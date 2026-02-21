@@ -64,3 +64,6 @@ class CompanySummary(BaseModel):
     logo_url: Optional[str] = None
     setup_complete: bool = False
     onboarding_step: int = 1
+
+class LogoUpdate(BaseModel):
+    logo_url: str
