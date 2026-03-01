@@ -1,7 +1,8 @@
 from pathlib import Path
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.api.routers import auth, knowledge, diagnosis, conversations, companies, dashboard
+from app.api.routers import auth, knowledge, diagnosis, conversations, companies, dashboard, widget
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
@@ -17,12 +18,22 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# CORS — allow the widget to be embedded on any domain
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(auth.router, prefix="/api/v1/auth")
 app.include_router(knowledge.router, prefix="/api/v1/knowledge")
 app.include_router(diagnosis.router, prefix="/api/v1/diagnosis")
 app.include_router(conversations.router, prefix="/api/v1/conversations")
 app.include_router(companies.router, prefix="/api/v1/companies")
 app.include_router(dashboard.router, prefix="/api/v1/dashboard")
+app.include_router(widget.router, prefix="/api/v1/widget")
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "app" / "static"), name="static")
 

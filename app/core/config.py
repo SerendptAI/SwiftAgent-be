@@ -15,6 +15,17 @@ class Settings(BaseSettings):
     API_BASE_URL: str
     CONFIDENCE_THRESHOLD: float = 0.7
 
+    # Gemini AI
+    GEMINI_API_KEY: str = ""
+
+    # Blockchain explorer API keys (optional per-chain)
+    ETHERSCAN_API_KEY: str = ""
+    BSCSCAN_API_KEY: str = ""
+    POLYGONSCAN_API_KEY: str = ""
+    ARBISCAN_API_KEY: str = ""
+    BASESCAN_API_KEY: str = ""
+    AVALANCHE_API_KEY: str = ""
+
     model_config = SettingsConfigDict(env_file=".env")
 
 settings = Settings()
