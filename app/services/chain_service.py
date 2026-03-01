@@ -30,7 +30,7 @@ async def diagnose_transaction(tx_data: dict, customer_complaint: str = "") -> d
     status = tx_data.get("status", "unknown")
     chain = tx_data.get("chain", "unknown")
 
-    # ── PENDING / STUCK TRANSACTIONS ──────────────────────────────────
+    # pending / stuck transactions
     if status == "pending":
         issues.append({
             "issue": "Transaction is pending",
@@ -64,7 +64,7 @@ async def diagnose_transaction(tx_data: dict, customer_complaint: str = "") -> d
                         ),
                     })
 
-    # ── FAILED TRANSACTIONS ───────────────────────────────────────────
+    # failed transactions
     if status == "failed":
         gas_used = tx_data.get("gas_used", 0)
         gas_limit = tx_data.get("gas_limit", 0)
@@ -124,7 +124,7 @@ async def diagnose_transaction(tx_data: dict, customer_complaint: str = "") -> d
                 ),
             })
 
-    # ── MISSING DEPOSITS ──────────────────────────────────────────────
+    # missing deposits
     if any(word in complaint_lower for word in ["deposit", "credit", "missing", "not received", "not showing", "didn't arrive"]):
         if status == "success" or status == "confirmed":
             confirmations = tx_data.get("confirmations", 0)
@@ -174,7 +174,7 @@ async def diagnose_transaction(tx_data: dict, customer_complaint: str = "") -> d
                 ),
             })
 
-    # ── WRONG NETWORK DETECTION ───────────────────────────────────────
+    # wrong network detection
     if any(word in complaint_lower for word in ["wrong network", "wrong chain", "sent on", "bsc instead", "polygon instead"]):
         issues.append({
             "issue": "Possible wrong network",
@@ -191,7 +191,7 @@ async def diagnose_transaction(tx_data: dict, customer_complaint: str = "") -> d
             ),
         })
 
-    # ── SUSPICIOUS ACTIVITY FLAGS ─────────────────────────────────────
+    # suspicious activity flags
     from_addr = tx_data.get("from_address", "").lower()
     to_addr_lower = tx_data.get("to_address", "").lower()
 
@@ -233,7 +233,7 @@ async def diagnose_transaction(tx_data: dict, customer_complaint: str = "") -> d
                     ),
                 })
 
-    # ── GENERAL EXPLANATIONS ──────────────────────────────────────────
+    # general explanations
     if any(word in complaint_lower for word in ["gas", "fee", "why did i pay"]):
         issues.append({
             "issue": "Gas fee explanation",

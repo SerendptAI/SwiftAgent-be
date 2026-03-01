@@ -23,7 +23,7 @@ from app.services.blockchain import detect, evm, bitcoin, prices
 
 logger = logging.getLogger(__name__)
 
-# ── Gemini Client ─────────────────────────────────────────────────────
+# gemini client
 _client = None
 
 def _get_client():
@@ -33,7 +33,7 @@ def _get_client():
     return _client
 
 
-# ── Tool Definitions (Gemini Function Declarations) ──────────────────
+# tool definitions (gemini function declarations)
 
 TOOLS = [
     types.Tool(function_declarations=[
@@ -114,7 +114,7 @@ TOOLS = [
 ]
 
 
-# ── System Prompt Builder ─────────────────────────────────────────────
+# system prompt builder
 
 def _build_system_prompt(company: dict, knowledge_context: str = "") -> str:
     company_name = company.get("name", "the company")
@@ -171,7 +171,7 @@ Cite specific documents or policies when relevant.
     return base_prompt
 
 
-# ── Tool Execution ────────────────────────────────────────────────────
+# tool execution
 
 async def _execute_tool(name: str, args: dict) -> dict:
     """Execute a tool call and return the result."""
@@ -256,7 +256,7 @@ async def _execute_tool(name: str, args: dict) -> dict:
         return {"error": f"Tool '{name}' failed: {str(e)}"}
 
 
-# ── Conversation Management ──────────────────────────────────────────
+# conversation management
 
 async def _load_conversation(company_id: str, session_id: str) -> list[dict]:
     """Load conversation history from MongoDB."""
@@ -289,7 +289,7 @@ async def _save_conversation(company_id: str, session_id: str, messages: list[di
     )
 
 
-# ── Main Chat Function ───────────────────────────────────────────────
+# main chat function
 
 async def chat(company_id: str, session_id: str, user_message: str) -> dict:
     """
@@ -303,7 +303,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
     5. If tool call → execute, feed result back → get final response
     6. Save conversation, return response
     """
-    # 1. Load company info
+    # load company info
     company = await db.companies.find_one({"id": company_id})
     if not company:
         return {
@@ -312,10 +312,10 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
             "blockchain_data": None,
         }
 
-    # 2. Load conversation history
+    # load conversation history
     history = await _load_conversation(company_id, session_id)
 
-    # 3. RAG — search knowledge base
+    # rag — search knowledge base
     knowledge_context = ""
     sources = []
     try:
@@ -337,12 +337,12 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
     except Exception as e:
         logger.warning(f"Knowledge search failed: {e}")
 
-    # 4. Build system prompt and messages
+    # build system prompt and messages
     system_prompt = _build_system_prompt(company, knowledge_context)
 
     # Convert history to Gemini format
     gemini_history = []
-    for msg in history[-20:]:  # Keep last 20 messages for context
+    for msg in history[-10:]:  # Keep last 10 messages for context
         role = "user" if msg["role"] == "user" else "model"
         gemini_history.append(
             types.Content(role=role, parts=[types.Part.from_text(text=msg["content"])])
@@ -353,13 +353,13 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
         types.Content(role="user", parts=[types.Part.from_text(text=user_message)])
     )
 
-    # 5. Call Gemini
+    # call gemini
     client = _get_client()
     blockchain_data = None
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=gemini_history,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
@@ -406,7 +406,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
 
             # Call Gemini again with tool results
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=gemini_history,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
@@ -432,7 +432,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
             "Please try again in a moment, or contact our support team directly."
         )
 
-    # 6. Save conversation
+    # save conversation
     history.append({"role": "user", "content": user_message, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
     history.append({"role": "assistant", "content": reply, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
     await _save_conversation(company_id, session_id, history)
