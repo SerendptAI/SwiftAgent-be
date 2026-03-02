@@ -9,9 +9,9 @@ from app.models.company_models import (
     VoiceSettingsUpdate,
     CompanyResponse,
     CompanySummary,
-    LogoUpdate,
 )
-from app.services import company_service
+from app.services import company_service, cloudinary_service
+from fastapi import UploadFile, File, Form
 
 router = APIRouter(tags=["Companies"])
 
@@ -100,13 +100,15 @@ async def update_voice(
 @router.patch("/{company_id}/logo", response_model=CompanyResponse)
 async def update_logo(
     company_id: str,
-    data: LogoUpdate,
+    file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ):
-    """Update company logo URL (frontend uploads to cloud storage first)."""
+    """Update company logo URL (uploads to Cloudinary)."""
     user_id = current_user["user_id"]
     company = await company_service.get_company(company_id, user_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    return await company_service.update_logo(company_id, user_id, data.logo_url)
+        
+    logo_url = await cloudinary_service.upload_image(file, folder=f"logos/{company_id}")
+    return await company_service.update_logo(company_id, user_id, logo_url)
 

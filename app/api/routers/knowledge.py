@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query, UploadFile, File, Form
 from typing import List, Optional
 from app.core.auth import get_current_user
-from app.models.knowledge_models import DocumentIngest, DocumentResponse, DocumentSummary, QueryRequest, QueryResponse
-from app.services import knowledge_service
+from app.models.knowledge_models import DocumentIngest, DocumentResponse, DocumentSummary, QueryRequest, QueryResponse, KnowledgeSourceResponse
+from app.services import knowledge_service, cloudinary_service
 from app.core.database import get_database
 from datetime import datetime
 from uuid import uuid4
@@ -77,4 +77,52 @@ async def query_knowledge(
         limit=request.limit,
         threshold=request.threshold,
     )
-    return results
+    return {"results": results, "confidence": confidence, "escalate": escalate}
+
+@router.post("/upload", response_model=KnowledgeSourceResponse)
+async def upload_knowledge_document(
+    background_tasks: BackgroundTasks,
+    company_id: str = Form(...),
+    category: str = Form("general"),
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Upload a document to Cloudinary and ingest its content as knowledge."""
+    user_id = current_user["user_id"]
+    
+    # Upload to Cloudinary
+    upload_result = await cloudinary_service.upload_document(
+        file, folder=f"documents/{company_id}"
+    )
+    
+    filename = file.filename or "unknown_file"
+    doc_id = str(uuid4())
+    
+    # Store source record
+    source_record = {
+        "id": doc_id,
+        "user_id": user_id,
+        "company_id": company_id,
+        "category": category,
+        "filename": filename,
+        "file_url": upload_result["secure_url"],
+        "cloudinary_public_id": upload_result["public_id"],
+        "uploaded_at": datetime.utcnow(),
+    }
+    await db.knowledge_sources.insert_one(source_record)
+    
+    # For now, ingest just the URL/filename since we don't have text extraction yet
+    # A full text extraction (PDF, DOCX) should be done here before ingesting
+    content = f"Document: {filename}\nURL: {upload_result['secure_url']}"
+    
+    background_tasks.add_task(
+        knowledge_service.ingest_document,
+        user_id,
+        doc_id,
+        filename,
+        content,
+        {"company_id": company_id, "category": category, "source_id": doc_id},
+    )
+    
+    return source_record

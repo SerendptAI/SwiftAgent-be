@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     # Gemini AI
     GEMINI_API_KEY: str = ""
 
+    # Cloudinary (file uploads)
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+
     # Blockchain explorer API keys (optional per-chain)
     ETHERSCAN_API_KEY: str = ""
     BSCSCAN_API_KEY: str = ""

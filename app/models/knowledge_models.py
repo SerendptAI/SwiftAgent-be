@@ -44,13 +44,10 @@ class QueryResponse(BaseModel):
     confidence: float = Field(description="Overall confidence score")
     escalate: bool = Field(False, description="True if confidence is below threshold")
 
-class KnowledgeSourceUpload(BaseModel):
-    category: str
-    company_id: str
-
 class KnowledgeSourceResponse(BaseModel):
     id: str
     company_id: str
     category: str
     filename: str
+    file_url: Optional[str] = None
     uploaded_at: datetime
