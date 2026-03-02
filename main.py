@@ -18,10 +18,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS — allow the widget to be embedded on any domain
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://swiftagents.org",
+        "https://www.swiftagents.org",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
