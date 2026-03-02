@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query, U
 from typing import List, Optional
 from app.core.auth import get_current_user
 from app.models.knowledge_models import DocumentIngest, DocumentResponse, DocumentSummary, QueryRequest, QueryResponse, KnowledgeSourceResponse
-from app.services import knowledge_service, cloudinary_service
+from app.services import knowledge_service, cloudinary_service, text_extraction_service
 from app.core.database import get_database
 from datetime import datetime
 from uuid import uuid4
@@ -91,15 +91,31 @@ async def upload_knowledge_document(
     """Upload a document to Cloudinary and ingest its content as knowledge."""
     user_id = current_user["user_id"]
     
-    # Upload to Cloudinary
+    filename = file.filename or "unknown_file"
+    
+    # read the file to bytes once for both operations
+    content = await file.read()
+    
+    # try text extraction first before uploading
+    try:
+        extracted_text = text_extraction_service.extract_text(filename, content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    if not extracted_text.strip():
+        raise HTTPException(status_code=400, detail="Could not extract any text from the document.")
+
+    # pass the bytes to cloudinary since it accepts bytes
+    await file.seek(0)
+    
+    # upload to cloudinary
     upload_result = await cloudinary_service.upload_document(
         file, folder=f"documents/{company_id}"
     )
     
-    filename = file.filename or "unknown_file"
     doc_id = str(uuid4())
     
-    # Store source record
+    # store source record
     source_record = {
         "id": doc_id,
         "user_id": user_id,
@@ -112,17 +128,14 @@ async def upload_knowledge_document(
     }
     await db.knowledge_sources.insert_one(source_record)
     
-    # For now, ingest just the URL/filename since we don't have text extraction yet
-    # A full text extraction (PDF, DOCX) should be done here before ingesting
-    content = f"Document: {filename}\nURL: {upload_result['secure_url']}"
-    
+    # ingest the extracted text
     background_tasks.add_task(
         knowledge_service.ingest_document,
         user_id,
         doc_id,
         filename,
-        content,
-        {"company_id": company_id, "category": category, "source_id": doc_id},
+        extracted_text,
+        {"company_id": company_id, "category": category, "source_id": doc_id, "file_url": upload_result["secure_url"]},
     )
     
     return source_record

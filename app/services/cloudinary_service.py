@@ -8,7 +8,7 @@ import cloudinary.uploader
 from fastapi import UploadFile
 from app.core.config import settings
 
-# Configure Cloudinary SDK on module load
+# configure cloudinary sdk on module load
 cloudinary.config(
     cloud_name=settings.CLOUDINARY_CLOUD_NAME,
     api_key=settings.CLOUDINARY_API_KEY,
