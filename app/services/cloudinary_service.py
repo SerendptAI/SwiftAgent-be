@@ -34,17 +34,17 @@ async def upload_image(file: UploadFile, folder: str = "logos") -> str:
     return result["secure_url"]
 
 
-async def upload_document(file: UploadFile, folder: str = "documents") -> dict:
+async def upload_document(content: bytes, filename: str, folder: str = "documents") -> dict:
     """
     Upload a raw document (PDF, DOCX, TXT, CSV, etc.) to Cloudinary.
+    Accepts pre-read bytes to avoid double-reading the UploadFile.
     Returns a dict with 'secure_url' and 'public_id'.
     """
-    contents = await file.read()
     result = cloudinary.uploader.upload(
-        contents,
+        content,
         folder=folder,
         resource_type="raw",
-        original_filename=file.filename,
+        original_filename=filename,
         use_filename=True,
         unique_filename=True,
     )

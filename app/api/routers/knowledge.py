@@ -105,12 +105,9 @@ async def upload_knowledge_document(
     if not extracted_text.strip():
         raise HTTPException(status_code=400, detail="Could not extract any text from the document.")
 
-    # pass the bytes to cloudinary since it accepts bytes
-    await file.seek(0)
-    
-    # upload to cloudinary
+    # upload to cloudinary using the already-read bytes
     upload_result = await cloudinary_service.upload_document(
-        file, folder=f"documents/{company_id}"
+        content, filename, folder=f"documents/{company_id}"
     )
     
     doc_id = str(uuid4())
