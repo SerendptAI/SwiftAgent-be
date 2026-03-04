@@ -137,8 +137,16 @@ async def refresh_token(request: RefreshTokenRequest):
     return {"access_token": new_access_token, "token_type": "bearer"}
 
 @router.get("/me")
-async def read_users_me(current_user: dict = Depends(get_current_user)):
+async def read_users_me(current_user: dict = Depends(get_current_user), db = Depends(get_database)):
     """Get current user details."""
     if "_id" in current_user:
         current_user["_id"] = str(current_user["_id"])
+
+    # check if the user has completed company onboarding
+    company = await db.companies.find_one(
+        {"user_id": current_user["user_id"], "setup_complete": True},
+        {"_id": 1},
+    )
+    current_user["onboarding_completed"] = company is not None
+
     return current_user
