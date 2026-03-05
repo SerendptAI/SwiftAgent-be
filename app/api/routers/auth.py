@@ -145,8 +145,9 @@ async def read_users_me(current_user: dict = Depends(get_current_user), db = Dep
     # check if the user has completed company onboarding
     company = await db.companies.find_one(
         {"user_id": current_user["user_id"], "setup_complete": True},
-        {"_id": 1},
+        {"_id": 0, "id": 1},
     )
     current_user["onboarding_completed"] = company is not None
+    current_user["company_id"] = company["id"] if company else None
 
     return current_user
