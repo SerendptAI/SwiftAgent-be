@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: str = ""
     CLOUDINARY_API_SECRET: str = ""
 
+    # Fish.audio (voice STT/TTS)
+    FISH_AUDIO_API_KEY: str = ""
+    FISH_AUDIO_VOICE_ID: str = ""
+
     # Blockchain explorer API keys (optional per-chain)
     ETHERSCAN_API_KEY: str = ""
     BSCSCAN_API_KEY: str = ""

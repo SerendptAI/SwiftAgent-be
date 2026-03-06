@@ -1,40 +1,40 @@
 /**
- * SwiftAgent Chat Widget
- * Self-contained, embeddable chat widget for customer support.
- * 
+ * SwiftAgent Voice Call Widget
+ * Self-contained, embeddable voice call widget for customer support.
+ *
  * Usage:
  *   <script src="https://api.swiftagents.org/static/widget/widget.js" data-company-id="YOUR_ID"></script>
  */
 (function () {
-    "use strict";
+  "use strict";
 
-    // ── Configuration ──────────────────────────────────────────────
-    const scriptTag = document.currentScript;
-    const COMPANY_ID = scriptTag?.getAttribute("data-company-id") || "";
-    const API_BASE =
-        scriptTag?.getAttribute("data-api-base") ||
-        scriptTag?.src?.replace(/\/static\/widget\/widget\.js.*$/, "") ||
-        "";
+  // ── Configuration ──────────────────────────────────────────────
+  const scriptTag = document.currentScript;
+  const COMPANY_ID = scriptTag?.getAttribute("data-company-id") || "";
+  const API_BASE =
+    scriptTag?.getAttribute("data-api-base") ||
+    scriptTag?.src?.replace(/\/static\/widget\/widget\.js.*$/, "") ||
+    "";
 
-    if (!COMPANY_ID) {
-        console.error("[SwiftAgent] Missing data-company-id attribute");
-        return;
+  if (!COMPANY_ID) {
+    console.error("[SwiftAgent] Missing data-company-id attribute");
+    return;
+  }
+
+  const SESSION_KEY = `sa_session_${COMPANY_ID}`;
+
+  function getSessionId() {
+    let id = localStorage.getItem(SESSION_KEY);
+    if (!id) {
+      id = "sess_" + crypto.randomUUID();
+      localStorage.setItem(SESSION_KEY, id);
     }
+    return id;
+  }
 
-    const SESSION_KEY = `sa_session_${COMPANY_ID}`;
-
-    function getSessionId() {
-        let id = localStorage.getItem(SESSION_KEY);
-        if (!id) {
-            id = "sess_" + crypto.randomUUID();
-            localStorage.setItem(SESSION_KEY, id);
-        }
-        return id;
-    }
-
-    // ── Inject Styles ──────────────────────────────────────────────
-    const STYLES = `
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+  // ── Inject Styles ──────────────────────────────────────────────
+  const STYLES = `
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 
     .sa-widget * {
       box-sizing: border-box;
@@ -43,491 +43,590 @@
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
 
-    .sa-widget {
+    /* ── Top Banner ── */
+    .sa-banner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 99998;
+      background: #E5A100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 24px;
+      min-height: 48px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .sa-banner-text {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: #000;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      flex: 1;
+      margin-right: 16px;
+    }
+    .sa-banner-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      background: #fff;
+      border: 2px solid #000;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: #000;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .sa-banner-btn:hover {
+      background: #f0f0f0;
+      transform: scale(1.02);
+    }
+    .sa-banner-btn svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+    .sa-banner-ongoing {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: #fff;
+      border: 2px solid #000;
+      border-radius: 4px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: #000;
+      letter-spacing: 0.5px;
+    }
+    .sa-banner-ongoing svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+    .sa-banner-ongoing.sa-active {
+      display: flex;
+    }
+
+    /* ── FAB (phone button) ── */
+    .sa-fab {
       position: fixed;
       bottom: 24px;
       right: 24px;
       z-index: 99999;
-    }
-
-    /* ── Floating Button ── */
-    .sa-fab {
-      width: 60px;
-      height: 60px;
+      width: 56px;
+      height: 56px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      border: none;
+      background: #fff;
+      border: 2px solid #e0e0e0;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 24px rgba(99, 102, 241, 0.4);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      transition: transform 0.2s, box-shadow 0.2s;
     }
     .sa-fab:hover {
       transform: scale(1.08);
-      box-shadow: 0 6px 32px rgba(99, 102, 241, 0.5);
+      box-shadow: 0 6px 24px rgba(0,0,0,0.18);
     }
     .sa-fab svg {
-      width: 28px;
-      height: 28px;
-      fill: white;
-      transition: transform 0.3s ease;
-    }
-    .sa-fab.sa-open svg {
-      transform: rotate(90deg);
+      width: 24px;
+      height: 24px;
+      fill: #333;
     }
 
-    /* ── Chat Window ── */
-    .sa-window {
-      position: absolute;
-      bottom: 76px;
+    /* ── Call Overlay ── */
+    .sa-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
       right: 0;
-      width: 400px;
-      max-width: calc(100vw - 32px);
-      height: 560px;
-      max-height: calc(100vh - 120px);
-      background: #0f1117;
-      border-radius: 16px;
-      overflow: hidden;
+      bottom: 0;
+      z-index: 100000;
+      background: rgba(0,0,0,0.5);
       display: none;
-      flex-direction: column;
-      box-shadow: 0 8px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
-      animation: sa-slide-up 0.25s ease-out;
-    }
-    .sa-window.sa-visible {
-      display: flex;
-    }
-
-    @keyframes sa-slide-up {
-      from { opacity: 0; transform: translateY(16px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    /* ── Header ── */
-    .sa-header {
-      padding: 16px 20px;
-      background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
-      display: flex;
       align-items: center;
-      gap: 12px;
-      flex-shrink: 0;
+      justify-content: center;
+      animation: sa-fade-in 0.2s ease-out;
     }
-    .sa-header-logo {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.2);
+    .sa-overlay.sa-active {
+      display: flex;
+    }
+    @keyframes sa-fade-in {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    .sa-call-panel {
+      width: 90%;
+      max-width: 660px;
+      background: #fafafa;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 16px 64px rgba(0,0,0,0.3);
+      display: flex;
+      flex-direction: column;
+      animation: sa-scale-up 0.25s ease-out;
+    }
+    @keyframes sa-scale-up {
+      from { opacity: 0; transform: scale(0.95); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    /* call header */
+    .sa-call-header {
+      text-align: center;
+      padding: 32px 24px 16px;
+    }
+    .sa-call-company {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 4px;
+    }
+    .sa-call-status {
+      font-size: 14px;
+      color: #888;
+    }
+
+    /* call body — large white area */
+    .sa-call-body {
+      flex: 1;
+      min-height: 280px;
+      background: #fff;
+      margin: 0 16px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
     }
-    .sa-header-logo img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .sa-header-logo svg {
-      width: 20px;
-      height: 20px;
-      fill: white;
-    }
-    .sa-header-info h3 {
-      font-size: 15px;
-      font-weight: 600;
-      color: white;
-    }
-    .sa-header-info p {
-      font-size: 12px;
-      color: rgba(255,255,255,0.78);
-      margin-top: 1px;
-    }
-
-    /* ── Messages ── */
-    .sa-messages {
-      flex: 1;
+    .sa-call-transcript {
+      padding: 24px;
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+      max-height: 280px;
       overflow-y: auto;
-      padding: 16px;
+    }
+
+    /* call controls */
+    .sa-call-controls {
       display: flex;
-      flex-direction: column;
-      gap: 12px;
-      scrollbar-width: thin;
-      scrollbar-color: rgba(255,255,255,0.1) transparent;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 24px;
     }
-    .sa-messages::-webkit-scrollbar {
-      width: 4px;
-    }
-    .sa-messages::-webkit-scrollbar-thumb {
-      background: rgba(255,255,255,0.1);
-      border-radius: 2px;
-    }
-
-    .sa-msg {
-      max-width: 85%;
-      padding: 10px 14px;
-      border-radius: 12px;
-      font-size: 14px;
-      line-height: 1.5;
-      word-wrap: break-word;
-      animation: sa-fade-in 0.2s ease;
-    }
-    @keyframes sa-fade-in {
-      from { opacity: 0; transform: translateY(4px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .sa-msg-user {
-      align-self: flex-end;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
-      color: white;
-      border-bottom-right-radius: 4px;
-    }
-
-    .sa-msg-assistant {
-      align-self: flex-start;
-      background: #1a1d27;
-      color: #e2e8f0;
-      border: 1px solid rgba(255,255,255,0.06);
-      border-bottom-left-radius: 4px;
-    }
-    .sa-msg-assistant strong { color: #a5b4fc; }
-    .sa-msg-assistant code {
-      background: rgba(99, 102, 241, 0.15);
-      padding: 1px 5px;
-      border-radius: 4px;
-      font-size: 13px;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      color: #c7d2fe;
-    }
-    .sa-msg-assistant ul, .sa-msg-assistant ol {
-      padding-left: 18px;
-      margin: 6px 0;
-    }
-    .sa-msg-assistant li {
-      margin-bottom: 3px;
-    }
-    .sa-msg-assistant p {
-      margin-bottom: 8px;
-    }
-    .sa-msg-assistant p:last-child {
-      margin-bottom: 0;
-    }
-
-    /* ── Typing Indicator ── */
-    .sa-typing {
-      display: none;
-      align-self: flex-start;
-      padding: 12px 18px;
-      background: #1a1d27;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-    .sa-typing.sa-visible { display: flex; gap: 5px; }
-    .sa-typing span {
-      width: 7px;
-      height: 7px;
-      background: #6366f1;
+    .sa-ctrl-btn {
+      width: 48px;
+      height: 48px;
       border-radius: 50%;
-      animation: sa-bounce 1.2s infinite;
-    }
-    .sa-typing span:nth-child(2) { animation-delay: 0.15s; }
-    .sa-typing span:nth-child(3) { animation-delay: 0.3s; }
-    @keyframes sa-bounce {
-      0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
-      40% { transform: translateY(-6px); opacity: 1; }
-    }
-
-    /* ── Input ── */
-    .sa-input-wrap {
-      padding: 12px 16px;
-      border-top: 1px solid rgba(255,255,255,0.06);
-      display: flex;
-      gap: 8px;
-      background: #13151c;
-      flex-shrink: 0;
-    }
-    .sa-input {
-      flex: 1;
-      padding: 10px 14px;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: #1a1d27;
-      color: #e2e8f0;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.2s;
-      resize: none;
-      min-height: 40px;
-      max-height: 100px;
-      font-family: inherit;
-    }
-    .sa-input::placeholder { color: rgba(255,255,255,0.3); }
-    .sa-input:focus { border-color: #6366f1; }
-
-    .sa-send {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
       border: none;
-      background: linear-gradient(135deg, #6366f1, #8b5cf6);
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: opacity 0.2s;
-      flex-shrink: 0;
-      align-self: flex-end;
+      transition: transform 0.15s, opacity 0.15s;
+      background: #ececec;
     }
-    .sa-send:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
+    .sa-ctrl-btn:hover {
+      transform: scale(1.1);
     }
-    .sa-send svg {
-      width: 18px;
-      height: 18px;
-      fill: white;
+    .sa-ctrl-btn svg {
+      width: 22px;
+      height: 22px;
+      fill: #333;
     }
-
-    /* ── Welcome Message ── */
-    .sa-welcome {
-      text-align: center;
-      padding: 32px 24px;
-      color: rgba(255,255,255,0.5);
-      font-size: 13px;
-      line-height: 1.6;
-    }
-    .sa-welcome h4 {
-      font-size: 16px;
-      color: #e2e8f0;
-      margin-bottom: 6px;
-      font-weight: 600;
+    .sa-ctrl-btn.sa-muted {
+      opacity: 0.5;
     }
 
-    /* ── Powered By ── */
-    .sa-powered {
-      text-align: center;
-      padding: 6px;
-      font-size: 10px;
-      color: rgba(255,255,255,0.2);
-      background: #13151c;
+    /* hangup button */
+    .sa-hangup {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #E53935;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s, background 0.15s;
     }
-    .sa-powered a {
-      color: rgba(255,255,255,0.3);
-      text-decoration: none;
+    .sa-hangup:hover {
+      transform: scale(1.1);
+      background: #C62828;
+    }
+    .sa-hangup svg {
+      width: 26px;
+      height: 26px;
+      fill: #fff;
     }
   `;
 
-    const styleEl = document.createElement("style");
-    styleEl.textContent = STYLES;
-    document.head.appendChild(styleEl);
+  const styleEl = document.createElement("style");
+  styleEl.textContent = STYLES;
+  document.head.appendChild(styleEl);
 
-    // ── Build DOM ──────────────────────────────────────────────────
-    const widget = document.createElement("div");
-    widget.className = "sa-widget";
-    widget.innerHTML = `
-    <div class="sa-window" id="sa-window">
-      <div class="sa-header">
-        <div class="sa-header-logo" id="sa-logo">
-          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-        </div>
-        <div class="sa-header-info">
-          <h3 id="sa-company-name">Support</h3>
-          <p>We typically reply instantly</p>
-        </div>
+  // push page content down so banner doesn't cover it
+  document.body.style.marginTop = (parseInt(getComputedStyle(document.body).marginTop) || 0) + 48 + "px";
+
+  // ── Build DOM ──────────────────────────────────────────────────
+
+  // top banner
+  const banner = document.createElement("div");
+  banner.className = "sa-banner";
+  banner.innerHTML = `
+    <span class="sa-banner-text">If you have any questions or inquiries, please feel free to get on a call with our Swift Agent.</span>
+    <button class="sa-banner-btn" id="sa-banner-cta">
+      <svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+      Request a Call
+    </button>
+    <div class="sa-banner-ongoing" id="sa-banner-ongoing">
+      <svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+      ONGOING..<span id="sa-timer-badge">00:00</span>
+    </div>
+  `;
+  document.body.prepend(banner);
+
+  // call overlay
+  const overlay = document.createElement("div");
+  overlay.className = "sa-overlay";
+  overlay.id = "sa-overlay";
+  overlay.innerHTML = `
+    <div class="sa-call-panel">
+      <div class="sa-call-header">
+        <div class="sa-call-company" id="sa-call-company">Support</div>
+        <div class="sa-call-status" id="sa-call-status">Calling...</div>
       </div>
-
-      <div class="sa-messages" id="sa-messages">
-        <div class="sa-welcome" id="sa-welcome">
-          <h4>👋 Hi there!</h4>
-          How can we help you today? Ask about transactions, deposits, withdrawals, or anything else.
-        </div>
+      <div class="sa-call-body">
+        <div class="sa-call-transcript" id="sa-call-transcript"></div>
       </div>
-
-      <div class="sa-typing" id="sa-typing">
-        <span></span><span></span><span></span>
-      </div>
-
-      <div class="sa-input-wrap">
-        <textarea class="sa-input" id="sa-input"
-          placeholder="Type your message..." rows="1"></textarea>
-        <button class="sa-send" id="sa-send" disabled>
-          <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      <div class="sa-call-controls">
+        <button class="sa-ctrl-btn" id="sa-btn-menu" title="More options">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+        </button>
+        <button class="sa-ctrl-btn" id="sa-btn-speaker" title="Toggle speaker">
+          <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+        </button>
+        <button class="sa-ctrl-btn" id="sa-btn-mic" title="Toggle microphone">
+          <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>
+        </button>
+        <button class="sa-hangup" id="sa-btn-hangup" title="End call">
+          <svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
         </button>
       </div>
-
-      <div class="sa-powered">Powered by <a href="https://swiftagents.org" target="_blank">SwiftAgents</a></div>
     </div>
-
-    <button class="sa-fab" id="sa-fab" aria-label="Open chat">
-      <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg>
-    </button>
   `;
-    document.body.appendChild(widget);
+  document.body.appendChild(overlay);
 
-    // ── Elements ───────────────────────────────────────────────────
-    const fab = document.getElementById("sa-fab");
-    const win = document.getElementById("sa-window");
-    const msgs = document.getElementById("sa-messages");
-    const input = document.getElementById("sa-input");
-    const sendBtn = document.getElementById("sa-send");
-    const typing = document.getElementById("sa-typing");
-    const welcome = document.getElementById("sa-welcome");
-    const nameEl = document.getElementById("sa-company-name");
-    const logoEl = document.getElementById("sa-logo");
+  // floating phone FAB
+  const fab = document.createElement("button");
+  fab.className = "sa-fab";
+  fab.id = "sa-fab";
+  fab.setAttribute("aria-label", "Start a call");
+  fab.innerHTML = `<svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>`;
+  document.body.appendChild(fab);
 
-    let isOpen = false;
-    let isLoading = false;
+  // ── Elements ───────────────────────────────────────────────────
+  const bannerCta = document.getElementById("sa-banner-cta");
+  const bannerOngoing = document.getElementById("sa-banner-ongoing");
+  const timerBadge = document.getElementById("sa-timer-badge");
+  const callOverlay = document.getElementById("sa-overlay");
+  const callCompany = document.getElementById("sa-call-company");
+  const callStatus = document.getElementById("sa-call-status");
+  const callTranscript = document.getElementById("sa-call-transcript");
+  const btnSpeaker = document.getElementById("sa-btn-speaker");
+  const btnMic = document.getElementById("sa-btn-mic");
+  const btnHangup = document.getElementById("sa-btn-hangup");
 
-    // ── Toggle ─────────────────────────────────────────────────────
-    fab.addEventListener("click", () => {
-        isOpen = !isOpen;
-        win.classList.toggle("sa-visible", isOpen);
-        fab.classList.toggle("sa-open", isOpen);
-        if (isOpen) input.focus();
-    });
+  // ── State ──────────────────────────────────────────────────────
+  let isCallActive = false;
+  let ws = null;
+  let mediaStream = null;
+  let mediaRecorder = null;
+  let timerInterval = null;
+  let callSeconds = 0;
+  let isMuted = false;
+  let isSpeakerOff = false;
+  let audioContext = null;
 
-    // ── Input Handling ─────────────────────────────────────────────
-    input.addEventListener("input", () => {
-        sendBtn.disabled = !input.value.trim() || isLoading;
-        // Auto-resize textarea
-        input.style.height = "auto";
-        input.style.height = Math.min(input.scrollHeight, 100) + "px";
-    });
+  // ── Timer ──────────────────────────────────────────────────────
+  function startTimer() {
+    callSeconds = 0;
+    updateTimerDisplay();
+    timerInterval = setInterval(() => {
+      callSeconds++;
+      updateTimerDisplay();
+    }, 1000);
+  }
 
-    input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            if (input.value.trim() && !isLoading) sendMessage();
-        }
-    });
+  function stopTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = null;
+    callSeconds = 0;
+  }
 
-    sendBtn.addEventListener("click", () => {
-        if (input.value.trim() && !isLoading) sendMessage();
-    });
+  function updateTimerDisplay() {
+    const m = String(Math.floor(callSeconds / 60)).padStart(2, "0");
+    const s = String(callSeconds % 60).padStart(2, "0");
+    timerBadge.textContent = `${m}:${s}`;
+  }
 
-    // ── Simple Markdown Renderer ───────────────────────────────────
-    function renderMarkdown(text) {
-        return text
-            // Code blocks
-            .replace(/```[\s\S]*?```/g, (m) => {
-                const code = m.slice(3, -3).replace(/^\w+\n/, "");
-                return `<pre><code>${escapeHtml(code.trim())}</code></pre>`;
-            })
-            // Inline code
-            .replace(/`([^`]+)`/g, "<code>$1</code>")
-            // Bold
-            .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-            // Italic
-            .replace(/\*(.+?)\*/g, "<em>$1</em>")
-            // Bullet lists
-            .replace(/^[\s]*[-•]\s+(.+)/gm, "<li>$1</li>")
-            .replace(/(<li>.*<\/li>\n?)+/gs, "<ul>$&</ul>")
-            // Numbered lists
-            .replace(/^\d+\.\s+(.+)/gm, "<li>$1</li>")
-            // Headers
-            .replace(/^###\s+(.+)/gm, "<strong>$1</strong>")
-            .replace(/^##\s+(.+)/gm, "<strong>$1</strong>")
-            // Paragraphs
-            .replace(/\n{2,}/g, "</p><p>")
-            .replace(/\n/g, "<br>")
-            .replace(/^(.+)$/s, "<p>$1</p>");
-    }
+  // ── WebSocket ──────────────────────────────────────────────────
+  function getWsUrl() {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const base = API_BASE.replace(/^https?:/, proto);
+    return `${base}/api/v1/voice/${COMPANY_ID}/call`;
+  }
 
-    function escapeHtml(str) {
-        return str.replace(/[&<>"']/g, (m) =>
-            ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m])
-        );
-    }
+  function connectWebSocket() {
+    return new Promise((resolve, reject) => {
+      const url = getWsUrl();
+      ws = new WebSocket(url);
 
-    // ── Add Message ────────────────────────────────────────────────
-    function addMessage(role, content) {
-        if (welcome) welcome.style.display = "none";
-        const div = document.createElement("div");
-        div.className = `sa-msg sa-msg-${role}`;
-        div.innerHTML = role === "user" ? escapeHtml(content) : renderMarkdown(content);
-        msgs.appendChild(div);
-        msgs.scrollTop = msgs.scrollHeight;
-    }
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          type: "start",
+          session_id: getSessionId(),
+        }));
+        resolve();
+      };
 
-    // ── Send Message ───────────────────────────────────────────────
-    async function sendMessage() {
-        const text = input.value.trim();
-        if (!text) return;
-
-        input.value = "";
-        input.style.height = "auto";
-        sendBtn.disabled = true;
-        isLoading = true;
-
-        addMessage("user", text);
-        typing.classList.add("sa-visible");
-        msgs.scrollTop = msgs.scrollHeight;
-
+      ws.onmessage = (event) => {
         try {
-            const resp = await fetch(`${API_BASE}/api/v1/widget/${COMPANY_ID}/chat`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    session_id: getSessionId(),
-                    message: text,
-                }),
-            });
-
-            if (!resp.ok) {
-                const err = await resp.json().catch(() => ({}));
-                throw new Error(err.detail || "Request failed");
-            }
-
-            const data = await resp.json();
-            addMessage("assistant", data.reply || "Sorry, I couldn't generate a response.");
-        } catch (err) {
-            console.error("[SwiftAgent]", err);
-            addMessage(
-                "assistant",
-                "I'm sorry, I'm having trouble connecting. Please try again in a moment."
-            );
-        } finally {
-            typing.classList.remove("sa-visible");
-            isLoading = false;
-            sendBtn.disabled = !input.value.trim();
-            input.focus();
-        }
-    }
-
-    // ── Load Company Config ────────────────────────────────────────
-    async function loadConfig() {
-        try {
-            const resp = await fetch(`${API_BASE}/api/v1/widget/${COMPANY_ID}/config`);
-            if (!resp.ok) return;
-            const config = await resp.json();
-            if (config.name) nameEl.textContent = config.name;
-            if (config.logo_url) {
-                logoEl.innerHTML = `<img src="${config.logo_url}" alt="${config.name}" />`;
-            }
+          const msg = JSON.parse(event.data);
+          handleServerMessage(msg);
         } catch (e) {
-            console.warn("[SwiftAgent] Could not load config", e);
+          console.error("[SwiftAgent] Bad WS message", e);
         }
+      };
+
+      ws.onerror = (err) => {
+        console.error("[SwiftAgent] WebSocket error", err);
+        reject(err);
+      };
+
+      ws.onclose = () => {
+        if (isCallActive) endCall();
+      };
+    });
+  }
+
+  function handleServerMessage(msg) {
+    switch (msg.type) {
+      case "status":
+        updateCallStatus(msg.status);
+        break;
+      case "transcript":
+        appendTranscript("You", msg.text);
+        break;
+      case "reply_text":
+        appendTranscript("Agent", msg.text);
+        break;
+      case "audio":
+        playAudio(msg.data);
+        break;
+      case "error":
+        console.error("[SwiftAgent] Server error:", msg.message);
+        callStatus.textContent = "Error — please try again";
+        break;
+    }
+  }
+
+  function updateCallStatus(status) {
+    const labels = {
+      ready: "Connected",
+      transcribing: "Listening...",
+      thinking: "Thinking...",
+      ended: "Call ended",
+    };
+    callStatus.textContent = labels[status] || status;
+  }
+
+  function appendTranscript(speaker, text) {
+    const line = document.createElement("p");
+    line.style.marginBottom = "8px";
+    line.style.textAlign = "left";
+    line.innerHTML = `<strong style="color:#333">${speaker}:</strong> ${text}`;
+    callTranscript.appendChild(line);
+    callTranscript.scrollTop = callTranscript.scrollHeight;
+  }
+
+  // ── Audio Playback ─────────────────────────────────────────────
+  function playAudio(base64Data) {
+    if (isSpeakerOff) return;
+    const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type: "audio/mp3" });
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.play().catch(e => console.warn("[SwiftAgent] Audio play failed", e));
+    audio.onended = () => URL.revokeObjectURL(url);
+  }
+
+  // ── Mic Recording ──────────────────────────────────────────────
+  async function startRecording() {
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      console.error("[SwiftAgent] Mic access denied", e);
+      callStatus.textContent = "Microphone access required";
+      return false;
     }
 
-    // ── Load Previous Session ──────────────────────────────────────
-    async function loadHistory() {
-        try {
-            const sessionId = getSessionId();
-            const resp = await fetch(
-                `${API_BASE}/api/v1/widget/${COMPANY_ID}/history/${sessionId}`
-            );
-            if (!resp.ok) return;
-            const data = await resp.json();
-            if (data.messages && data.messages.length > 0) {
-                data.messages.forEach((m) => addMessage(m.role, m.content));
-            }
-        } catch (e) {
-            console.warn("[SwiftAgent] Could not load history", e);
+    audioContext = new AudioContext();
+    mediaRecorder = new MediaRecorder(mediaStream, {
+      mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm",
+    });
+
+    let chunks = [];
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      if (chunks.length === 0 || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+      const blob = new Blob(chunks, { type: "audio/webm" });
+      chunks = [];
+
+      const buffer = await blob.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+      );
+
+      ws.send(JSON.stringify({ type: "audio", data: base64 }));
+      ws.send(JSON.stringify({ type: "stop_audio" }));
+    };
+
+    // record in 4-second intervals for natural pauses
+    function recordCycle() {
+      if (!isCallActive || isMuted) return;
+      chunks = [];
+      mediaRecorder.start();
+      setTimeout(() => {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+          // start next cycle after a brief gap
+          setTimeout(recordCycle, 200);
         }
+      }, 4000);
     }
 
-    // ── Initialize ─────────────────────────────────────────────────
-    loadConfig();
-    loadHistory();
+    recordCycle();
+    return true;
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+    }
+    mediaRecorder = null;
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(t => t.stop());
+      mediaStream = null;
+    }
+    if (audioContext) {
+      audioContext.close();
+      audioContext = null;
+    }
+  }
+
+  // ── Call Lifecycle ──────────────────────────────────────────────
+  async function startCall() {
+    if (isCallActive) return;
+
+    callTranscript.innerHTML = "";
+    callStatus.textContent = "Calling...";
+    callOverlay.classList.add("sa-active");
+    bannerCta.style.display = "none";
+    bannerOngoing.classList.add("sa-active");
+
+    try {
+      await connectWebSocket();
+      const micOk = await startRecording();
+      if (!micOk) {
+        endCall();
+        return;
+      }
+      isCallActive = true;
+      startTimer();
+      callStatus.textContent = "Connected";
+    } catch (e) {
+      console.error("[SwiftAgent] Failed to start call", e);
+      callStatus.textContent = "Connection failed";
+      setTimeout(endCall, 2000);
+    }
+  }
+
+  function endCall() {
+    isCallActive = false;
+    stopTimer();
+    stopRecording();
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "end" }));
+      ws.close();
+    }
+    ws = null;
+
+    callOverlay.classList.remove("sa-active");
+    bannerOngoing.classList.remove("sa-active");
+    bannerCta.style.display = "flex";
+
+    isMuted = false;
+    isSpeakerOff = false;
+    btnMic.classList.remove("sa-muted");
+    btnSpeaker.classList.remove("sa-muted");
+  }
+
+  // ── Control Buttons ────────────────────────────────────────────
+  bannerCta.addEventListener("click", startCall);
+  fab.addEventListener("click", startCall);
+  btnHangup.addEventListener("click", endCall);
+
+  btnMic.addEventListener("click", () => {
+    isMuted = !isMuted;
+    btnMic.classList.toggle("sa-muted", isMuted);
+    if (mediaStream) {
+      mediaStream.getAudioTracks().forEach(t => (t.enabled = !isMuted));
+    }
+  });
+
+  btnSpeaker.addEventListener("click", () => {
+    isSpeakerOff = !isSpeakerOff;
+    btnSpeaker.classList.toggle("sa-muted", isSpeakerOff);
+  });
+
+  // ── Load Company Config ────────────────────────────────────────
+  async function loadConfig() {
+    try {
+      const resp = await fetch(`${API_BASE}/api/v1/widget/${COMPANY_ID}/config`);
+      if (!resp.ok) return;
+      const config = await resp.json();
+      if (config.name) {
+        callCompany.textContent = config.name;
+      }
+    } catch (e) {
+      console.warn("[SwiftAgent] Could not load config", e);
+    }
+  }
+
+  // ── Initialize ─────────────────────────────────────────────────
+  loadConfig();
 })();

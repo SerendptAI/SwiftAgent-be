@@ -2,7 +2,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.api.routers import auth, knowledge, diagnosis, conversations, companies, dashboard, widget
+from app.api.routers import auth, knowledge, diagnosis, conversations, companies, dashboard, widget, voice
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
@@ -38,6 +38,7 @@ app.include_router(conversations.router, prefix="/api/v1/conversations")
 app.include_router(companies.router, prefix="/api/v1/companies")
 app.include_router(dashboard.router, prefix="/api/v1/dashboard")
 app.include_router(widget.router, prefix="/api/v1/widget")
+app.include_router(voice.router, prefix="/api/v1/voice")
 
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "app" / "static"), name="static")
 
