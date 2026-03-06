@@ -58,10 +58,7 @@ async def get_visitors(company_id: str, limit: int = 20) -> list:
 async def get_widget_config(company_id: str) -> dict:
     base_url = settings.API_BASE_URL
     embed_code = (
-        f'<script src="{base_url}/widget/{company_id}/chat-widget.js"></script> '
-        f'<div id="chat-widget"></div> '
-        f'<style>#chat-widget {{ position: fixed; bottom: 20px; right: 20px; '
-        f'width: 300px; height: 400px; border: 1px solid #ccc; '
-        f'background-color: #fff; z-index: 1000; }}</style>'
+        f'<script src="{base_url}/static/widget/widget.js" '
+        f'data-company-id="{company_id}"></script>'
     )
     return {"company_id": company_id, "embed_code": embed_code}

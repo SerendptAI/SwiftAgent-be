@@ -23,22 +23,21 @@ async def ensure_collection():
 async def ingest_document(user_id: str, doc_id: str, title: str, content: str, metadata: dict):
     await ensure_collection()
 
-    # embed the full content, store title and metadata alongside
-    point = models.Document(
-        page_content=content,
-        metadata={
-            "doc_id": doc_id,
-            "title": title,
-            "user_id": user_id,
-            "type": "knowledge_doc",
-            **metadata,
-        },
-        id=str(uuid4()),
-    )
-
-    await qdrant_client.upsert(
+    # use qdrant fastembed add – handles embedding + upserting
+    await qdrant_client.add(
         collection_name=COLLECTION_NAME,
-        points=[point],
+        documents=[content],
+        metadata=[
+            {
+                "doc_id": doc_id,
+                "title": title,
+                "user_id": user_id,
+                "type": "knowledge_doc",
+                "page_content": content,
+                **metadata,
+            }
+        ],
+        ids=[str(uuid4())],
     )
 
 async def search_knowledge(user_id: str, query: str, limit: int = 5, threshold: float = 0.7) -> dict:
