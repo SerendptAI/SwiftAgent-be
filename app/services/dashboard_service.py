@@ -13,15 +13,9 @@ async def get_stats(company_id: str) -> dict:
         "timestamp": {"$gte": today_start},
     })
 
-    # chats answered and pending
-    chats_answered = await db.conversations.count_documents({
+    # chats (widget conversations)
+    chats_today = await db.widget_conversations.count_documents({
         "company_id": company_id,
-        "status": "answered",
-        "created_at": {"$gte": today_start},
-    })
-    chats_pending = await db.conversations.count_documents({
-        "company_id": company_id,
-        "status": "pending",
         "created_at": {"$gte": today_start},
     })
 
@@ -31,10 +25,10 @@ async def get_stats(company_id: str) -> dict:
         "timestamp": {"$gte": today_start},
     })
 
-    # documents count
-    documents_today = await db.documents.count_documents({
+    # documents count (uploaded knowledge sources)
+    documents_today = await db.knowledge_sources.count_documents({
         "company_id": company_id,
-        "created_at": {"$gte": today_start},
+        "uploaded_at": {"$gte": today_start},
     })
 
     # scrapes count
@@ -45,7 +39,7 @@ async def get_stats(company_id: str) -> dict:
 
     return {
         "visitors": {"today": visitors_today, "percent_change": 0.0, "last_7_days_up": 0, "last_7_days_down": 0},
-        "chats": {"answered": chats_answered, "pending": chats_pending, "last_7_days_up": 0, "last_7_days_down": 0},
+        "chats": {"today": chats_today, "pending": 0, "last_7_days_up": 0, "last_7_days_down": 0},
         "calls": {"today": calls_today, "percent_change": 0.0, "last_7_days_up": 0, "last_7_days_down": 0},
         "documents": {"today": documents_today, "percent_change": 0.0, "last_7_days_up": 0, "last_7_days_down": 0},
         "scrapes": {"today": scrapes_today, "percent_change": 0.0, "last_7_days_up": 0, "last_7_days_down": 0},

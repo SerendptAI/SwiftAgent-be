@@ -9,7 +9,7 @@ class StatCard(BaseModel):
     last_7_days_down: int = 0
 
 class ChatStatCard(BaseModel):
-    answered: int = 0
+    today: int = 0
     pending: int = 0
     last_7_days_up: int = 0
     last_7_days_down: int = 0
