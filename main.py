@@ -40,7 +40,7 @@ app.include_router(dashboard.router, prefix="/api/v1/dashboard")
 
 app.include_router(voice.router, prefix="/api/v1/voice")
 
-app.mount("/static", StaticFiles(directory=Path(__file__).parent / "app" / "static"), name="static")
+
 
 @app.get("/health", tags=["Health"])
 async def health_check():
