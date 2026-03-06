@@ -41,6 +41,7 @@ async def voice_call(websocket: WebSocket, company_id: str):
 
     session_id = None
     audio_buffer = bytearray()
+    webm_init_segment = None  # stores WebM header from the first audio chunk
 
     try:
         while True:
@@ -58,7 +59,12 @@ async def voice_call(websocket: WebSocket, company_id: str):
                 # accumulate audio chunks from the user's mic
                 chunk_b64 = msg.get("data", "")
                 if chunk_b64:
-                    audio_buffer.extend(base64.b64decode(chunk_b64))
+                    chunk = base64.b64decode(chunk_b64)
+                    # capture the WebM init segment from the very first chunk
+                    # (contains EBML header + Segment/Track info needed for a valid file)
+                    if webm_init_segment is None and chunk[:4] == b'\x1a\x45\xdf\xa3':
+                        webm_init_segment = bytes(chunk)
+                    audio_buffer.extend(chunk)
 
             elif msg_type == "stop_audio":
                 # user finished speaking — process the audio
@@ -72,8 +78,15 @@ async def voice_call(websocket: WebSocket, company_id: str):
 
                 # STT — transcribe the audio
                 await websocket.send_json({"type": "status", "status": "transcribing"})
+
+                # build a valid WebM file: if the buffer doesn't start with
+                # the EBML magic bytes, prepend the saved init segment
+                raw = bytes(audio_buffer)
+                if webm_init_segment and raw[:4] != b'\x1a\x45\xdf\xa3':
+                    raw = webm_init_segment + raw
+
                 try:
-                    transcript = await fish_audio_service.transcribe(bytes(audio_buffer))
+                    transcript = await fish_audio_service.transcribe(raw)
                 except Exception as e:
                     logger.error(f"STT failed: {e}")
                     await websocket.send_json({"type": "error", "message": "Could not transcribe audio"})
