@@ -29,6 +29,4 @@ class VisitorRecord(BaseModel):
     duration_seconds: int = 0
     timestamp: datetime
 
-class WidgetConfig(BaseModel):
-    company_id: str
-    embed_code: str
+

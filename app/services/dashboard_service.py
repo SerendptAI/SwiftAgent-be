@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from app.core.database import db
-from app.core.config import settings
 
 async def get_stats(company_id: str) -> dict:
     now = datetime.utcnow()
@@ -48,11 +47,3 @@ async def get_stats(company_id: str) -> dict:
 async def get_visitors(company_id: str, limit: int = 20) -> list:
     cursor = db.visitors.find({"company_id": company_id}).sort("timestamp", -1).limit(limit)
     return await cursor.to_list(length=limit)
-
-async def get_widget_config(company_id: str) -> dict:
-    base_url = settings.API_BASE_URL
-    embed_code = (
-        f'<script src="{base_url}/static/widget/widget.js" '
-        f'data-company-id="{company_id}"></script>'
-    )
-    return {"company_id": company_id, "embed_code": embed_code}

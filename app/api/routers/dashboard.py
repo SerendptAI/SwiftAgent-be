@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 from app.core.auth import get_current_user
-from app.models.dashboard_models import DashboardStats, VisitorRecord, WidgetConfig
+from app.models.dashboard_models import DashboardStats, VisitorRecord
 from app.services import dashboard_service, company_service
 
 router = APIRouter(tags=["Dashboard"])
@@ -31,14 +31,4 @@ async def get_visitors(
         raise HTTPException(status_code=404, detail="Company not found")
     return await dashboard_service.get_visitors(company_id, limit)
 
-@router.get("/{company_id}/widget", response_model=WidgetConfig)
-async def get_widget_config(
-    company_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Get the embeddable widget code for a company."""
-    user_id = current_user["user_id"]
-    company = await company_service.get_company(company_id, user_id)
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
-    return await dashboard_service.get_widget_config(company_id)
+
