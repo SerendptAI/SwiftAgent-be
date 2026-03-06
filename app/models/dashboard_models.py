@@ -29,4 +29,26 @@ class VisitorRecord(BaseModel):
     duration_seconds: int = 0
     timestamp: datetime
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+    timestamp: Optional[str] = None
+
+class ChatSessionSummary(BaseModel):
+    id: str
+    company_id: str
+    session_id: str
+    created_at: datetime
+    updated_at: datetime
+    message_count: int = 0
+
+class ChatSession(ChatSessionSummary):
+    messages: List[ChatMessage] = []
+    id: str
+    company_id: str
+    session_id: str
+    created_at: datetime
+    updated_at: datetime
+    messages: List[ChatMessage] = []
+
 
