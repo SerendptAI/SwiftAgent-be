@@ -20,7 +20,7 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.core.database import db
-from app.services import agent_service, fish_audio_service
+from app.services import anthropic_agent_service, fish_audio_service
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ async def voice_call(websocket: WebSocket, company_id: str):
                 # agent — process through existing chat pipeline
                 await websocket.send_json({"type": "status", "status": "thinking"})
                 try:
-                    result = await agent_service.chat(company_id, session_id, transcript)
+                    result = await anthropic_agent_service.chat(company_id, session_id, transcript)
                     reply = result.get("reply", "I'm sorry, I couldn't generate a response.")
                 except Exception as e:
                     logger.error(f"Agent chat failed: {e}")

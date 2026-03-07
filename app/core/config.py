@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # Gemini AI
     GEMINI_API_KEY: str = ""
 
+    # Anthropic AI
+    ANTHROPIC_API_KEY: str = ""
+
     # Cloudinary (file uploads)
     CLOUDINARY_CLOUD_NAME: str = ""
     CLOUDINARY_API_KEY: str = ""
