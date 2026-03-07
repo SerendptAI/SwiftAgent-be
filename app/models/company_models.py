@@ -12,6 +12,23 @@ class CompanyInfoCreate(BaseModel):
     contact_email: str
     phone_number: Optional[str] = None
 
+class CompanyInfoUpdate(BaseModel):
+    name: Optional[str] = None
+    website: Optional[str] = None
+    industry: Optional[str] = None
+    company_size: Optional[str] = None
+    country: Optional[str] = None
+    timezone: Optional[str] = None
+    contact_email: Optional[str] = None
+    phone_number: Optional[str] = None
+
+class CompanySecurityUpdate(BaseModel):
+    backup_email: Optional[str] = None
+    access_code: Optional[str] = None
+
+class MemberInviteCreate(BaseModel):
+    email: str
+
 class CompanyIdentityUpdate(BaseModel):
     description: Optional[str] = None
     customer_value: Optional[str] = None

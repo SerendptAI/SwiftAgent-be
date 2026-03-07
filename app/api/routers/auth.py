@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.database import get_database
 from app.core.security import create_access_token, create_refresh_token, decode_refresh_token
 from app.core.auth import get_current_user
-from app.models.auth_models import RefreshTokenRequest
+from app.models.auth_models import RefreshTokenRequest, UserProfileUpdate
 import os
 
 router = APIRouter(tags=["Auth"])
@@ -150,3 +150,24 @@ async def read_users_me(current_user: dict = Depends(get_current_user), db = Dep
     current_user["company_id"] = company["id"] if company else None
 
     return current_user
+
+@router.patch("/me")
+async def update_user_profile(
+    data: UserProfileUpdate,
+    current_user: dict = Depends(get_current_user),
+    db = Depends(get_database)
+):
+    """Update current user's profile details."""
+    user_id = current_user["user_id"]
+    
+    update_data = data.model_dump(exclude_none=True)
+    if not update_data:
+        return {"status": "success"}
+
+    update_data["updated_at"] = datetime.utcnow()
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": update_data}
+    )
+    return {"status": "success"}

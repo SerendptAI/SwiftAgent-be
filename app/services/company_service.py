@@ -62,6 +62,26 @@ async def update_company_type(company_id: str, user_id: str, company_type: str) 
     )
     return await get_company(company_id, user_id)
 
+async def update_company_info(company_id: str, user_id: str, data: dict) -> dict:
+    update = {
+        "$set": {
+            **{k: v for k, v in data.items() if v is not None},
+            "updated_at": datetime.utcnow(),
+        }
+    }
+    await db.companies.update_one({"id": company_id, "user_id": user_id}, update)
+    return await get_company(company_id, user_id)
+
+async def update_security(company_id: str, user_id: str, data: dict) -> dict:
+    update = {
+        "$set": {
+            **{k: v for k, v in data.items() if v is not None},
+            "updated_at": datetime.utcnow(),
+        }
+    }
+    await db.companies.update_one({"id": company_id, "user_id": user_id}, update)
+    return await get_company(company_id, user_id)
+
 async def update_boundaries(company_id: str, user_id: str, data: dict) -> dict:
     await db.companies.update_one(
         {"id": company_id, "user_id": user_id},

@@ -3,6 +3,8 @@ from typing import List
 from app.core.auth import get_current_user
 from app.models.company_models import (
     CompanyInfoCreate,
+    CompanyInfoUpdate,
+    CompanySecurityUpdate,
     CompanyIdentityUpdate,
     CompanyTypeUpdate,
     AnswerBoundariesUpdate,
@@ -57,6 +59,32 @@ async def update_identity(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     return await company_service.update_identity(company_id, user_id, data.model_dump(exclude_none=True))
+
+@router.patch("/{company_id}/info", response_model=CompanyResponse)
+async def update_company_info(
+    company_id: str,
+    data: CompanyInfoUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update general company information (Settings page)."""
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return await company_service.update_company_info(company_id, user_id, data.model_dump(exclude_none=True))
+
+@router.patch("/{company_id}/security", response_model=CompanyResponse)
+async def update_security(
+    company_id: str,
+    data: CompanySecurityUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update settings for security, like backup email and access code."""
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return await company_service.update_security(company_id, user_id, data.model_dump(exclude_none=True))
 
 @router.patch("/{company_id}/type", response_model=CompanyResponse)
 async def update_company_type(
