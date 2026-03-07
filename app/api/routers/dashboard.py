@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 from app.core.auth import get_current_user
-from app.models.dashboard_models import DashboardStats, VisitorRecord, ChatSession, ChatSessionSummary
+from app.core.database import db
+from app.models.dashboard_models import DashboardStats, VisitorRecord, ChatSession, ChatSessionSummary, VisitorEventCreate
 from app.services import dashboard_service, company_service
 
 router = APIRouter(tags=["Dashboard"])
@@ -80,5 +81,18 @@ async def mark_chat_seen(
         if not chat:
             raise HTTPException(status_code=404, detail="Chat session not found")
     return {"status": "success"}
+
+@router.post("/{company_id}/visitors/log")
+async def log_visitor(
+    company_id: str,
+    payload: VisitorEventCreate
+):
+    """Log a unique visitor by IP address (unprotected public endpoint)."""
+    company = await db.companies.find_one({"id": company_id})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+        
+    result = await dashboard_service.log_visitor(company_id, payload.ip_address)
+    return result
 
 

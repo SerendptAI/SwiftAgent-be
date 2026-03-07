@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from uuid import uuid4
 from app.core.database import db
 
 async def get_stats(company_id: str) -> dict:
@@ -83,3 +84,29 @@ async def mark_chat_seen(company_id: str, chat_id: str) -> bool:
         {"$set": {"seen": True}}
     )
     return result.modified_count > 0
+
+async def log_visitor(company_id: str, ip_address: str) -> dict:
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Check if a document with company_id, visitor_id (IP), and timestamp >= today_start exists
+    existing_visitor = await db.visitors.find_one({
+        "company_id": company_id,
+        "visitor_id": ip_address,
+        "timestamp": {"$gte": today_start}
+    })
+
+    if existing_visitor:
+        return {"status": "already_logged", "id": existing_visitor["id"]}
+
+    # Insert a new record
+    new_id = str(uuid4())
+    doc = {
+        "id": new_id,
+        "company_id": company_id,
+        "visitor_id": ip_address,
+        "timestamp": now,
+        "duration_seconds": 0
+    }
+    await db.visitors.insert_one(doc)
+    return {"status": "logged", "id": new_id}
