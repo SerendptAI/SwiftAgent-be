@@ -18,6 +18,11 @@ async def get_stats(company_id: str) -> dict:
         "created_at": {"$gte": today_start},
     })
 
+    pending_chats = await db.widget_conversations.count_documents({
+        "company_id": company_id,
+        "seen": {"$ne": True},
+    })
+
     # calls today
     calls_today = await db.calls.count_documents({
         "company_id": company_id,
@@ -38,7 +43,7 @@ async def get_stats(company_id: str) -> dict:
 
     return {
         "visitors": {"today": visitors_today, "percent_change": 0.0, "last_7_days_up": 0, "last_7_days_down": 0},
-        "chats": {"today": chats_today, "pending": 0, "last_7_days_up": 0, "last_7_days_down": 0},
+        "chats": {"today": chats_today, "pending": pending_chats, "last_7_days_up": 0, "last_7_days_down": 0},
         "calls": {"today": calls_today, "percent_change": 0.0, "last_7_days_up": 0, "last_7_days_down": 0},
         "documents": {"today": documents_today, "percent_change": 0.0, "last_7_days_up": 0, "last_7_days_down": 0},
         "scrapes": {"today": scrapes_today, "percent_change": 0.0, "last_7_days_up": 0, "last_7_days_down": 0},
@@ -60,7 +65,8 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
             "session_id": 1,
             "created_at": 1,
             "updated_at": 1,
-            "message_count": {"$size": {"$ifNull": ["$messages", []]}}
+            "message_count": {"$size": {"$ifNull": ["$messages", []]}},
+            "seen": {"$ifNull": ["$seen", False]}
         }}
     ])
     return await cursor.to_list(length=limit)
@@ -70,3 +76,10 @@ async def get_chat_by_id(company_id: str, chat_id: str) -> dict:
         "company_id": company_id,
         "id": chat_id
     })
+
+async def mark_chat_seen(company_id: str, chat_id: str) -> bool:
+    result = await db.widget_conversations.update_one(
+        {"company_id": company_id, "id": chat_id},
+        {"$set": {"seen": True}}
+    )
+    return result.modified_count > 0

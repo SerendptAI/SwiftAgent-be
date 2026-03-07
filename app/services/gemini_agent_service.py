@@ -277,6 +277,7 @@ async def _save_conversation(company_id: str, session_id: str, messages: list[di
             "$set": {
                 "messages": messages,
                 "updated_at": datetime.now(tz=timezone.utc),
+                "seen": False,
             },
             "$setOnInsert": {
                 "id": str(uuid4()),

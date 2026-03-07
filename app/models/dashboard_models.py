@@ -41,6 +41,7 @@ class ChatSessionSummary(BaseModel):
     created_at: datetime
     updated_at: datetime
     message_count: int = 0
+    seen: bool = False
 
 class ChatSession(ChatSessionSummary):
     messages: List[ChatMessage] = []

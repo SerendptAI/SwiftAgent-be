@@ -62,4 +62,23 @@ async def get_chat_by_id(
         raise HTTPException(status_code=404, detail="Chat session not found")
     return chat
 
+@router.patch("/{company_id}/chats/{chat_id}/seen")
+async def mark_chat_seen(
+    company_id: str,
+    chat_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Mark a chat session as seen."""
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+        
+    success = await dashboard_service.mark_chat_seen(company_id, chat_id)
+    if not success:
+        chat = await dashboard_service.get_chat_by_id(company_id, chat_id)
+        if not chat:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+    return {"status": "success"}
+
 
