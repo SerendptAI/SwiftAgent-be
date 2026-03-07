@@ -1,53 +1,87 @@
 """
-Unified Etherscan-compatible API client for EVM chains.
-All supported chains use the same API shape — only the base URL and key differ.
+Unified Etherscan API V2 client for EVM chains.
+All supported chains use a single API key and base URL — only the chain ID differs.
+Docs: https://docs.etherscan.io
 """
 import httpx
 from datetime import datetime, timezone
 from app.core.config import settings
 
-# Chain config: base_url, api_key_attr, native_symbol, coingecko_id, confirmations_required
+# Etherscan API V2 — single endpoint for all chains
+BASE_URL = "https://api.etherscan.io/v2/api"
+
+# Chain config: chain_id, native_symbol, coingecko_id, confirmations_required
 CHAIN_CONFIG = {
     "ethereum": {
-        "base_url": "https://api.etherscan.io/api",
-        "api_key_attr": "ETHERSCAN_API_KEY",
+        "chain_id": 1,
         "symbol": "ETH",
         "coingecko_id": "ethereum",
         "confirmations_required": 6,
     },
     "bsc": {
-        "base_url": "https://api.bscscan.com/api",
-        "api_key_attr": "BSCSCAN_API_KEY",
+        "chain_id": 56,
         "symbol": "BNB",
         "coingecko_id": "binancecoin",
         "confirmations_required": 3,
     },
     "polygon": {
-        "base_url": "https://api.polygonscan.com/api",
-        "api_key_attr": "POLYGONSCAN_API_KEY",
-        "symbol": "MATIC",
+        "chain_id": 137,
+        "symbol": "POL",
         "coingecko_id": "matic-network",
         "confirmations_required": 1,
     },
     "arbitrum": {
-        "base_url": "https://api.arbiscan.io/api",
-        "api_key_attr": "ARBISCAN_API_KEY",
+        "chain_id": 42161,
         "symbol": "ETH",
         "coingecko_id": "ethereum",
         "confirmations_required": 1,
     },
     "base": {
-        "base_url": "https://api.basescan.org/api",
-        "api_key_attr": "BASESCAN_API_KEY",
+        "chain_id": 8453,
         "symbol": "ETH",
         "coingecko_id": "ethereum",
         "confirmations_required": 1,
     },
     "avalanche": {
-        "base_url": "https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api",
-        "api_key_attr": "AVALANCHE_API_KEY",
+        "chain_id": 43114,
         "symbol": "AVAX",
         "coingecko_id": "avalanche-2",
+        "confirmations_required": 1,
+    },
+    "optimism": {
+        "chain_id": 10,
+        "symbol": "ETH",
+        "coingecko_id": "ethereum",
+        "confirmations_required": 1,
+    },
+    "linea": {
+        "chain_id": 59144,
+        "symbol": "ETH",
+        "coingecko_id": "ethereum",
+        "confirmations_required": 1,
+    },
+    "scroll": {
+        "chain_id": 534352,
+        "symbol": "ETH",
+        "coingecko_id": "ethereum",
+        "confirmations_required": 1,
+    },
+    "blast": {
+        "chain_id": 81457,
+        "symbol": "ETH",
+        "coingecko_id": "ethereum",
+        "confirmations_required": 1,
+    },
+    "gnosis": {
+        "chain_id": 100,
+        "symbol": "xDAI",
+        "coingecko_id": "xdai",
+        "confirmations_required": 1,
+    },
+    "celo": {
+        "chain_id": 42220,
+        "symbol": "CELO",
+        "coingecko_id": "celo",
         "confirmations_required": 1,
     },
 }
@@ -55,62 +89,71 @@ CHAIN_CONFIG = {
 HTTP_TIMEOUT = 15.0
 
 
-def _get_api_key(chain: str) -> str | None:
-    """Get the API key for a chain from settings."""
-    cfg = CHAIN_CONFIG.get(chain)
-    if not cfg:
-        return None
-    key = getattr(settings, cfg["api_key_attr"], "")
+def _get_api_key() -> str | None:
+    """Get the single Etherscan API key from settings."""
+    key = getattr(settings, "ETHERSCAN_API_KEY", "")
     return key if key else None
 
 
 def get_supported_chains() -> list[str]:
-    """Return list of chains that have API keys configured."""
-    return [chain for chain in CHAIN_CONFIG if _get_api_key(chain)]
+    """Return list of supported EVM chains (available when API key is set)."""
+    if _get_api_key():
+        return list(CHAIN_CONFIG.keys())
+    return []
+
+
+def _base_params(chain: str) -> dict | None:
+    """Build the common params dict with chainid and apikey. Returns None if misconfigured."""
+    cfg = CHAIN_CONFIG.get(chain)
+    if not cfg:
+        return None
+    api_key = _get_api_key()
+    if not api_key:
+        return None
+    return {"chainid": cfg["chain_id"], "apikey": api_key}
 
 
 async def get_transaction(chain: str, tx_hash: str) -> dict | None:
     """
-    Fetch transaction details from the block explorer.
+    Fetch transaction details from Etherscan V2.
     Returns structured tx data or None on failure.
     """
     cfg = CHAIN_CONFIG.get(chain)
     if not cfg:
         return {"error": f"Unsupported chain: {chain}"}
 
-    api_key = _get_api_key(chain)
-    if not api_key:
-        supported = get_supported_chains()
+    base = _base_params(chain)
+    if not base:
         return {
-            "error": f"No API key configured for {chain}",
-            "supported_chains": supported,
+            "error": f"No Etherscan API key configured",
+            "supported_chains": get_supported_chains(),
         }
 
     try:
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             # Get transaction receipt for status
-            receipt_resp = await client.get(cfg["base_url"], params={
+            receipt_resp = await client.get(BASE_URL, params={
+                **base,
                 "module": "proxy",
                 "action": "eth_getTransactionReceipt",
                 "txhash": tx_hash,
-                "apikey": api_key,
             })
             receipt_data = receipt_resp.json()
 
             # Get transaction details
-            tx_resp = await client.get(cfg["base_url"], params={
+            tx_resp = await client.get(BASE_URL, params={
+                **base,
                 "module": "proxy",
                 "action": "eth_getTransactionByHash",
                 "txhash": tx_hash,
-                "apikey": api_key,
             })
             tx_data = tx_resp.json()
 
             # Get current block number for confirmation count
-            block_resp = await client.get(cfg["base_url"], params={
+            block_resp = await client.get(BASE_URL, params={
+                **base,
                 "module": "proxy",
                 "action": "eth_blockNumber",
-                "apikey": api_key,
             })
             block_data = block_resp.json()
 
@@ -171,38 +214,38 @@ async def get_wallet(chain: str, address: str) -> dict | None:
     if not cfg:
         return {"error": f"Unsupported chain: {chain}"}
 
-    api_key = _get_api_key(chain)
-    if not api_key:
-        supported = get_supported_chains()
+    base = _base_params(chain)
+    if not base:
         return {
-            "error": f"No API key configured for {chain}",
-            "supported_chains": supported,
+            "error": f"No Etherscan API key configured",
+            "supported_chains": get_supported_chains(),
         }
 
     try:
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             # Get balance
-            balance_resp = await client.get(cfg["base_url"], params={
+            balance_resp = await client.get(BASE_URL, params={
+                **base,
                 "module": "account",
                 "action": "balance",
                 "address": address,
                 "tag": "latest",
-                "apikey": api_key,
             })
             balance_data = balance_resp.json()
 
             # Get tx count
-            txcount_resp = await client.get(cfg["base_url"], params={
+            txcount_resp = await client.get(BASE_URL, params={
+                **base,
                 "module": "proxy",
                 "action": "eth_getTransactionCount",
                 "address": address,
                 "tag": "latest",
-                "apikey": api_key,
             })
             txcount_data = txcount_resp.json()
 
             # Get recent transactions (last 5)
-            txlist_resp = await client.get(cfg["base_url"], params={
+            txlist_resp = await client.get(BASE_URL, params={
+                **base,
                 "module": "account",
                 "action": "txlist",
                 "address": address,
@@ -211,7 +254,6 @@ async def get_wallet(chain: str, address: str) -> dict | None:
                 "page": 1,
                 "offset": 5,
                 "sort": "desc",
-                "apikey": api_key,
             })
             txlist_data = txlist_resp.json()
 
@@ -255,16 +297,16 @@ async def get_gas_price(chain: str) -> dict | None:
     if not cfg:
         return None
 
-    api_key = _get_api_key(chain)
-    if not api_key:
+    base = _base_params(chain)
+    if not base:
         return None
 
     try:
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-            resp = await client.get(cfg["base_url"], params={
+            resp = await client.get(BASE_URL, params={
+                **base,
                 "module": "proxy",
                 "action": "eth_gasPrice",
-                "apikey": api_key,
             })
             data = resp.json()
 
@@ -282,9 +324,9 @@ async def probe_transaction_chain(tx_hash: str) -> str | None:
     Try each supported EVM chain to find which one has this transaction.
     Returns the chain name or None.
     """
+    if not _get_api_key():
+        return None
     for chain in CHAIN_CONFIG:
-        if not _get_api_key(chain):
-            continue
         result = await get_transaction(chain, tx_hash)
         if result and "error" not in result:
             return chain
@@ -296,13 +338,11 @@ async def probe_address_chain(address: str) -> str | None:
     Try each supported EVM chain to find activity for an address.
     Returns the first chain with a non-zero tx count, or 'ethereum' as default.
     """
+    if not _get_api_key():
+        return None
     for chain in CHAIN_CONFIG:
-        if not _get_api_key(chain):
-            continue
         result = await get_wallet(chain, address)
         if result and "error" not in result and result.get("tx_count", 0) > 0:
             return chain
     # Default to ethereum if we have the key
-    if _get_api_key("ethereum"):
-        return "ethereum"
-    return None
+    return "ethereum"

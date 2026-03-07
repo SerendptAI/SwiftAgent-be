@@ -4,7 +4,10 @@ Auto-detect blockchain chain from transaction hash or wallet address format.
 import re
 
 # EVM chains in priority order for probing
-EVM_CHAINS = ["ethereum", "bsc", "polygon", "arbitrum", "base", "avalanche"]
+EVM_CHAINS = [
+    "ethereum", "bsc", "polygon", "arbitrum", "base", "avalanche",
+    "optimism", "linea", "scroll", "blast", "gnosis", "celo",
+]
 
 # Regex patterns
 EVM_TX_HASH = re.compile(r"^0x[0-9a-fA-F]{64}$")

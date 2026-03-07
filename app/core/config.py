@@ -30,13 +30,8 @@ class Settings(BaseSettings):
     FISH_AUDIO_API_KEY: str = ""
     FISH_AUDIO_VOICE_ID: str = ""
 
-    # Blockchain explorer API keys (optional per-chain)
+    # Blockchain explorer (Etherscan API V2 — single key for all EVM chains)
     ETHERSCAN_API_KEY: str = ""
-    BSCSCAN_API_KEY: str = ""
-    POLYGONSCAN_API_KEY: str = ""
-    ARBISCAN_API_KEY: str = ""
-    BASESCAN_API_KEY: str = ""
-    AVALANCHE_API_KEY: str = ""
 
     model_config = SettingsConfigDict(env_file=".env")
 
