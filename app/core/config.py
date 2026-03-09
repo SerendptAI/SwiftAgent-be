@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     API_BASE_URL: str
     CONFIDENCE_THRESHOLD: float = 0.7
+    REFERRAL_CODE: str = ""
 
     # Gemini AI
     GEMINI_API_KEY: str = ""

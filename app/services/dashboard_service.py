@@ -4,50 +4,76 @@ from app.core.database import db
 
 async def get_stats(company_id: str) -> dict:
     now = datetime.utcnow()
+    
+    # Time boundaries
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    week_ago = now - timedelta(days=7)
+    yesterday_start = today_start - timedelta(days=1)
+    
+    last_7_days_start = now - timedelta(days=7)
+    previous_7_days_start = last_7_days_start - timedelta(days=7)
 
-    # visitor count today
-    visitors_today = await db.visitors.count_documents({
-        "company_id": company_id,
-        "timestamp": {"$gte": today_start},
-    })
+    async def get_stat_group(collection, date_field):
+        # today's count
+        today_count = await collection.count_documents({
+            "company_id": company_id,
+            date_field: {"$gte": today_start}
+        })
+        
+        # yesterday's count
+        yesterday_count = await collection.count_documents({
+            "company_id": company_id,
+            date_field: {"$gte": yesterday_start, "$lt": today_start}
+        })
+        
+        # last 7 days count
+        last_7_days_count = await collection.count_documents({
+            "company_id": company_id,
+            date_field: {"$gte": last_7_days_start}
+        })
+        
+        # previous 7 days count
+        previous_7_days_count = await collection.count_documents({
+            "company_id": company_id,
+            date_field: {"$gte": previous_7_days_start, "$lt": last_7_days_start}
+        })
+        
+        # calculate percent change (today vs yesterday)
+        if yesterday_count == 0:
+            percent_change = 100.0 if today_count > 0 else 0.0
+        else:
+            percent_change = ((today_count - yesterday_count) / yesterday_count) * 100.0
+            
+        # calculate up/down trends
+        trend_diff = last_7_days_count - previous_7_days_count
+        trend_up = trend_diff if trend_diff > 0 else 0
+        trend_down = abs(trend_diff) if trend_diff < 0 else 0
+            
+        return {
+            "today": today_count,
+            "percent_change": round(percent_change, 1),
+            "last_7_days_up": trend_up,
+            "last_7_days_down": trend_down
+        }
 
-    # chats (widget conversations)
-    chats_today = await db.widget_conversations.count_documents({
-        "company_id": company_id,
-        "created_at": {"$gte": today_start},
-    })
-
+    visitors_stat = await get_stat_group(db.visitors, "timestamp")
+    calls_stat = await get_stat_group(db.calls, "timestamp")
+    documents_stat = await get_stat_group(db.knowledge_sources, "uploaded_at")
+    scrapes_stat = await get_stat_group(db.scrapes, "timestamp")
+    
+    # chats (widget conversations) has an extra 'pending' field
+    chats_stat = await get_stat_group(db.widget_conversations, "created_at")
     pending_chats = await db.widget_conversations.count_documents({
         "company_id": company_id,
         "seen": {"$ne": True},
     })
-
-    # calls today
-    calls_today = await db.calls.count_documents({
-        "company_id": company_id,
-        "timestamp": {"$gte": today_start},
-    })
-
-    # documents count (uploaded knowledge sources)
-    documents_today = await db.knowledge_sources.count_documents({
-        "company_id": company_id,
-        "uploaded_at": {"$gte": today_start},
-    })
-
-    # scrapes count
-    scrapes_today = await db.scrapes.count_documents({
-        "company_id": company_id,
-        "timestamp": {"$gte": today_start},
-    })
+    chats_stat["pending"] = pending_chats
 
     return {
-        "visitors": {"today": visitors_today, "percent_change": 0.0, "last_7_days_up": 0, "last_7_days_down": 0},
-        "chats": {"today": chats_today, "pending": pending_chats, "last_7_days_up": 0, "last_7_days_down": 0},
-        "calls": {"today": calls_today, "percent_change": 0.0, "last_7_days_up": 0, "last_7_days_down": 0},
-        "documents": {"today": documents_today, "percent_change": 0.0, "last_7_days_up": 0, "last_7_days_down": 0},
-        "scrapes": {"today": scrapes_today, "percent_change": 0.0, "last_7_days_up": 0, "last_7_days_down": 0},
+        "visitors": visitors_stat,
+        "chats": chats_stat,
+        "calls": calls_stat,
+        "documents": documents_stat,
+        "scrapes": scrapes_stat,
     }
 
 async def get_visitors(company_id: str, limit: int = 20) -> list:

@@ -15,6 +15,7 @@ Protocol (JSON messages over WebSocket):
     {"type": "audio", "data": "<base64>"}      — TTS audio response
     {"type": "error", "message": "..."}        — error occurred
 """
+from datetime import datetime
 import base64
 import logging
 
@@ -52,6 +53,14 @@ async def voice_call(websocket: WebSocket, company_id: str):
                 # begin a new call session
                 session_id = msg.get("session_id", "")
                 audio_buffer.clear()
+                
+                # record the call in database
+                await db.calls.insert_one({
+                    "company_id": company_id,
+                    "session_id": session_id,
+                    "timestamp": datetime.utcnow()
+                })
+                
                 await websocket.send_json({"type": "status", "status": "ready"})
                 logger.info(f"Voice call started: company={company_id}, session={session_id}")
 

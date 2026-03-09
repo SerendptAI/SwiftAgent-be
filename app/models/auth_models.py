@@ -7,3 +7,6 @@ class RefreshTokenRequest(BaseModel):
 class UserProfileUpdate(BaseModel):
     personal_email: Optional[str] = None
     personal_phone: Optional[str] = None
+
+class ReferralRequest(BaseModel):
+    code: str

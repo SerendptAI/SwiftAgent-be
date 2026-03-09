@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.database import get_database
 from app.core.security import create_access_token, create_refresh_token, decode_refresh_token
 from app.core.auth import get_current_user
-from app.models.auth_models import RefreshTokenRequest, UserProfileUpdate
+from app.models.auth_models import RefreshTokenRequest, UserProfileUpdate, ReferralRequest
 import os
 
 router = APIRouter(tags=["Auth"])
@@ -31,6 +31,18 @@ def _build_client_config():
             "redirect_uris": [REDIRECT_URI],
         }
     }
+
+@router.post("/verify-referral")
+async def verify_referral(request: ReferralRequest):
+    """Verify if the provided referral code is valid."""
+    if not settings.REFERRAL_CODE:
+        # If no code is configured, accept any code or disable invite-only
+        return {"status": "success", "message": "Invites are open"}
+        
+    if request.code != settings.REFERRAL_CODE:
+        raise HTTPException(status_code=400, detail="Invalid referral code")
+        
+    return {"status": "success", "message": "Valid referral code"}
 
 @router.get("/login")
 async def login(redirect_url: Optional[str] = None):
