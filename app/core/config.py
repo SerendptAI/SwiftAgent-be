@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     MONGO_DB_NAME: str = "swift_agent"
     QDRANT_URL: str
     QDRANT_API_KEY: str
-    QDRANT_COLLECTION_NAME: str = "knowledge_docs"
+    QDRANT_COLLECTION_NAME: str = "knowledge_docs_gemini"
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     SECRET_KEY: str
