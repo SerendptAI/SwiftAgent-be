@@ -26,6 +26,11 @@ async def ensure_collection():
         field_name="user_id",
         field_schema="keyword"
     )
+    await qdrant_client.create_payload_index(
+        collection_name=COLLECTION_NAME,
+        field_name="company_id",
+        field_schema="keyword"
+    )
 
 async def ingest_document(user_id: str, doc_id: str, title: str, content: str, metadata: dict):
     await ensure_collection()
@@ -59,7 +64,7 @@ async def ingest_document(user_id: str, doc_id: str, title: str, content: str, m
         ]
     )
 
-async def search_knowledge(user_id: str, query: str, limit: int = 5, threshold: float = 0.7) -> dict:
+async def search_knowledge(user_id: str, query: str, limit: int = 5, threshold: float = 0.7, company_id: str = None) -> dict:
     # ensure collection exists
     if not await qdrant_client.collection_exists(COLLECTION_NAME):
         return {"results": [], "confidence": 0.0, "escalate": True}
@@ -78,16 +83,25 @@ async def search_knowledge(user_id: str, query: str, limit: int = 5, threshold: 
         print(f"Embedding error: {e}")
         return {"results": [], "confidence": 0.0, "escalate": True}
 
+    must_conditions = [
+        models.FieldCondition(
+            key="user_id",
+            match=models.MatchValue(value=user_id)
+        )
+    ]
+    if company_id:
+        must_conditions.append(
+            models.FieldCondition(
+                key="company_id",
+                match=models.MatchValue(value=company_id)
+            )
+        )
+
     search_result = await qdrant_client.query_points(
         collection_name=COLLECTION_NAME,
         query=query_vector,
         query_filter=models.Filter(
-            must=[
-                models.FieldCondition(
-                    key="user_id",
-                    match=models.MatchValue(value=user_id)
-                )
-            ]
+            must=must_conditions
         ),
         limit=limit,
     )

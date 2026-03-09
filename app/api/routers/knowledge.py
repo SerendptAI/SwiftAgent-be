@@ -76,8 +76,9 @@ async def query_knowledge(
         request.query,
         limit=request.limit,
         threshold=request.threshold,
+        company_id=request.company_id,
     )
-    return {"results": results, "confidence": confidence, "escalate": escalate}
+    return results
 
 @router.post("/upload", response_model=KnowledgeSourceResponse)
 async def upload_knowledge_document(

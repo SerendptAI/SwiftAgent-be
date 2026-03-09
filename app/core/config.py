@@ -15,23 +15,18 @@ class Settings(BaseSettings):
     API_BASE_URL: str
     CONFIDENCE_THRESHOLD: float = 0.7
     REFERRAL_CODE: str = ""
-
-    # Gemini AI
+    # gemini AI
     GEMINI_API_KEY: str = ""
-
-    # Anthropic AI
+    # anthropic AI
     ANTHROPIC_API_KEY: str = ""
-
-    # Cloudinary (file uploads)
+    # cloudinary (file uploads)
     CLOUDINARY_CLOUD_NAME: str = ""
     CLOUDINARY_API_KEY: str = ""
     CLOUDINARY_API_SECRET: str = ""
-
-    # Fish.audio (voice STT/TTS)
+    # fish.audio (voice STT/TTS)
     FISH_AUDIO_API_KEY: str = ""
     FISH_AUDIO_VOICE_ID: str = ""
-
-    # Blockchain explorer (Etherscan API V2 — single key for all EVM chains)
+    # etherscan API V2 — single key for all EVM chains
     ETHERSCAN_API_KEY: str = ""
 
     model_config = SettingsConfigDict(env_file=".env")

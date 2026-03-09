@@ -324,7 +324,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
         user_id = company.get("user_id", "")
         if user_id:
             search_result = await knowledge_service.search_knowledge(
-                user_id, user_message, limit=3, threshold=0.5
+                user_id, user_message, limit=3, threshold=0.5, company_id=company_id
             )
             if search_result.get("results"):
                 knowledge_pieces = []
