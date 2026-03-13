@@ -38,6 +38,25 @@ def _get_client():
 TOOLS = [
     types.Tool(function_declarations=[
         types.FunctionDeclaration(
+            name="search_knowledge_base",
+            description=(
+                "Search the company's knowledge base and documentation for relevant information. "
+                "Use this when a customer asks a question that might be answered by company "
+                "documentation, FAQs, policies, or guides. Do NOT use this for simple greetings, "
+                "small talk, or follow-up questions where you already have the context."
+            ),
+            parameters=types.Schema(
+                type="OBJECT",
+                properties={
+                    "query": types.Schema(
+                        type="STRING",
+                        description="The search query to find relevant documents. Use the customer's question or a refined version of it.",
+                    ),
+                },
+                required=["query"],
+            ),
+        ),
+        types.FunctionDeclaration(
             name="lookup_transaction",
             description=(
                 "Look up a blockchain transaction by its hash. Use this when a customer "
@@ -116,13 +135,13 @@ TOOLS = [
 
 # system prompt builder
 
-def _build_system_prompt(company: dict, knowledge_context: str = "") -> str:
+def _build_system_prompt(company: dict) -> str:
     company_name = company.get("name", "the company")
     brand_tone = company.get("brand_tone", "professional and helpful")
     description = company.get("description", "")
     company_type = company.get("company_type", "")
 
-    base_prompt = f"""You are a senior customer support agent for {company_name}. \
+    return f"""You are a senior customer support agent for {company_name}. \
 You respond with expertise, empathy, and clarity.
 
 COMPANY CONTEXT:
@@ -133,7 +152,9 @@ COMPANY CONTEXT:
 
 YOUR BEHAVIOR:
 1. You are warm, professional, and knowledgeable.
-2. You answer questions based on the company's documentation and knowledge base.
+2. You answer questions based on the company's documentation and knowledge base. \
+Use the search_knowledge_base tool to find relevant information when the customer asks \
+a question that might be answered by company documentation.
 3. For crypto companies: when a customer provides a transaction hash or wallet address, \
 use your tools to look up real on-chain data and diagnose issues.
 4. ALWAYS explain things in plain language. Assume the customer may not be technical.
@@ -144,6 +165,8 @@ use your tools to look up real on-chain data and diagnose issues.
 flag them clearly with appropriate urgency.
 
 TOOL USAGE:
+- Use search_knowledge_base when the customer asks about company policies, features, pricing, \
+FAQs, how-to guides, or anything that might be in the company documentation.
 - When you see a string that looks like a transaction hash (0x... followed by 64 hex chars, \
 or 64 hex chars without 0x for Bitcoin), use lookup_transaction.
 - When you see a wallet address (0x... followed by 40 hex chars, or a Bitcoin address), \
@@ -151,32 +174,43 @@ use lookup_wallet.
 - After getting transaction data, if the customer has a problem, use diagnose_problem \
 to run the data through the diagnosis engine.
 - You can chain tools: first lookup, then diagnose.
+- Do NOT use any tools for simple greetings or small talk.
 
 RESPONSE FORMAT:
-- Use clear, structured responses with sections when appropriate.
-- Use bullet points for lists of issues or steps.
-- Include relevant data points (confirmations, gas, fees) to support your explanations.
-- End with a clear recommendation or next step.
+- Match your response length to the complexity of the question.
+- For simple greetings or casual messages, respond briefly and naturally (1-2 sentences).
+- Only use structured responses (sections, bullet points) for complex or technical questions.
+- Keep answers concise and to the point. Avoid unnecessary preamble or filler.
 """
-
-    if knowledge_context:
-        base_prompt += f"""
-COMPANY KNOWLEDGE BASE (use this to answer questions):
-{knowledge_context}
-
-When answering, prefer information from the knowledge base above. \
-Cite specific documents or policies when relevant.
-"""
-
-    return base_prompt
 
 
 # tool execution
 
-async def _execute_tool(name: str, args: dict) -> dict:
+async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
     """Execute a tool call and return the result."""
     try:
-        if name == "lookup_transaction":
+        if name == "search_knowledge_base":
+            query = args.get("query", "")
+            if not company:
+                return {"error": "Company context not available"}
+            user_id = company.get("user_id", "")
+            company_id = company.get("id", "")
+            if not user_id:
+                return {"results": [], "message": "No knowledge base configured"}
+            search_result = await knowledge_service.search_knowledge(
+                user_id, query, limit=3, threshold=0.5, company_id=company_id
+            )
+            results = search_result.get("results", [])
+            if not results:
+                return {"results": [], "message": "No relevant documents found"}
+            return {
+                "results": [
+                    {"title": r["title"], "content": r["content"], "score": r["score"]}
+                    for r in results
+                ]
+            }
+
+        elif name == "lookup_transaction":
             tx_hash = args.get("hash", "")
             chain = args.get("chain")
 
@@ -298,11 +332,10 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
 
     Flow:
     1. Load conversation history
-    2. Search company knowledge base (RAG)
-    3. Build messages array with system prompt + history + new message
-    4. Send to Gemini with tools
-    5. If tool call → execute, feed result back → get final response
-    6. Save conversation, return response
+    2. Build messages array with system prompt + history + new message
+    3. Send to Gemini with tools (including search_knowledge_base)
+    4. If tool call → execute, feed result back → get final response
+    5. Save conversation, return response
     """
     # load company info
     company = await db.companies.find_one({"id": company_id})
@@ -316,30 +349,8 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
     # load conversation history
     history = await _load_conversation(company_id, session_id)
 
-    # rag — search knowledge base
-    knowledge_context = ""
-    sources = []
-    try:
-        # Use company's user_id for knowledge search
-        user_id = company.get("user_id", "")
-        if user_id:
-            search_result = await knowledge_service.search_knowledge(
-                user_id, user_message, limit=3, threshold=0.5, company_id=company_id
-            )
-            if search_result.get("results"):
-                knowledge_pieces = []
-                for r in search_result["results"]:
-                    knowledge_pieces.append(f"[{r['title']}]: {r['content']}")
-                    sources.append({
-                        "title": r["title"],
-                        "score": r["score"],
-                    })
-                knowledge_context = "\n\n---\n\n".join(knowledge_pieces)
-    except Exception as e:
-        logger.warning(f"Knowledge search failed: {e}")
-
     # build system prompt and messages
-    system_prompt = _build_system_prompt(company, knowledge_context)
+    system_prompt = _build_system_prompt(company)
 
     # Convert history to Gemini format
     gemini_history = []
@@ -357,6 +368,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
     # call gemini
     client = _get_client()
     blockchain_data = None
+    sources = []
 
     try:
         response = client.models.generate_content(
@@ -386,11 +398,19 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
             tool_results = []
             for fc in function_calls:
                 args = dict(fc.args) if fc.args else {}
-                result = await _execute_tool(fc.name, args)
+                result = await _execute_tool(fc.name, args, company=company)
 
                 # Track blockchain data for response
                 if fc.name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
                     blockchain_data = result
+
+                # Track knowledge sources
+                if fc.name == "search_knowledge_base" and isinstance(result, dict):
+                    for r in result.get("results", []):
+                        sources.append({
+                            "title": r.get("title", ""),
+                            "score": r.get("score", 0),
+                        })
 
                 tool_results.append(
                     types.Part.from_function_response(
