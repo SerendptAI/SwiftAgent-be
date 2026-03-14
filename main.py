@@ -31,22 +31,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class WSCorsBypassMiddleware:
+class WidgetCorsBypassMiddleware:
     """
-    Middleware to bypass CORS for WebSocket endpoints.
-    Starlette's CORSMiddleware rejects WS connections from unallowed origins.
-    Since the voice widget is embedded on various websites, we need to allow all origins for it.
+    Middleware to bypass CORS for public widget endpoints.
+    Starlette's CORSMiddleware rejects requests from unallowed origins.
+    Since the voice widget is embedded on various websites, we strip the Origin
+    header for widget-facing routes so they aren't blocked by the allowlist.
     """
+    BYPASS_PREFIXES = ("/api/v1/voice",)
+    BYPASS_SUFFIXES = ("/visitors/log",)
+
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] == "websocket" and scope.get("path", "").startswith("/api/v1/voice"):
-            if "headers" in scope:
-                scope["headers"] = [(k, v) for k, v in scope["headers"] if k.lower() != b"origin"]
+        if scope["type"] in ("http", "websocket"):
+            path = scope.get("path", "")
+            if any(path.startswith(p) for p in self.BYPASS_PREFIXES) or \
+               any(path.endswith(s) for s in self.BYPASS_SUFFIXES):
+                if "headers" in scope:
+                    scope["headers"] = [(k, v) for k, v in scope["headers"] if k.lower() != b"origin"]
         await self.app(scope, receive, send)
 
-app.add_middleware(WSCorsBypassMiddleware)
+app.add_middleware(WidgetCorsBypassMiddleware)
 
 app.include_router(auth.router, prefix="/api/v1/auth")
 app.include_router(knowledge.router, prefix="/api/v1/knowledge")

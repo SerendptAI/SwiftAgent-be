@@ -101,9 +101,11 @@ async def voice_call(websocket: WebSocket, company_id: str):
                     await websocket.send_json({"type": "error", "message": "Could not transcribe audio"})
                     await websocket.send_json({"type": "status", "status": "ready"})
                     audio_buffer.clear()
+                    webm_init_segment = None
                     continue
 
                 audio_buffer.clear()
+                webm_init_segment = None  # reset so the next recording captures a fresh header
 
                 if not transcript:
                     await websocket.send_json({"type": "status", "status": "ready"})
@@ -129,11 +131,22 @@ async def voice_call(websocket: WebSocket, company_id: str):
                     audio_bytes = await fish_audio_service.synthesize(reply)
                     audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
                     await websocket.send_json({"type": "audio", "data": audio_b64})
+                except WebSocketDisconnect:
+                    logger.info(f"Client disconnected during TTS send: session={session_id}")
+                    return
                 except Exception as e:
                     logger.error(f"TTS failed: {e}")
-                    await websocket.send_json({"type": "error", "message": "Could not synthesize audio"})
+                    try:
+                        await websocket.send_json({"type": "error", "message": "Could not synthesize audio"})
+                    except Exception:
+                        logger.info("Client disconnected before TTS error could be sent")
+                        return
 
-                await websocket.send_json({"type": "status", "status": "ready"})
+                try:
+                    await websocket.send_json({"type": "status", "status": "ready"})
+                except Exception:
+                    logger.info("Client disconnected before ready status could be sent")
+                    return
 
             elif msg_type == "end":
                 # user hung up
