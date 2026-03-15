@@ -42,7 +42,6 @@ async def voice_call(websocket: WebSocket, company_id: str):
 
     session_id = None
     audio_buffer = bytearray()
-    webm_init_segment = None  # stores WebM header from the first audio chunk
 
     try:
         while True:
@@ -64,15 +63,16 @@ async def voice_call(websocket: WebSocket, company_id: str):
                 await websocket.send_json({"type": "status", "status": "ready"})
                 logger.info(f"Voice call started: company={company_id}, session={session_id}")
 
+            elif msg_type == "start_audio":
+                # client is starting a new utterance
+                audio_buffer.clear()
+                logger.debug(f"start_audio received: clearing buffer for session={session_id}")
+
             elif msg_type == "audio":
                 # accumulate audio chunks from the user's mic
                 chunk_b64 = msg.get("data", "")
                 if chunk_b64:
                     chunk = base64.b64decode(chunk_b64)
-                    # capture the WebM init segment from the very first chunk
-                    # (contains EBML header + Segment/Track info needed for a valid file)
-                    if webm_init_segment is None and chunk[:4] == b'\x1a\x45\xdf\xa3':
-                        webm_init_segment = bytes(chunk)
                     audio_buffer.extend(chunk)
 
             elif msg_type == "stop_audio":
@@ -88,24 +88,37 @@ async def voice_call(websocket: WebSocket, company_id: str):
                 # STT — transcribe the audio
                 await websocket.send_json({"type": "status", "status": "transcribing"})
 
-                # build a valid WebM file: if the buffer doesn't start with
-                # the EBML magic bytes, prepend the saved init segment
                 raw = bytes(audio_buffer)
-                if webm_init_segment and raw[:4] != b'\x1a\x45\xdf\xa3':
-                    raw = webm_init_segment + raw
+                
+                # detect format from magic bytes
+                if raw.startswith(b'OggS'):
+                    filename = "audio.ogg"
+                    content_type = "audio/ogg"
+                elif raw.startswith(b'\x1a\x45\xdf\xa3'):
+                    filename = "audio.webm"
+                    content_type = "audio/webm"
+                elif raw.startswith(b'RIFF'):
+                    filename = "audio.wav"
+                    content_type = "audio/wav"
+                else:
+                    # fallback
+                    filename = "audio.webm"
+                    content_type = "audio/webm"
 
                 try:
-                    transcript = await fish_audio_service.transcribe(raw)
+                    transcript = await fish_audio_service.transcribe(
+                        raw, 
+                        filename=filename, 
+                        content_type=content_type
+                    )
                 except Exception as e:
                     logger.error(f"STT failed: {e}")
                     await websocket.send_json({"type": "error", "message": "Could not transcribe audio"})
                     await websocket.send_json({"type": "status", "status": "ready"})
                     audio_buffer.clear()
-                    webm_init_segment = None
                     continue
 
                 audio_buffer.clear()
-                webm_init_segment = None  # reset so the next recording captures a fresh header
 
                 if not transcript:
                     await websocket.send_json({"type": "status", "status": "ready"})

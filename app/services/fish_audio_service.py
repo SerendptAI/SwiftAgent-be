@@ -28,19 +28,21 @@ def _get_client() -> httpx.AsyncClient:
     return _http_client
 
 
-async def transcribe(audio_bytes: bytes, language: str = "auto") -> str:
+async def transcribe(audio_bytes: bytes, language: str = "auto", filename: str = "audio.wav", content_type: str = "audio/wav") -> str:
     """
     Transcribe audio to text via Fish.audio ASR.
 
     Args:
         audio_bytes: Raw audio data (wav/webm/ogg).
         language: Language hint, or "auto" for auto-detection.
+        filename: Filename to send in the multipart request.
+        content_type: MIME type of the audio data.
 
     Returns:
         Transcribed text string.
     """
     client = _get_client()
-    files = {"audio": ("audio.webm", audio_bytes, "audio/webm")}
+    files = {"audio": (filename, audio_bytes, content_type)}
     data = {}
     if language != "auto":
         data["language"] = language
