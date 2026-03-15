@@ -47,6 +47,19 @@ async def get_company(
         raise HTTPException(status_code=404, detail="Company not found")
     return company
 
+@router.get("/{company_id}/public")
+async def get_company_public(
+    company_id: str,
+):
+    """Get public company details."""
+    company = await company_service.get_company(company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    name = company["name"]
+    website = company["website"]
+    logo_url = company["logo_url"]
+    return {"name": name, "website": website, "logo_url": logo_url}
+
 @router.patch("/{company_id}/identity", response_model=CompanyResponse)
 async def update_identity(
     company_id: str,
