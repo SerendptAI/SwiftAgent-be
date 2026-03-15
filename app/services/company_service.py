@@ -1,6 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 from app.core.database import db
+from typing import Optional
 
 async def create_company(user_id: str, data: dict) -> dict:
     doc = {
@@ -34,8 +35,10 @@ async def create_company(user_id: str, data: dict) -> dict:
     await db.companies.insert_one(doc)
     return doc
 
-async def get_company(company_id: str, user_id: str) -> dict:
-    return await db.companies.find_one({"id": company_id, "user_id": user_id})
+async def get_company(company_id: str, user_id: Optional[str] = None) -> dict:
+    if user_id:
+        return await db.companies.find_one({"id": company_id, "user_id": user_id})
+    return await db.companies.find_one({"id": company_id})
 
 async def list_companies(user_id: str) -> list:
     cursor = db.companies.find(
