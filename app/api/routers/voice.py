@@ -42,6 +42,7 @@ async def voice_call(websocket: WebSocket, company_id: str):
 
     session_id = None
     audio_buffer = bytearray()
+    current_mime_type = None
 
     try:
         while True:
@@ -51,29 +52,37 @@ async def voice_call(websocket: WebSocket, company_id: str):
             if msg_type == "start":
                 # begin a new call session
                 session_id = msg.get("session_id", "")
+                current_mime_type = msg.get("mime_type")
                 audio_buffer.clear()
                 
                 # record the call in database
                 await db.calls.insert_one({
                     "company_id": company_id,
                     "session_id": session_id,
-                    "timestamp": datetime.utcnow()
+                    "timestamp": datetime.utcnow(),
+                    "mime_type": current_mime_type
                 })
                 
                 await websocket.send_json({"type": "status", "status": "ready"})
-                logger.info(f"Voice call started: company={company_id}, session={session_id}")
+                logger.info(f"Voice call started: company={company_id}, session={session_id}, mime={current_mime_type}")
 
             elif msg_type == "start_audio":
                 # client is starting a new utterance
                 audio_buffer.clear()
-                logger.debug(f"start_audio received: clearing buffer for session={session_id}")
+                # update mime type if provided (e.g. from a restarted MediaRecorder)
+                if "mime_type" in msg:
+                    current_mime_type = msg["mime_type"]
+                logger.debug(f"start_audio received: clearing buffer for session={session_id}, mime={current_mime_type}")
 
             elif msg_type == "audio":
                 # accumulate audio chunks from the user's mic
                 chunk_b64 = msg.get("data", "")
                 if chunk_b64:
-                    chunk = base64.b64decode(chunk_b64)
-                    audio_buffer.extend(chunk)
+                    try:
+                        chunk = base64.b64decode(chunk_b64)
+                        audio_buffer.extend(chunk)
+                    except Exception as e:
+                        logger.error(f"Failed to decode audio chunk: {e}")
 
             elif msg_type == "stop_audio":
                 # user finished speaking — process the audio
@@ -90,22 +99,45 @@ async def voice_call(websocket: WebSocket, company_id: str):
 
                 raw = bytes(audio_buffer)
                 
-                # detect format from magic bytes
-                if raw.startswith(b'OggS'):
-                    filename = "audio.ogg"
-                    content_type = "audio/ogg"
-                elif raw.startswith(b'\x1a\x45\xdf\xa3'):
-                    filename = "audio.webm"
-                    content_type = "audio/webm"
-                elif raw.startswith(b'RIFF'):
-                    filename = "audio.wav"
-                    content_type = "audio/wav"
+                # Determine format: Prefer explicit mime_type, then magic bytes
+                filename = "audio.webm"
+                content_type = "audio/webm"
+
+                if current_mime_type:
+                    content_type = current_mime_type
+                    ext = "webm"
+                    if "ogg" in current_mime_type: ext = "ogg"
+                    elif "mp4" in current_mime_type: ext = "mp4"
+                    elif "wav" in current_mime_type: ext = "wav"
+                    elif "mpeg" in current_mime_type: ext = "mp3"
+                    elif "aac" in current_mime_type: ext = "aac"
+                    filename = f"audio.{ext}"
+                    logger.debug(f"Using provided mime_type: {content_type} -> {filename}")
                 else:
-                    # fallback
-                    filename = "audio.webm"
-                    content_type = "audio/webm"
+                    # detect format from magic bytes
+                    if raw.startswith(b'OggS'):
+                        filename = "audio.ogg"
+                        content_type = "audio/ogg"
+                    elif raw.startswith(b'\x1a\x45\xdf\xa3'):
+                        filename = "audio.webm"
+                        content_type = "audio/webm"
+                    elif raw.startswith(b'RIFF'):
+                        filename = "audio.wav"
+                        content_type = "audio/wav"
+                    elif raw[4:8] == b'ftyp':
+                        filename = "audio.mp4"
+                        content_type = "audio/mp4"
+                    elif raw.startswith((b'\xff\xf1', b'\xff\xf9')):
+                        filename = "audio.aac"
+                        content_type = "audio/aac"
+                    else:
+                        # fallback
+                        filename = "audio.webm"
+                        content_type = "audio/webm"
+                    logger.debug(f"Detected format from magic bytes: {content_type} ({raw[:8].hex()})")
 
                 try:
+                    logger.info(f"Transcribing {len(raw)} bytes as {content_type} for session={session_id}")
                     transcript = await fish_audio_service.transcribe(
                         raw, 
                         filename=filename, 
