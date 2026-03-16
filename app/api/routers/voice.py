@@ -104,15 +104,17 @@ async def voice_call(websocket: WebSocket, company_id: str):
                 content_type = "audio/webm"
 
                 if current_mime_type:
-                    content_type = current_mime_type
+                    # Clean mime type (remove parameters like ;codecs=opus)
+                    content_type = current_mime_type.split(";")[0].strip()
+                    
                     ext = "webm"
-                    if "ogg" in current_mime_type: ext = "ogg"
-                    elif "mp4" in current_mime_type: ext = "mp4"
-                    elif "wav" in current_mime_type: ext = "wav"
-                    elif "mpeg" in current_mime_type: ext = "mp3"
-                    elif "aac" in current_mime_type: ext = "aac"
+                    if "ogg" in content_type: ext = "ogg"
+                    elif "mp4" in content_type: ext = "mp4"
+                    elif "wav" in content_type: ext = "wav"
+                    elif "mpeg" in content_type: ext = "mp3"
+                    elif "aac" in content_type: ext = "aac"
                     filename = f"audio.{ext}"
-                    logger.debug(f"Using provided mime_type: {content_type} -> {filename}")
+                    logger.debug(f"Using provided mime_type (cleaned): {content_type} -> {filename}")
                 else:
                     # detect format from magic bytes
                     if raw.startswith(b'OggS'):
@@ -130,6 +132,9 @@ async def voice_call(websocket: WebSocket, company_id: str):
                     elif raw.startswith((b'\xff\xf1', b'\xff\xf9')):
                         filename = "audio.aac"
                         content_type = "audio/aac"
+                    elif raw.startswith(b'ID3') or (len(raw) > 2 and raw[0] == 0xff and (raw[1] & 0xe0) == 0xe0):
+                        filename = "audio.mp3"
+                        content_type = "audio/mpeg"
                     else:
                         # fallback
                         filename = "audio.webm"

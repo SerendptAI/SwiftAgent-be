@@ -54,9 +54,11 @@ async def transcribe(audio_bytes: bytes, language: str = "auto", filename: str =
         return result.get("text", "").strip()
     except httpx.HTTPStatusError as e:
         logger.error(f"Fish.audio ASR error {e.response.status_code}: {e.response.text}")
+        logger.error(f"Audio debug info: len={len(audio_bytes)}, content_type={content_type}, first_16_bytes={audio_bytes[:16].hex()}")
         raise
     except Exception as e:
         logger.exception("Fish.audio ASR request failed")
+        logger.error(f"Audio debug info: len={len(audio_bytes)}, content_type={content_type}, first_16_bytes={audio_bytes[:16].hex()}")
         raise
 
 
