@@ -4,13 +4,11 @@ Voice call WebSocket router — real-time audio streaming for voice conversation
 Protocol (JSON messages over WebSocket):
   Client → Server:
     {"type": "start", "session_id": "..."}     — begin call session
-    {"type": "audio", "data": "<base64>"}      — audio chunk from mic
-    {"type": "stop_audio"}                     — user finished speaking
+    {"type": "user_text", "text": "..."}       — transcribed text from frontend
     {"type": "end"}                            — hang up
 
   Server → Client:
-    {"type": "status", "status": "..."}        — transcribing / thinking / ready
-    {"type": "transcript", "text": "..."}      — what user said
+    {"type": "status", "status": "..."}        — thinking / ready
     {"type": "reply_text", "text": "..."}      — agent text reply
     {"type": "audio", "data": "<base64>"}      — TTS audio response
     {"type": "error", "message": "..."}        — error occurred
@@ -41,8 +39,6 @@ async def voice_call(websocket: WebSocket, company_id: str):
         return
 
     session_id = None
-    audio_buffer = bytearray()
-    current_mime_type = None
 
     try:
         while True:
@@ -52,41 +48,30 @@ async def voice_call(websocket: WebSocket, company_id: str):
             if msg_type == "start":
                 # begin a new call session
                 session_id = msg.get("session_id", "")
-                current_mime_type = msg.get("mime_type")
-                audio_buffer.clear()
                 
                 # record the call in database
                 await db.calls.insert_one({
                     "company_id": company_id,
                     "session_id": session_id,
-                    "timestamp": datetime.utcnow(),
-                    "mime_type": current_mime_type
+                    "timestamp": datetime.utcnow()
                 })
                 
                 await websocket.send_json({"type": "status", "status": "ready"})
-                logger.info(f"Voice call started: company={company_id}, session={session_id}, mime={current_mime_type}")
+                logger.info(f"Voice call started: company={company_id}, session={session_id}")
 
-            elif msg_type == "start_audio":
-                # client is starting a new utterance
-                audio_buffer.clear()
-                # update mime type if provided (e.g. from a restarted MediaRecorder)
-                if "mime_type" in msg:
-                    current_mime_type = msg["mime_type"]
-                logger.debug(f"start_audio received: clearing buffer for session={session_id}, mime={current_mime_type}")
+            elif msg_type == "user_text":
+                # frontend provides the transcribed text
+                text = msg.get("text")
+                
+                if not isinstance(text, str):
+                    logger.warning(f"Invalid text data type received: {type(text)}")
+                    await websocket.send_json({
+                        "type": "error", 
+                        "message": "Invalid text data: expected a string"
+                    })
+                    continue
 
-            elif msg_type == "audio":
-                # accumulate audio chunks from the user's mic
-                chunk_b64 = msg.get("data", "")
-                if chunk_b64:
-                    try:
-                        chunk = base64.b64decode(chunk_b64)
-                        audio_buffer.extend(chunk)
-                    except Exception as e:
-                        logger.error(f"Failed to decode audio chunk: {e}")
-
-            elif msg_type == "stop_audio":
-                # user finished speaking — process the audio
-                if not audio_buffer:
+                if not text.strip():
                     await websocket.send_json({"type": "status", "status": "ready"})
                     continue
 
@@ -94,80 +79,10 @@ async def voice_call(websocket: WebSocket, company_id: str):
                     await websocket.send_json({"type": "error", "message": "Session not started"})
                     continue
 
-                # STT — transcribe the audio
-                await websocket.send_json({"type": "status", "status": "transcribing"})
-
-                raw = bytes(audio_buffer)
-                
-                # Determine format: Prefer explicit mime_type, then magic bytes
-                filename = "audio.webm"
-                content_type = "audio/webm"
-
-                if current_mime_type:
-                    # Clean mime type (remove parameters like ;codecs=opus)
-                    content_type = current_mime_type.split(";")[0].strip()
-                    
-                    ext = "webm"
-                    if "ogg" in content_type: ext = "ogg"
-                    elif "mp4" in content_type: ext = "mp4"
-                    elif "wav" in content_type: ext = "wav"
-                    elif "mpeg" in content_type: ext = "mp3"
-                    elif "aac" in content_type: ext = "aac"
-                    filename = f"audio.{ext}"
-                    logger.debug(f"Using provided mime_type (cleaned): {content_type} -> {filename}")
-                else:
-                    # detect format from magic bytes
-                    if raw.startswith(b'OggS'):
-                        filename = "audio.ogg"
-                        content_type = "audio/ogg"
-                    elif raw.startswith(b'\x1a\x45\xdf\xa3'):
-                        filename = "audio.webm"
-                        content_type = "audio/webm"
-                    elif raw.startswith(b'RIFF'):
-                        filename = "audio.wav"
-                        content_type = "audio/wav"
-                    elif raw[4:8] == b'ftyp':
-                        filename = "audio.mp4"
-                        content_type = "audio/mp4"
-                    elif raw.startswith((b'\xff\xf1', b'\xff\xf9')):
-                        filename = "audio.aac"
-                        content_type = "audio/aac"
-                    elif raw.startswith(b'ID3') or (len(raw) > 2 and raw[0] == 0xff and (raw[1] & 0xe0) == 0xe0):
-                        filename = "audio.mp3"
-                        content_type = "audio/mpeg"
-                    else:
-                        # fallback
-                        filename = "audio.webm"
-                        content_type = "audio/webm"
-                    logger.debug(f"Detected format from magic bytes: {content_type} ({raw[:8].hex()})")
-
-                try:
-                    logger.info(f"Transcribing {len(raw)} bytes as {content_type} for session={session_id}")
-                    transcript = await fish_audio_service.transcribe(
-                        raw, 
-                        filename=filename, 
-                        content_type=content_type
-                    )
-                except Exception as e:
-                    logger.error(f"STT failed: {e}")
-                    await websocket.send_json({"type": "error", "message": "Could not transcribe audio"})
-                    await websocket.send_json({"type": "status", "status": "ready"})
-                    audio_buffer.clear()
-                    continue
-
-                audio_buffer.clear()
-
-                if not transcript:
-                    await websocket.send_json({"type": "status", "status": "ready"})
-                    continue
-
-                # send transcript back to client
-                await websocket.send_json({"type": "transcript", "text": transcript})
-
                 # agent — process through existing chat pipeline
                 await websocket.send_json({"type": "status", "status": "thinking"})
                 try:
-                    result = await anthropic_agent_service.chat(company_id, session_id, transcript)
+                    result = await anthropic_agent_service.chat(company_id, session_id, text)
                     reply = result.get("reply", "I'm sorry, I couldn't generate a response.")
                 except Exception as e:
                     logger.error(f"Agent chat failed: {e}")
