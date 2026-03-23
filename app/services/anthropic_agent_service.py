@@ -134,6 +134,15 @@ TOOLS = [
 ]
 
 
+# user-friendly labels for each tool, streamed as thinking stages
+TOOL_STAGE_LABELS = {
+    "search_knowledge_base": "Searching knowledge base…",
+    "lookup_transaction":    "Looking up transaction…",
+    "lookup_wallet":         "Looking up wallet…",
+    "diagnose_problem":      "Diagnosing transaction issue…",
+}
+
+
 # system prompt builder
 
 def _build_system_prompt(company: dict) -> str:
@@ -453,3 +462,137 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
         "sources": sources,
         "blockchain_data": blockchain_data,
     }
+
+
+# streaming chat (SSE)
+
+async def chat_stream(company_id: str, session_id: str, user_message: str):
+    """
+    Async generator that streams the agent chat flow as events.
+
+    Yields dicts with a "type" key:
+        thinking  – status update for the frontend loader
+        tool      – a tool is being invoked (name + friendly label)
+        text      – final agent reply text
+        sources   – knowledge-base sources & blockchain data (if any)
+        error     – friendly error message
+        done      – stream complete
+    """
+    # load company info
+    company = await db.companies.find_one({"id": company_id})
+    if not company:
+        yield {"type": "error", "message": "Company not found. Please contact support."}
+        yield {"type": "done"}
+        return
+
+    yield {"type": "thinking", "message": "Reading your message…"}
+
+    # load conversation history
+    history = await _load_conversation(company_id, session_id)
+
+    # build system prompt and messages
+    system_prompt = _build_system_prompt(company)
+
+    claude_messages = []
+    for msg in history[-10:]:
+        role = "user" if msg["role"] == "user" else "assistant"
+        claude_messages.append({"role": role, "content": msg["content"]})
+
+    claude_messages.append({"role": "user", "content": user_message})
+
+    client = _get_client()
+    blockchain_data = None
+    sources = []
+
+    try:
+        yield {"type": "thinking", "message": "Thinking…"}
+
+        response = await client.messages.create(
+            model=MODEL,
+            max_tokens=4096,
+            system=system_prompt,
+            tools=TOOLS,
+            messages=claude_messages,
+            temperature=0.3,
+        )
+
+        # tool-use loop
+        max_tool_rounds = 3
+        for _ in range(max_tool_rounds):
+            tool_use_blocks = [
+                block for block in response.content
+                if block.type == "tool_use"
+            ]
+
+            if not tool_use_blocks:
+                break
+
+            claude_messages.append({"role": "assistant", "content": response.content})
+
+            tool_results = []
+            for block in tool_use_blocks:
+                # emit tool event with friendly label
+                label = TOOL_STAGE_LABELS.get(block.name, "Working…")
+                yield {"type": "thinking", "message": label}
+                yield {"type": "tool", "name": block.name, "label": label}
+
+                result = await _execute_tool(block.name, block.input, company=company)
+
+                if block.name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
+                    blockchain_data = result
+
+                if block.name == "search_knowledge_base" and isinstance(result, dict):
+                    for r in result.get("results", []):
+                        sources.append({
+                            "title": r.get("title", ""),
+                            "score": r.get("score", 0),
+                        })
+
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": json.dumps(result, default=str),
+                })
+
+            claude_messages.append({"role": "user", "content": tool_results})
+
+            yield {"type": "thinking", "message": "Preparing response…"}
+
+            response = await client.messages.create(
+                model=MODEL,
+                max_tokens=4096,
+                system=system_prompt,
+                tools=TOOLS,
+                messages=claude_messages,
+                temperature=0.3,
+            )
+
+        # extract final text
+        reply = ""
+        for block in response.content:
+            if hasattr(block, "text"):
+                reply += block.text
+
+        if not reply:
+            reply = "I apologize, but I wasn't able to generate a response. Could you please rephrase your question?"
+
+    except Exception as e:
+        logger.exception("Anthropic API error during streaming chat")
+        reply = (
+            "I'm sorry, I'm experiencing a temporary issue. "
+            "Please try again in a moment, or contact our support team directly."
+        )
+
+    # save conversation
+    history.append({"role": "user", "content": user_message, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
+    history.append({"role": "assistant", "content": reply, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
+    await _save_conversation(company_id, session_id, history)
+
+    # emit final events
+    yield {"type": "text", "content": reply}
+
+    if sources or blockchain_data:
+        yield {"type": "sources", "sources": sources, "blockchain_data": blockchain_data}
+
+    yield {"type": "done"}
+

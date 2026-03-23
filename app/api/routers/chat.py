@@ -1,0 +1,99 @@
+"""
+Chat SSE router — streaming text-based agent responses via Server-Sent Events.
+
+POST /{company_id}/chat
+  Body: {"session_id": "...", "message": "..."}
+  Returns: text/event-stream
+
+SSE event format (matches my-health-diary-be agent v2):
+  event: message
+  data: {"data": {"stage": "<stage>", ...}}
+
+Stages:
+  chat_details  – session metadata
+  thinking      – agent is working (with a user-friendly label)
+  tool          – a specific tool is being invoked
+  stream        – final agent reply text
+  sources       – knowledge-base sources / blockchain data
+  done          – stream complete
+"""
+import json
+import logging
+
+from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+from app.core.database import db
+from app.services import anthropic_agent_service
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["Chat"])
+
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+
+
+def _sse(stage: str, **kwargs) -> str:
+    """Format a single SSE event line."""
+    payload = {"data": {"stage": stage, **kwargs}}
+    return f"event: message\ndata: {json.dumps(payload)}\n\n"
+
+
+async def _chat_sse_generator(company_id: str, req: ChatRequest):
+    """SSE generator that wraps the agent streaming chat."""
+
+    # validate company
+    company = await db.companies.find_one({"id": company_id})
+    if not company:
+        yield _sse("error", message="Company not found")
+        yield _sse("done")
+        return
+
+    yield _sse("chat_details", session_id=req.session_id, company_id=company_id)
+
+    response_text = ""
+
+    async for event in anthropic_agent_service.chat_stream(
+        company_id, req.session_id, req.message
+    ):
+        event_type = event.get("type")
+
+        if event_type == "thinking":
+            yield _sse("thinking", message=event.get("message", ""))
+
+        elif event_type == "tool":
+            yield _sse("tool", name=event.get("name", ""), label=event.get("label", ""))
+
+        elif event_type == "text":
+            content = event.get("content", "")
+            response_text = content
+            yield _sse("stream", message=content)
+
+        elif event_type == "sources":
+            yield _sse(
+                "sources",
+                sources=event.get("sources", []),
+                blockchain_data=event.get("blockchain_data"),
+            )
+
+        elif event_type == "error":
+            logger.error(f"Agent error for company {company_id}: {event.get('message')}")
+            friendly = "I'm having trouble right now. Please try again in a moment."
+            if not response_text.strip():
+                response_text = friendly
+            yield _sse("stream", message=friendly)
+
+    yield _sse("done")
+
+
+@router.post("/{company_id}/chat")
+async def chat_endpoint(company_id: str, req: ChatRequest):
+    """Stream agent chat responses as Server-Sent Events."""
+    return StreamingResponse(
+        _chat_sse_generator(company_id, req),
+        media_type="text/event-stream",
+    )
