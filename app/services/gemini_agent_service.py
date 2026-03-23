@@ -133,6 +133,15 @@ TOOLS = [
 ]
 
 
+# user-friendly labels for each tool, streamed as thinking stages
+TOOL_STAGE_LABELS = {
+    "search_knowledge_base": "Searching knowledge base…",
+    "lookup_transaction":    "Looking up transaction…",
+    "lookup_wallet":         "Looking up wallet…",
+    "diagnose_problem":      "Diagnosing transaction issue…",
+}
+
+
 # system prompt builder
 
 def _build_system_prompt(company: dict) -> str:
@@ -463,3 +472,152 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
         "sources": sources,
         "blockchain_data": blockchain_data,
     }
+
+
+# streaming chat (SSE)
+
+async def chat_stream(company_id: str, session_id: str, user_message: str):
+    """
+    Async generator that streams the Gemini agent chat flow as events.
+
+    Yields dicts with a "type" key:
+        thinking  – status update for the frontend loader
+        tool      – a tool is being invoked (name + friendly label)
+        text      – final agent reply text
+        sources   – knowledge-base sources & blockchain data (if any)
+        error     – friendly error message
+        done      – stream complete
+    """
+    # load company info
+    company = await db.companies.find_one({"id": company_id})
+    if not company:
+        yield {"type": "error", "message": "Company not found. Please contact support."}
+        yield {"type": "done"}
+        return
+
+    yield {"type": "thinking", "message": "Reading your message…"}
+
+    # load conversation history
+    history = await _load_conversation(company_id, session_id)
+
+    # build system prompt and messages
+    system_prompt = _build_system_prompt(company)
+
+    # Convert history to Gemini format
+    gemini_history = []
+    for msg in history[-10:]:
+        role = "user" if msg["role"] == "user" else "model"
+        gemini_history.append(
+            types.Content(role=role, parts=[types.Part.from_text(text=msg["content"])])
+        )
+
+    # Add new user message
+    gemini_history.append(
+        types.Content(role="user", parts=[types.Part.from_text(text=user_message)])
+    )
+
+    client = _get_client()
+    blockchain_data = None
+    sources = []
+
+    try:
+        yield {"type": "thinking", "message": "Thinking…"}
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=gemini_history,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                tools=TOOLS,
+                temperature=0.3,
+            ),
+        )
+
+        # Handle tool calls (may need multiple rounds)
+        max_tool_rounds = 3
+        for _ in range(max_tool_rounds):
+            function_calls = []
+            if response.candidates and response.candidates[0].content:
+                for part in response.candidates[0].content.parts:
+                    if part.function_call:
+                        function_calls.append(part.function_call)
+
+            if not function_calls:
+                break
+
+            # Execute all tool calls
+            tool_results = []
+            for fc in function_calls:
+                # emit tool event with friendly label
+                label = TOOL_STAGE_LABELS.get(fc.name, "Working…")
+                yield {"type": "thinking", "message": label}
+                yield {"type": "tool", "name": fc.name, "label": label}
+
+                args = dict(fc.args) if fc.args else {}
+                result = await _execute_tool(fc.name, args, company=company)
+
+                if fc.name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
+                    blockchain_data = result
+
+                if fc.name == "search_knowledge_base" and isinstance(result, dict):
+                    for r in result.get("results", []):
+                        sources.append({
+                            "title": r.get("title", ""),
+                            "score": r.get("score", 0),
+                        })
+
+                tool_results.append(
+                    types.Part.from_function_response(
+                        name=fc.name,
+                        response=result,
+                    )
+                )
+
+            # Add the model's tool call and tool results to history
+            gemini_history.append(response.candidates[0].content)
+            gemini_history.append(
+                types.Content(role="user", parts=tool_results)
+            )
+
+            yield {"type": "thinking", "message": "Preparing response…"}
+
+            # Call Gemini again with tool results
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=gemini_history,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    tools=TOOLS,
+                    temperature=0.3,
+                ),
+            )
+
+        # Extract final text response
+        reply = ""
+        if response.candidates and response.candidates[0].content:
+            for part in response.candidates[0].content.parts:
+                if part.text:
+                    reply += part.text
+
+        if not reply:
+            reply = "I apologize, but I wasn't able to generate a response. Could you please rephrase your question?"
+
+    except Exception as e:
+        logger.exception("Gemini API error during streaming chat")
+        reply = (
+            "I'm sorry, I'm experiencing a temporary issue. "
+            "Please try again in a moment, or contact our support team directly."
+        )
+
+    # save conversation
+    history.append({"role": "user", "content": user_message, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
+    history.append({"role": "assistant", "content": reply, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
+    await _save_conversation(company_id, session_id, history)
+
+    # emit final events
+    yield {"type": "text", "content": reply}
+
+    if sources or blockchain_data:
+        yield {"type": "sources", "sources": sources, "blockchain_data": blockchain_data}
+
+    yield {"type": "done"}
