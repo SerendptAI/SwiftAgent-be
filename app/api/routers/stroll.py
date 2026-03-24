@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from app.core.auth import get_current_user
 from app.core.database import db
 from app.services import stroll_service, stroll_index_service
+from app.services.stroll_scheduler import schedule_stroll_job
 from app.models.stroll_models import StrollConfigCreate
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,9 @@ async def update_config(
 ):
     """Create or update the stroll configuration for a company."""
     config = await stroll_service.save_stroll_config(company_id, data)
+    
+    schedule_stroll_job(company_id, data.schedule)
+    
     return config.model_dump()
 
 

@@ -1,21 +1,34 @@
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
 from app.api.routers import auth, knowledge, diagnosis, conversations, companies, dashboard, voice, billing, chat, stroll
-from contextlib import asynccontextmanager
+from app.services.stroll_service import init_browser, close_browser
+from app.services.stroll_scheduler import init_scheduler, close_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup: initialize Playwright browser for stroll feature
-    from app.services.stroll_service import init_browser, close_browser
     try:
         await init_browser()
     except Exception:
-        import logging
         logging.getLogger(__name__).warning("Playwright browser init failed — stroll feature unavailable")
+        
+    try:
+        await init_scheduler()
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Scheduler init failed: {e}")
+        
     yield
-    # shutdown: close Playwright browser
+    # shutdown: close Playwright browser and scheduler
+    try:
+        await close_scheduler()
+    except Exception:
+        pass
+        
     try:
         await close_browser()
     except Exception:
