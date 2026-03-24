@@ -17,6 +17,7 @@ from collections import deque
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Optional
+from urllib.parse import urljoin, urlparse
 from uuid import uuid4
 
 import anthropic
@@ -64,8 +65,6 @@ async def close_browser():
 def _get_anthropic_client() -> anthropic.AsyncAnthropic:
     return anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
-
-# --- Page Analysis (Claude Vision) ---
 
 async def _analyze_page_with_vision(
     screenshot_bytes: bytes,
@@ -129,9 +128,6 @@ async def _analyze_page_with_vision(
         logger.warning(f"Vision analysis failed for {page_url}: {e}")
         return {"page_summary": page_title, "elements": []}
 
-
-# --- Element Detection ---
-
 DETECT_ELEMENTS_JS = """
 () => {
     const elements = [];
@@ -185,9 +181,6 @@ DETECT_ELEMENTS_JS = """
 }
 """
 
-
-# --- BFS Crawl ---
-
 async def _capture_screenshot(page: Page) -> bytes:
     """Capture a full-page screenshot as PNG bytes."""
     return await page.screenshot(type="png", full_page=False)
@@ -200,8 +193,6 @@ def _compute_dom_hash(page_content: str) -> str:
 
 def _normalize_url(url: str, base_url: str) -> str:
     """Normalize a URL relative to the base dashboard URL."""
-    from urllib.parse import urljoin, urlparse
-
     parsed = urlparse(url)
     # skip external links, javascript:, mailto:, etc.
     if parsed.scheme and parsed.scheme not in ("http", "https", ""):
@@ -419,9 +410,6 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
         status="success",
     )
 
-
-# --- Diff ---
-
 def diff_stroll(new_graph: NavGraph, prev_version: Optional[StrollVersion]) -> DiffLog:
     """Compare new graph against previous version. Returns a DiffLog."""
     if prev_version is None:
@@ -479,9 +467,6 @@ def diff_stroll(new_graph: NavGraph, prev_version: Optional[StrollVersion]) -> D
 
     return diff
 
-
-# --- Commit ---
-
 async def commit_stroll(
     company_id: str,
     version: StrollVersion,
@@ -504,9 +489,6 @@ async def commit_stroll(
     logger.info(f"Committed stroll {version.id} for company {company_id}")
 
     return version
-
-
-# --- Version Queries ---
 
 async def get_latest_version(company_id: str) -> Optional[StrollVersion]:
     """Get the most recent successful stroll version for a company."""
@@ -532,9 +514,6 @@ async def list_versions(company_id: str, limit: int = 10) -> list[dict]:
         doc.pop("_id", None)
         results.append(doc)
     return results
-
-
-# --- Config CRUD ---
 
 async def get_stroll_config(company_id: str) -> Optional[StrollConfig]:
     """Get the stroll config for a company."""

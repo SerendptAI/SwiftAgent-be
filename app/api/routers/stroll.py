@@ -18,6 +18,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
+from app.core.database import db
 from app.services import stroll_service, stroll_index_service
 from app.models.stroll_models import StrollConfigCreate
 
@@ -25,14 +26,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Stroll"])
 
-
-# --- Request Models ---
-
 class FindFeatureRequest(BaseModel):
     query: str
-
-
-# --- Background stroll runner ---
 
 async def _run_stroll_background(company_id: str):
     """Run a full stroll cycle in the background: crawl → diff → commit → index."""
@@ -49,7 +44,7 @@ async def _run_stroll_background(company_id: str):
             logger.error(f"Stroll failed for company {company_id}: {version.status}")
             # persist failure record
             version.diff = None
-            await stroll_service.db.stroll_versions.insert_one(version.model_dump())
+            await db.stroll_versions.insert_one(version.model_dump())
             return
 
         # diff against previous
@@ -67,9 +62,6 @@ async def _run_stroll_background(company_id: str):
 
     except Exception as e:
         logger.exception(f"Background stroll failed for company {company_id}: {e}")
-
-
-# --- Endpoints ---
 
 @router.get("/{company_id}/config")
 async def get_config(company_id: str, user: dict = Depends(get_current_user)):
@@ -127,8 +119,6 @@ async def get_version(
     user: dict = Depends(get_current_user),
 ):
     """Get a specific stroll version with full graph data."""
-    from app.core.database import db
-
     doc = await db.stroll_versions.find_one({
         "company_id": company_id,
         "id": version_id,

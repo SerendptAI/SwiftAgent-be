@@ -5,10 +5,10 @@ Builds a vector index from stroll data (page summaries + element labels)
 and answers "where is X?" queries with annotated screenshot guides.
 """
 
-import base64
 import logging
 from io import BytesIO
 from typing import Optional
+from uuid import uuid4
 
 import httpx
 from PIL import Image, ImageDraw
@@ -24,6 +24,8 @@ from app.models.stroll_models import (
     NavGraph,
     StrollVersion,
 )
+from app.services.cloudinary_service import upload_document
+from app.services.stroll_service import get_latest_version
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +34,6 @@ COLLECTION_NAME = "stroll_nav_index"
 
 def _get_gemini_client() -> genai.Client:
     return genai.Client(api_key=settings.GEMINI_API_KEY)
-
-
-# --- Collection Setup ---
 
 async def _ensure_collection():
     """Create the stroll nav index collection if it doesn't exist."""
@@ -54,9 +53,6 @@ async def _ensure_collection():
             field_name=field,
             field_schema="keyword",
         )
-
-
-# --- Build Index ---
 
 async def build_index(company_id: str, version: StrollVersion):
     """
@@ -122,7 +118,6 @@ async def build_index(company_id: str, version: StrollVersion):
                     if pid in version.graph.nodes
                 ]
 
-        from uuid import uuid4
         points.append(
             models.PointStruct(
                 id=str(uuid4()),
@@ -149,9 +144,6 @@ async def build_index(company_id: str, version: StrollVersion):
             )
 
     logger.info(f"Built stroll index for company {company_id}: {len(points)} pages indexed")
-
-
-# --- Screenshot Annotation ---
 
 def _annotate_screenshot(
     image_bytes: bytes,
@@ -202,9 +194,6 @@ async def _download_screenshot(url: str) -> bytes:
         response.raise_for_status()
         return response.content
 
-
-# --- Find Feature ---
-
 async def find_feature(
     company_id: str, user_query: str
 ) -> Optional[FindFeatureResult]:
@@ -212,8 +201,6 @@ async def find_feature(
     Search for a feature in the stroll data and return an annotated
     step-by-step visual guide.
     """
-    from app.services.stroll_service import get_latest_version
-
     version = await get_latest_version(company_id)
     if not version:
         return None
@@ -297,8 +284,6 @@ async def find_feature(
             try:
                 raw_bytes = await _download_screenshot(screenshot_url)
                 annotated_bytes = _annotate_screenshot(raw_bytes, highlight, is_destination=is_last)
-                # upload annotated version
-                from app.services.cloudinary_service import upload_document
                 result = await upload_document(
                     content=annotated_bytes,
                     filename=f"annotated_{node_id}_step{i+1}.png",

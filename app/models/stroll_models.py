@@ -10,12 +10,11 @@ Defines the data structures for:
 - Query results (step-by-step visual guides)
 """
 
+from collections import deque
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 
-
-# --- Interactive Elements ---
 
 class BoundingBox(BaseModel):
     x: float
@@ -31,8 +30,6 @@ class InteractiveElement(BaseModel):
     type: str = "nav"                           # "nav" (expands graph) | "action" (logged only)
     bbox: Optional[BoundingBox] = None
 
-
-# --- Navigation Graph ---
 
 class PageNode(BaseModel):
     id: str                                     # stable page identifier
@@ -59,13 +56,10 @@ class NavGraph(BaseModel):
         if start_id == end_id:
             return [start_id]
 
-        # build adjacency list
         adj: Dict[str, List[str]] = {}
         for edge in self.edges:
             adj.setdefault(edge.from_page, []).append(edge.to_page)
 
-        # BFS
-        from collections import deque
         queue = deque([(start_id, [start_id])])
         visited = {start_id}
 
@@ -94,8 +88,6 @@ class NavGraph(BaseModel):
         return None
 
 
-# --- Diff Log ---
-
 class MovedFeature(BaseModel):
     label: str
     old_path: List[str]
@@ -109,8 +101,6 @@ class DiffLog(BaseModel):
     unchanged_count: int = 0
 
 
-# --- Stroll Version ---
-
 class StrollVersion(BaseModel):
     id: str                                     # "stroll_v1", "stroll_v2", ...
     company_id: str
@@ -120,8 +110,6 @@ class StrollVersion(BaseModel):
     diff: Optional[DiffLog] = None
     status: str = "success"                     # "success" | "failed" | "aborted"
 
-
-# --- Configuration ---
 
 class StrollCredentials(BaseModel):
     """Credentials for accessing authenticated dashboards."""
@@ -151,8 +139,6 @@ class StrollConfigCreate(BaseModel):
     max_pages: int = 50
 
 
-# --- Query Results ---
-
 class NavigationStep(BaseModel):
     step: int
     page_title: str
@@ -165,8 +151,6 @@ class FindFeatureResult(BaseModel):
     path_summary: List[str]                     # ["Dashboard", "Settings", "Billing"]
     steps: List[NavigationStep]
 
-
-# --- Job Status ---
 
 class StrollJobStatus(BaseModel):
     company_id: str
