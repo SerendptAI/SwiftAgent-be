@@ -2,14 +2,24 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.api.routers import auth, knowledge, diagnosis, conversations, companies, dashboard, voice, billing, chat
+from app.api.routers import auth, knowledge, diagnosis, conversations, companies, dashboard, voice, billing, chat, stroll
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup logic if needed
+    # startup: initialize Playwright browser for stroll feature
+    from app.services.stroll_service import init_browser, close_browser
+    try:
+        await init_browser()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning("Playwright browser init failed — stroll feature unavailable")
     yield
-    # shutdown logic if needed
+    # shutdown: close Playwright browser
+    try:
+        await close_browser()
+    except Exception:
+        pass
 
 app = FastAPI(
     title="Swift Agent API",
@@ -65,6 +75,7 @@ app.include_router(billing.router, prefix="/api/v1/billing")
 
 app.include_router(voice.router, prefix="/api/v1/voice")
 app.include_router(chat.router, prefix="/api/v1/chat")
+app.include_router(stroll.router, prefix="/api/v1/stroll")
 
 
 

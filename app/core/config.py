@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     FISH_AUDIO_VOICE_ID: str = ""
     # etherscan API V2 — single key for all EVM chains
     ETHERSCAN_API_KEY: str = ""
+    # stroll (dashboard crawler)
+    STROLL_MAX_PAGES: int = 50
+    STROLL_PAGE_TIMEOUT_MS: int = 10000
+    STROLL_SCREENSHOT_QUALITY: int = 70
 
     model_config = SettingsConfigDict(env_file=".env")
 

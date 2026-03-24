@@ -17,7 +17,7 @@ import anthropic
 
 from app.core.config import settings
 from app.core.database import db
-from app.services import knowledge_service, chain_service
+from app.services import knowledge_service, chain_service, stroll_index_service
 from app.services.blockchain import detect, evm, bitcoin, prices
 
 logger = logging.getLogger(__name__)
@@ -131,15 +131,35 @@ TOOLS = [
             "required": ["tx_data", "customer_complaint"],
         },
     },
+    {
+        "name": "find_dashboard_feature",
+        "description": (
+            "Find where a feature or page is located in the customer's dashboard. "
+            "Returns step-by-step annotated screenshots showing how to navigate there. "
+            "Use this when a customer asks how to find something, where something is, "
+            "or how to navigate to a specific page or setting in the dashboard."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The feature, page, or setting the user is looking for",
+                },
+            },
+            "required": ["query"],
+        },
+    },
 ]
 
 
 # user-friendly labels for each tool, streamed as thinking stages
 TOOL_STAGE_LABELS = {
-    "search_knowledge_base": "Searching knowledge base…",
-    "lookup_transaction":    "Looking up transaction…",
-    "lookup_wallet":         "Looking up wallet…",
-    "diagnose_problem":      "Diagnosing transaction issue…",
+    "search_knowledge_base":   "Searching knowledge base…",
+    "lookup_transaction":      "Looking up transaction…",
+    "lookup_wallet":           "Looking up wallet…",
+    "diagnose_problem":        "Diagnosing transaction issue…",
+    "find_dashboard_feature":  "Searching dashboard navigation…",
 }
 
 
@@ -177,6 +197,9 @@ flag them clearly with appropriate urgency.
 TOOL USAGE:
 - Use search_knowledge_base when the customer asks about company policies, features, pricing, \
 FAQs, how-to guides, or anything that might be in the company documentation.
+- Use find_dashboard_feature when the customer asks "where is X?", "how do I find X?", \
+"how do I navigate to X?", or similar navigation questions about the dashboard. This tool \
+returns annotated screenshots showing the path — reference the steps in your reply.
 - When you see a string that looks like a transaction hash (0x... followed by 64 hex chars, \
 or 64 hex chars without 0x for Bitcoin), use lookup_transaction.
 - When you see a wallet address (0x... followed by 40 hex chars, or a Bitcoin address), \
@@ -291,6 +314,25 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
                 tx_data = {}
 
             return await chain_service.diagnose_transaction(tx_data, complaint)
+
+        elif name == "find_dashboard_feature":
+            query = args.get("query", "")
+            if not company:
+                return {"error": "Company context not available"}
+            company_id = company.get("id", "")
+            result = await stroll_index_service.find_feature(company_id, query)
+            if result:
+                # Return text-only summary for Claude (images go via Track B in chat_stream)
+                return {
+                    "found": True,
+                    "path_summary": result.path_summary,
+                    "step_count": len(result.steps),
+                    "steps_text": [
+                        {"step": s.step, "page_title": s.page_title, "instruction": s.instruction}
+                        for s in result.steps
+                    ],
+                }
+            return {"found": False, "message": "Feature not found in dashboard stroll data."}
 
         else:
             return {"error": f"Unknown tool: {name}"}
@@ -547,6 +589,13 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
                             "title": r.get("title", ""),
                             "score": r.get("score", 0),
                         })
+
+                # Track B: emit navigation_guide directly to SSE stream
+                if block.name == "find_dashboard_feature" and isinstance(result, dict) and result.get("found"):
+                    company_id_val = company.get("id", "")
+                    guide = await stroll_index_service.find_feature(company_id_val, block.input.get("query", ""))
+                    if guide:
+                        yield {"type": "navigation_guide", "guide": guide.model_dump()}
 
                 tool_results.append({
                     "type": "tool_result",

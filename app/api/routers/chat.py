@@ -80,6 +80,14 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
                 blockchain_data=event.get("blockchain_data"),
             )
 
+        elif event_type == "navigation_guide":
+            guide = event.get("guide", {})
+            yield _sse(
+                "navigation_guide",
+                steps=guide.get("steps", []),
+                path_summary=guide.get("path_summary", []),
+            )
+
         elif event_type == "error":
             logger.error(f"Agent error for company {company_id}: {event.get('message')}")
             friendly = "I'm having trouble right now. Please try again in a moment."
