@@ -35,6 +35,7 @@ from app.models.stroll_models import (
     PageNode,
     StrollConfig,
     StrollConfigCreate,
+    WidgetStrollReport,
     StrollVersion,
 )
 from app.services.cloudinary_service import upload_document
@@ -409,6 +410,129 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
         screenshot_urls=screenshot_urls,
         status="success",
     )
+
+async def process_widget_stroll(company_id: str, report: WidgetStrollReport):
+    """
+    Process a stroll report from the widget, build the graph, and update the index.
+    This is the backend part of the "DOM Intercept" stroll method.
+    """
+    graph = NavGraph()
+    screenshot_urls: dict[str, str] = {}
+    
+    try:
+        # 1. Process all nodes, run vision analysis, and upload screenshots
+        for widget_node in report.nodes:
+            page_id = hashlib.sha256(widget_node.url.encode()).hexdigest()[:12]
+            
+            try:
+                screenshot_bytes = base64.b64decode(widget_node.screenshot_base64)
+            except Exception:
+                logger.warning(f"Failed to decode base64 screenshot for {widget_node.url}")
+                continue
+
+            # Upload screenshot
+            screenshot_url = await _upload_screenshot(screenshot_bytes, company_id, page_id)
+            screenshot_urls[page_id] = screenshot_url
+
+            # Prepare elements for vision analysis
+            raw_elements = [
+                {
+                    "selector": el.selector,
+                    "label": el.label,
+                    "bbox": el.bbox.model_dump()
+                }
+                for el in widget_node.elements
+            ]
+
+            # Claude vision analysis
+            vision_result = await _analyze_page_with_vision(
+                screenshot_bytes, raw_elements, widget_node.title, widget_node.url
+            )
+            vision_elements_map = {
+                e.get("selector", ""): e.get("human_description", "")
+                for e in vision_result.get("elements", [])
+            }
+
+            # Build enriched InteractiveElement list
+            elements: list[InteractiveElement] = []
+            for el in widget_node.elements:
+                elements.append(InteractiveElement(
+                    selector=el.selector,
+                    label=el.label,
+                    human_description=vision_elements_map.get(el.selector, ""),
+                    type=el.type,
+                    bbox=el.bbox,
+                ))
+            
+            # Create PageNode
+            node = PageNode(
+                id=page_id,
+                url=widget_node.url,
+                title=widget_node.title,
+                page_summary=vision_result.get("page_summary", widget_node.title),
+                elements=elements,
+                dom_hash=hashlib.sha256(str(raw_elements).encode()).hexdigest()[:16],
+            )
+            graph.nodes[page_id] = node
+
+        # 2. Reconstruct edges
+        url_to_id_map = {node.url: node.id for node in graph.nodes.values()}
+        for widget_node in report.nodes:
+            from_id = url_to_id_map.get(widget_node.url)
+            if not from_id:
+                continue
+            
+            from_page_title = graph.nodes[from_id].title
+            graph_elements_map = {elem.selector: elem for elem in graph.nodes[from_id].elements}
+
+            for el in widget_node.elements:
+                if el.type != "nav" or not el.href:
+                    continue
+                
+                dest_url = _normalize_url(el.href, report.dashboard_url)
+                to_id = url_to_id_map.get(dest_url)
+
+                if to_id:
+                    via_element = graph_elements_map.get(el.selector)
+                    if via_element:
+                        edge = Edge(
+                            from_page=from_id,
+                            to_page=to_id,
+                            via=via_element,
+                            instruction=f"Click '{via_element.label or via_element.human_description}' on the {from_page_title} page",
+                        )
+                        graph.edges.append(edge)
+
+        # 3. Create a StrollVersion and process it
+        version = StrollVersion(
+            id=f"stroll_{str(uuid4())[:8]}",
+            company_id=company_id,
+            timestamp=datetime.now(tz=timezone.utc),
+            graph=graph,
+            screenshot_urls=screenshot_urls,
+            status="success",
+        )
+
+        prev = await get_latest_version(company_id)
+        diff = diff_stroll(version.graph, prev)
+
+        committed = await commit_stroll(company_id, version, diff)
+        if committed:
+            await stroll_index_service.build_index(company_id, committed)
+            logger.info(f"Widget stroll completed for company {company_id}: {committed.id}")
+        else:
+            logger.info(f"Widget stroll found no changes for company {company_id}")
+
+    except Exception as e:
+        logger.exception(f"Background widget stroll processing failed for company {company_id}: {e}")
+        version = StrollVersion(
+            id=f"stroll_{str(uuid4())[:8]}",
+            company_id=company_id,
+            timestamp=datetime.now(tz=timezone.utc),
+            graph=NavGraph(),
+            status="failed",
+        )
+        await db.stroll_versions.insert_one(version.model_dump())
 
 def diff_stroll(new_graph: NavGraph, prev_version: Optional[StrollVersion]) -> DiffLog:
     """Compare new graph against previous version. Returns a DiffLog."""

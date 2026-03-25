@@ -59,6 +59,7 @@ async def get_stats(company_id: str) -> dict:
     calls_stat = await get_stat_group(db.calls, "timestamp")
     documents_stat = await get_stat_group(db.knowledge_sources, "uploaded_at")
     scrapes_stat = await get_stat_group(db.scrapes, "timestamp")
+    strolls_stat = await get_stat_group(db.stroll_versions, "timestamp")
     
     # chats (widget conversations) has an extra 'pending' field
     chats_stat = await get_stat_group(db.widget_conversations, "created_at")
@@ -74,6 +75,7 @@ async def get_stats(company_id: str) -> dict:
         "calls": calls_stat,
         "documents": documents_stat,
         "scrapes": scrapes_stat,
+        "strolls": strolls_stat,
     }
 
 async def get_visitors(company_id: str, limit: int = 20) -> list:

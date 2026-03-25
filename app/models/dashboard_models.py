@@ -20,6 +20,7 @@ class DashboardStats(BaseModel):
     calls: StatCard = StatCard()
     documents: StatCard = StatCard()
     scrapes: StatCard = StatCard()
+    strolls: StatCard = StatCard()
 
 class VisitorRecord(BaseModel):
     id: str
@@ -54,5 +55,3 @@ class ChatSession(ChatSessionSummary):
 
 class VisitorEventCreate(BaseModel):
     ip_address: str
-
-

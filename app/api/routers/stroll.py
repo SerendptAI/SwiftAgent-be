@@ -21,7 +21,7 @@ from app.core.auth import get_current_user
 from app.core.database import db
 from app.services import stroll_service, stroll_index_service
 from app.services.stroll_scheduler import schedule_stroll_job
-from app.models.stroll_models import StrollConfigCreate
+from app.models.stroll_models import StrollConfigCreate, WidgetStrollReport
 
 logger = logging.getLogger(__name__)
 

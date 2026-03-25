@@ -139,6 +139,26 @@ class StrollConfigCreate(BaseModel):
     max_pages: int = 50
 
 
+class WidgetElement(BaseModel):
+    selector: str
+    label: str
+    type: str
+    href: str
+    bbox: BoundingBox
+
+
+class WidgetPageNode(BaseModel):
+    url: str
+    title: str
+    screenshot_base64: str
+    elements: List[WidgetElement]
+
+
+class WidgetStrollReport(BaseModel):
+    dashboard_url: str
+    nodes: List[WidgetPageNode]
+
+
 class NavigationStep(BaseModel):
     step: int
     page_title: str
