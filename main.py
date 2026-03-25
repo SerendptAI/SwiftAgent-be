@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routers import auth, knowledge, diagnosis, conversations, companies, dashboard, voice, billing, chat, stroll
+from app.api.routers import auth, knowledge, diagnosis, conversations, companies, dashboard, voice, billing, chat, stroll, stroll_public
 from app.services.stroll_service import init_browser, close_browser
 from app.services.stroll_scheduler import init_scheduler, close_scheduler
 
@@ -61,7 +61,7 @@ class WidgetCorsBypassMiddleware:
     Since the voice widget is embedded on various websites, we strip the Origin
     header for widget-facing routes so they aren't blocked by the allowlist.
     """
-    BYPASS_PREFIXES = ("/api/v1/voice", "/api/v1/chat")
+    BYPASS_PREFIXES = ("/api/v1/voice", "/api/v1/chat", "/api/v1/public/stroll")
     BYPASS_SUFFIXES = ("/visitors/log",)
 
     def __init__(self, app):
@@ -89,6 +89,7 @@ app.include_router(billing.router, prefix="/api/v1/billing")
 app.include_router(voice.router, prefix="/api/v1/voice")
 app.include_router(chat.router, prefix="/api/v1/chat")
 app.include_router(stroll.router, prefix="/api/v1/stroll")
+app.include_router(stroll_public.router, prefix="/api/v1/public/stroll")
 
 
 
