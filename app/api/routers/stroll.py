@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from app.core.auth import get_current_user
 from app.core.database import db
-from app.services import stroll_service, stroll_index_service
+from app.services import stroll_service
 from app.services.stroll_scheduler import schedule_stroll_job
 from app.models.stroll_models import StrollConfigCreate, WidgetStrollReport
 
@@ -27,8 +27,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Stroll"])
 
-class FindFeatureRequest(BaseModel):
-    query: str
+
 
 async def _run_stroll_background(company_id: str):
     """Run a full stroll cycle in the background: crawl → diff → commit → index."""
@@ -55,8 +54,6 @@ async def _run_stroll_background(company_id: str):
         # commit
         committed = await stroll_service.commit_stroll(company_id, version, diff)
         if committed:
-            # rebuild search index
-            await stroll_index_service.build_index(company_id, committed)
             logger.info(f"Stroll completed for company {company_id}: {committed.id}")
         else:
             logger.info(f"Stroll found no changes for company {company_id}")
@@ -116,6 +113,18 @@ async def list_versions(
     return {"versions": versions}
 
 
+@router.get("/{company_id}/versions/latest")
+async def get_latest_stroll_version(
+    company_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Get the latest successful stroll version with full graph data."""
+    version = await stroll_service.get_latest_version(company_id)
+    if not version:
+        raise HTTPException(status_code=404, detail="No successful stroll version found.")
+    return version.model_dump()
+
+
 @router.get("/{company_id}/versions/{version_id}")
 async def get_version(
     company_id: str,
@@ -152,20 +161,3 @@ async def get_status(company_id: str, user: dict = Depends(get_current_user)):
     }
 
 
-@router.post("/{company_id}/find")
-async def find_feature(
-    company_id: str,
-    req: FindFeatureRequest,
-    user: dict = Depends(get_current_user),
-):
-    """
-    Query: "Where is X?" — returns annotated screenshot step-by-step guide.
-    Bypasses the agent, hits the stroll index directly.
-    """
-    result = await stroll_index_service.find_feature(company_id, req.query)
-    if not result:
-        raise HTTPException(
-            status_code=404,
-            detail="Feature not found in dashboard stroll data. Try rephrasing, or wait for the next stroll.",
-        )
-    return result.model_dump()

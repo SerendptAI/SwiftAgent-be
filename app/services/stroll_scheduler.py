@@ -42,8 +42,7 @@ async def _scheduled_stroll_task(company_id: str):
 
         committed = await stroll_service.commit_stroll(company_id, version, diff)
         if committed:
-            await stroll_index_service.build_index(company_id, committed)
-            logger.info(f"Scheduled stroll completed/indexed for {company_id}")
+            logger.info(f"Scheduled stroll completed for {company_id}")
         else:
             logger.info(f"Scheduled stroll found no changes for {company_id}")
 

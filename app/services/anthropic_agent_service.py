@@ -18,6 +18,7 @@ import anthropic
 from app.core.config import settings
 from app.core.database import db
 from app.services import knowledge_service, chain_service, stroll_index_service
+from app.services.stroll_index_service import extract_navigation_steps, reconstruct_navigation_guide
 from app.services.blockchain import detect, evm, bitcoin, prices
 
 logger = logging.getLogger(__name__)
@@ -132,12 +133,14 @@ TOOLS = [
         },
     },
     {
-        "name": "find_dashboard_feature",
+        "name": "get_dashboard_navigation",
         "description": (
-            "Find where a feature or page is located in the customer's dashboard. "
-            "Returns step-by-step annotated screenshots showing how to navigate there. "
-            "Use this when a customer asks how to find something, where something is, "
-            "or how to navigate to a specific page or setting in the dashboard."
+            "Get the full navigation report of the customer's dashboard. "
+            "Returns a detailed map of all pages, their interactive elements, screenshots, "
+            "and how they connect. Use this when a customer asks how to find something, "
+            "where something is, or how to navigate to a specific page or setting in the dashboard. "
+            "After reading the report, you MUST respond with a ```navigation_steps JSON block "
+            "listing the ordered steps."
         ),
         "input_schema": {
             "type": "object",
@@ -159,7 +162,7 @@ TOOL_STAGE_LABELS = {
     "lookup_transaction":      "Looking up transaction…",
     "lookup_wallet":           "Looking up wallet…",
     "diagnose_problem":        "Diagnosing transaction issue…",
-    "find_dashboard_feature":  "Searching dashboard navigation…",
+    "get_dashboard_navigation":  "Searching dashboard navigation…",
 }
 
 
@@ -197,9 +200,8 @@ flag them clearly with appropriate urgency.
 TOOL USAGE:
 - Use search_knowledge_base when the customer asks about company policies, features, pricing, \
 FAQs, how-to guides, or anything that might be in the company documentation.
-- Use find_dashboard_feature when the customer asks "where is X?", "how do I find X?", \
-"how do I navigate to X?", or similar navigation questions about the dashboard. This tool \
-returns annotated screenshots showing the path — reference the steps in your reply.
+- Use get_dashboard_navigation when the customer asks "where is X?", "how do I find X?", \
+"how do I navigate to X?", or similar navigation questions about the dashboard.
 - When you see a string that looks like a transaction hash (0x... followed by 64 hex chars, \
 or 64 hex chars without 0x for Bitcoin), use lookup_transaction.
 - When you see a wallet address (0x... followed by 40 hex chars, or a Bitcoin address), \
@@ -208,6 +210,18 @@ use lookup_wallet.
 to run the data through the diagnosis engine.
 - You can chain tools: first lookup, then diagnose.
 - Do NOT use any tools for simple greetings or small talk.
+
+NAVIGATION GUIDE FORMAT:
+When you receive a navigation report from the get_dashboard_navigation tool, identify the \
+correct sequence of pages the user needs to visit. Then respond with:
+1. A ```navigation_steps fenced code block containing a JSON array of steps in order:
+   [{"page_id": "<id>", "instruction": "<natural language step>", "element_selector": "<css selector of element to click>"}]
+   - page_id MUST match a page ID from the report
+   - element_selector should be the selector of the element to click on that page (for highlighting)
+   - Only include pages that are part of the path, in order
+2. After the JSON block, write a brief conversational summary of the steps.
+
+Only reference pages and elements that exist in the navigation report. Never invent pages or UI elements.
 
 RESPONSE FORMAT:
 - Match your response length to the complexity of the question.
@@ -315,24 +329,18 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
 
             return await chain_service.diagnose_transaction(tx_data, complaint)
 
-        elif name == "find_dashboard_feature":
+        elif name == "get_dashboard_navigation":
             query = args.get("query", "")
             if not company:
                 return {"error": "Company context not available"}
             company_id = company.get("id", "")
-            result = await stroll_index_service.find_feature(company_id, query)
-            if result:
-                # Return text-only summary for Claude (images go via Track B in chat_stream)
+            report_data = await stroll_index_service.generate_navigation_report(company_id)
+            if report_data:
                 return {
                     "found": True,
-                    "path_summary": result.path_summary,
-                    "step_count": len(result.steps),
-                    "steps_text": [
-                        {"step": s.step, "page_title": s.page_title, "instruction": s.instruction}
-                        for s in result.steps
-                    ],
+                    "navigation_report": report_data["report"],
                 }
-            return {"found": False, "message": "Feature not found in dashboard stroll data."}
+            return {"found": False, "message": "No dashboard navigation data available. A stroll has not been run yet."}
 
         else:
             return {"error": f"Unknown tool: {name}"}
@@ -560,6 +568,8 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
 
         # tool-use loop
         max_tool_rounds = 3
+        nav_report_data = None  # store report data for reconstruction
+
         for _ in range(max_tool_rounds):
             tool_use_blocks = [
                 block for block in response.content
@@ -590,12 +600,10 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
                             "score": r.get("score", 0),
                         })
 
-                # Track B: emit navigation_guide directly to SSE stream
-                if block.name == "find_dashboard_feature" and isinstance(result, dict) and result.get("found"):
+                # capture nav report data for later reconstruction
+                if block.name == "get_dashboard_navigation" and isinstance(result, dict) and result.get("found"):
                     company_id_val = company.get("id", "")
-                    guide = await stroll_index_service.find_feature(company_id_val, block.input.get("query", ""))
-                    if guide:
-                        yield {"type": "navigation_guide", "guide": guide.model_dump()}
+                    nav_report_data = await stroll_index_service.generate_navigation_report(company_id_val)
 
                 tool_results.append({
                     "type": "tool_result",
@@ -624,6 +632,14 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
 
         if not reply:
             reply = "I apologize, but I wasn't able to generate a response. Could you please rephrase your question?"
+
+        # extract navigation_steps from reply and reconstruct guide
+        if nav_report_data:
+            nav_steps, reply = extract_navigation_steps(reply)
+            if nav_steps:
+                guide = reconstruct_navigation_guide(nav_steps, nav_report_data["page_lookup"])
+                if guide:
+                    yield {"type": "navigation_guide", "guide": guide.model_dump()}
 
     except Exception as e:
         logger.exception("Anthropic API error during streaming chat")

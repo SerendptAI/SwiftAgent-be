@@ -518,7 +518,6 @@ async def process_widget_stroll(company_id: str, report: WidgetStrollReport):
 
         committed = await commit_stroll(company_id, version, diff)
         if committed:
-            await stroll_index_service.build_index(company_id, committed)
             logger.info(f"Widget stroll completed for company {company_id}: {committed.id}")
         else:
             logger.info(f"Widget stroll found no changes for company {company_id}")
