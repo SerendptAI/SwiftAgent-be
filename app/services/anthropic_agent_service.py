@@ -438,6 +438,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
 
         # handle tool-use loop (may need multiple rounds)
         max_tool_rounds = 3
+        nav_report_data = None
         for _ in range(max_tool_rounds):
             # check if Claude wants to use tools
             tool_use_blocks = [
@@ -467,6 +468,11 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
                             "title": r.get("title", ""),
                             "score": r.get("score", 0),
                         })
+
+                # capture nav report data for later reconstruction
+                if block.name == "get_dashboard_navigation" and isinstance(result, dict) and result.get("found"):
+                    company_id_val = company.get("id", "")
+                    nav_report_data = await stroll_index_service.generate_navigation_report(company_id_val)
 
                 tool_results.append({
                     "type": "tool_result",
@@ -502,15 +508,30 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
             "Please try again in a moment, or contact our support team directly."
         )
 
+    # extract navigation_steps from reply and reconstruct guide
+    guide_dump = None
+    if 'nav_report_data' in locals() and nav_report_data:
+        nav_steps, reply = extract_navigation_steps(reply)
+        if nav_steps:
+            guide = reconstruct_navigation_guide(nav_steps, nav_report_data["page_lookup"])
+            if guide:
+                guide_dump = guide.model_dump()
+
     # save conversation
     history.append({"role": "user", "content": user_message, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
-    history.append({"role": "assistant", "content": reply, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
+
+    assistant_msg = {"role": "assistant", "content": reply, "timestamp": datetime.now(tz=timezone.utc).isoformat()}
+    if guide_dump:
+        assistant_msg['navigation_guide'] = guide_dump
+    history.append(assistant_msg)
+
     await _save_conversation(company_id, session_id, history)
 
     return {
         "reply": reply,
         "sources": sources,
         "blockchain_data": blockchain_data,
+        "navigation_guide": guide_dump,
     }
 
 
@@ -650,7 +671,12 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
 
     # save conversation
     history.append({"role": "user", "content": user_message, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
-    history.append({"role": "assistant", "content": reply, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
+    
+    assistant_msg = {"role": "assistant", "content": reply, "timestamp": datetime.now(tz=timezone.utc).isoformat()}
+    if 'guide' in locals() and guide:
+        assistant_msg['navigation_guide'] = guide.model_dump()
+    history.append(assistant_msg)
+    
     await _save_conversation(company_id, session_id, history)
 
     # emit final events
