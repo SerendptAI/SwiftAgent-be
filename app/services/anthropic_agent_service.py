@@ -135,12 +135,13 @@ TOOLS = [
     {
         "name": "get_dashboard_navigation",
         "description": (
-            "Get the full navigation report of the customer's dashboard. "
-            "Returns a detailed map of all pages, their interactive elements, screenshots, "
-            "and how they connect. Use this when a customer asks how to find something, "
-            "where something is, or how to navigate to a specific page or setting in the dashboard. "
+            "Access the visual dashboard navigation system. Returns a report containing "
+            "page maps, interactive elements, AND ACTUAL SCREENSHOTS. Use this tool "
+            "whenever a user asks to 'see' something, asks for 'screenshots', or asks "
+            "'how to' do anything in the dashboard. This tool is the ONLY way you can "
+            "provide the visual guide and screenshots the user is requesting. "
             "After reading the report, you MUST respond with a ```navigation_steps JSON block "
-            "listing the ordered steps."
+            "listing the ordered steps to trigger the visual display."
         ),
         "input_schema": {
             "type": "object",
@@ -200,8 +201,10 @@ flag them clearly with appropriate urgency.
 TOOL USAGE:
 - Use search_knowledge_base when the customer asks about company policies, features, pricing, \
 FAQs, how-to guides, or anything that might be in the company documentation.
-- Use get_dashboard_navigation when the customer asks "where is X?", "how do I find X?", \
-"how do I navigate to X?", or similar navigation questions about the dashboard.
+- COMPULSORY: You MUST ALWAYS use get_dashboard_navigation when the customer asks "how to", \
+"where is X?", "how do I find X?", "show me X", "show me the screenshot", or any question \
+involving steps or navigation in the dashboard. You must NEVER claim you cannot show screenshots; \
+instead, use this tool and output the visual guide.
 - When you see a string that looks like a transaction hash (0x... followed by 64 hex chars, \
 or 64 hex chars without 0x for Bitcoin), use lookup_transaction.
 - When you see a wallet address (0x... followed by 40 hex chars, or a Bitcoin address), \
@@ -220,6 +223,12 @@ correct sequence of pages the user needs to visit. Then respond with:
    - element_selector should be the selector of the element to click on that page (for highlighting)
    - Only include pages that are part of the path, in order
 2. After the JSON block, write a brief conversational summary of the steps.
+
+CRITICAL VISUALIZATION RULE:
+By outputting the ```navigation_steps JSON block, the frontend will automatically render an interactive visual guide with screenshots and highlighted elements for the user. Therefore:
+1. If a user asks to "see", "show screenshots", wants visual directions, or asks ANY "how to" or step-by-step question, you MUST use the get_dashboard_navigation tool and output the navigation_steps block. This is COMPULSORY.
+2. DO NOT claim you cannot show images.
+3. NEVER provide text-only step-by-step navigation directions. Always provide the visual guide.
 
 Only reference pages and elements that exist in the navigation report. Never invent pages or UI elements.
 
