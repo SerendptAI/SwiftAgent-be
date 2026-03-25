@@ -215,7 +215,7 @@ NAVIGATION GUIDE FORMAT:
 When you receive a navigation report from the get_dashboard_navigation tool, identify the \
 correct sequence of pages the user needs to visit. Then respond with:
 1. A ```navigation_steps fenced code block containing a JSON array of steps in order:
-   [{"page_id": "<id>", "instruction": "<natural language step>", "element_selector": "<css selector of element to click>"}]
+   [{{\"page_id\": \"<id>\", \"instruction\": \"<natural language step>\", \"element_selector\": \"<css selector of element to click>\"}}]
    - page_id MUST match a page ID from the report
    - element_selector should be the selector of the element to click on that page (for highlighting)
    - Only include pages that are part of the path, in order
