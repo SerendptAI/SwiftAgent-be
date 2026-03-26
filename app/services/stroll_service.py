@@ -211,14 +211,26 @@ def _normalize_url(url: str, base_url: str) -> str:
     return full_url.split("#")[0]
 
 
-async def _upload_screenshot(screenshot_bytes: bytes, company_id: str, page_id: str) -> str:
-    """Upload screenshot to Cloudinary, return secure URL."""
-    result = await upload_document(
-        content=screenshot_bytes,
-        filename=f"stroll_{company_id}_{page_id}.png",
-        folder=f"stroll/{company_id}",
-    )
-    return result["secure_url"]
+async def _upload_screenshot(screenshot_data: bytes | str, company_id: str, page_id: str) -> str:
+    """Upload screenshot to Cloudinary, return secure URL.
+    Supports either raw PNG bytes or a base64 Data URI."""
+    if isinstance(screenshot_data, str):
+        # Base64 Data URI upload
+        import cloudinary.uploader
+        result = cloudinary.uploader.upload(
+            screenshot_data,
+            folder=f"stroll/{company_id}",
+            resource_type="image",
+        )
+        return result["secure_url"]
+    else:
+        # Raw bytes upload
+        result = await upload_document(
+            content=screenshot_data,
+            filename=f"stroll_{company_id}_{page_id}.png",
+            folder=f"stroll/{company_id}",
+        )
+        return result["secure_url"]
 
 
 async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
@@ -425,13 +437,24 @@ async def process_widget_stroll(company_id: str, report: WidgetStrollReport):
             page_id = hashlib.sha256(widget_node.url.encode()).hexdigest()[:12]
             
             try:
-                screenshot_bytes = base64.b64decode(widget_node.screenshot_base64)
+                # The widget sends a data URI (e.g. data:image/png;base64,iVBORw0KG...)
+                # We need the raw bytes for the hash and fallback tasks, but we can pass the data URI directly to Cloudinary
+                b64_str = widget_node.screenshot_base64
+                if not b64_str or b64_str.strip() == "data:,":
+                    logger.warning(f"Empty screenshot base64 for {widget_node.url}")
+                    continue
+                
+                pure_b64 = b64_str.split(",", 1)[1] if "," in b64_str else b64_str
+                screenshot_bytes = base64.b64decode(pure_b64)
+                
+                # Format a proper data URI for Cloudinary if it's missing the prefix
+                cloudinary_data = b64_str if "," in b64_str else f"data:image/png;base64,{b64_str}"
             except Exception:
                 logger.warning(f"Failed to decode base64 screenshot for {widget_node.url}")
                 continue
 
-            # Upload screenshot
-            screenshot_url = await _upload_screenshot(screenshot_bytes, company_id, page_id)
+            # Upload screenshot directly using the Data URI
+            screenshot_url = await _upload_screenshot(cloudinary_data, company_id, page_id)
             screenshot_urls[page_id] = screenshot_url
 
             # Prepare elements for vision analysis
