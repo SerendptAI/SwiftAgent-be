@@ -61,7 +61,7 @@ class WidgetCorsBypassMiddleware:
     Since the voice widget is embedded on various websites, we strip the Origin
     header for widget-facing routes so they aren't blocked by the allowlist.
     """
-    BYPASS_PREFIXES = ("/api/v1/voice", "/api/v1/chat", "/api/v1/public/stroll")
+    BYPASS_PREFIXES = ("/api/v1/voice", "/api/v1/chat", "/api/v1/public/stroll", "/api/v1/stroll")
     BYPASS_SUFFIXES = ("/visitors/log",)
 
     def __init__(self, app):
