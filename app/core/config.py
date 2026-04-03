@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     STROLL_PAGE_TIMEOUT_MS: int = 10000
     STROLL_SCREENSHOT_QUALITY: int = 70
 
+    # Zoho SMTP (welcome emails)
+    ZOHO_APP_PASSWORD: str = ""
+    ZOHO_EMAIL: str = ""
+    ZOHO_SMTP_PORT: int = 465
+    ZOHO_SMTP_SERVER: str = "smtp.zoho.com"
+
     model_config = SettingsConfigDict(env_file=".env")
 
 settings = Settings()

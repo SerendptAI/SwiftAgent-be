@@ -12,6 +12,8 @@ from app.core.security import create_access_token, create_refresh_token, decode_
 from app.core.auth import get_current_user
 from app.models.auth_models import RefreshTokenRequest, UserProfileUpdate, ReferralRequest
 import os
+import asyncio
+from app.services.email_service import send_welcome_email
 
 router = APIRouter(tags=["Auth"])
 
@@ -111,11 +113,20 @@ async def callback(request: Request, db = Depends(get_database)):
         "updated_at": datetime.utcnow()
     }
 
-    await db.users.update_one(
+    result = await db.users.update_one(
         {"user_id": user_id},
         {"$set": user_data},
         upsert=True
     )
+
+    # If the update performed an upsert, result.upserted_id will be set
+    # — treat this as a new user signup and send the welcome email asynchronously.
+    if getattr(result, "upserted_id", None):
+        try:
+            asyncio.create_task(send_welcome_email(email, name))
+        except Exception:
+            # don't fail the auth flow if email send scheduling fails
+            pass
 
     # create jwt
     access_token = create_access_token(data={"sub": user_id})
