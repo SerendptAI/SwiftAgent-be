@@ -2,6 +2,10 @@ import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
+
+from app.core.logging_setup import install_default_log_record_fields
+
+install_default_log_record_fields()
 from pathlib import Path
 
 from fastapi import FastAPI, Request
