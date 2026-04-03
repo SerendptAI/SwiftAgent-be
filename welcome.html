@@ -82,7 +82,7 @@
       </tr>
 
       <!-- Hero image (welcome.svg with built-in photo) -->
-      <tr style="position: relative;">
+      <tr>
         <td style="padding: 0 16px;">
           <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
             <tr>
@@ -90,9 +90,9 @@
                 <img src="{{heroImageUrl}}" alt="Welcome" width="388" style="display: block; width: 100%; height: auto;" class="fluid">
               </td>
             </tr>
-            <!-- Overlay message row -->
+            <!-- Overlay message row (placed below image to avoid absolute positioning issues in email clients) -->
             <tr>
-              <td style="padding: 20px 24px; position: absolute; top: 0; left: 0; right: 0;">
+              <td style="padding: 16px 24px; background-color: #2b2b2b;">
                 <p style="margin: 0; font-size: 12px; line-height: 18px; font-weight: 600; color: white; text-transform: uppercase; letter-spacing: 1.5px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;" class="hero-overlay-text">
                   You are one of our very first<br>
                   customers and we appreciate<br>
