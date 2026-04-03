@@ -1,27 +1,43 @@
 import json
 import base64
+import logging
+import os
 import urllib.parse
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from google_auth_oauthlib.flow import Flow
 from app.core.config import settings
 from app.core.database import get_database
-from app.core.security import create_access_token, create_refresh_token, decode_refresh_token
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+)
 from app.core.auth import get_current_user
-from app.models.auth_models import RefreshTokenRequest, UserProfileUpdate, ReferralRequest
-import os
+from app.models.auth_models import (
+    RefreshTokenRequest,
+    UserProfileUpdate,
+    ReferralRequest,
+)
 import asyncio
 from app.services.email_service import send_welcome_email
 
 router = APIRouter(tags=["Auth"])
+logger = logging.getLogger(__name__)
 
-# ensure no trailing slash issue
-os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+# only allow insecure transport in development
+if settings.is_development:
+    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
-SCOPES = ['openid', 'https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile']
+SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
 REDIRECT_URI = f"{settings.API_BASE_URL}/api/v1/auth/callback"
+
 
 def _build_client_config():
     return {
@@ -34,41 +50,40 @@ def _build_client_config():
         }
     }
 
+
 @router.post("/verify-referral")
 async def verify_referral(request: ReferralRequest):
     """Verify if the provided referral code is valid."""
     if not settings.REFERRAL_CODE:
         # If no code is configured, accept any code or disable invite-only
         return {"status": "success", "message": "Invites are open"}
-        
+
     if request.code != settings.REFERRAL_CODE:
         raise HTTPException(status_code=400, detail="Invalid referral code")
-        
+
     return {"status": "success", "message": "Valid referral code"}
+
 
 @router.get("/login")
 async def login(redirect_url: Optional[str] = None):
     """Initiates the Google OAuth flow."""
-    flow = Flow.from_client_config(
-        _build_client_config(),
-        scopes=SCOPES,
-        redirect_uri=REDIRECT_URI
-    )
+    flow = Flow.from_client_config(_build_client_config(), scopes=SCOPES, redirect_uri=REDIRECT_URI)
 
     # encode redirect_url into oauth state so it survives the round-trip
     state_data = json.dumps({"redirect_url": redirect_url or ""})
     state = base64.urlsafe_b64encode(state_data.encode()).decode()
 
     authorization_url, _ = flow.authorization_url(
-        access_type='offline',
-        include_granted_scopes='true',
+        access_type="offline",
+        include_granted_scopes="true",
         state=state,
     )
 
     return RedirectResponse(authorization_url)
 
+
 @router.get("/callback")
-async def callback(request: Request, db = Depends(get_database)):
+async def callback(request: Request, db=Depends(get_database)):
     """Handles the callback from Google."""
     code = request.query_params.get("code")
     if not code:
@@ -84,18 +99,14 @@ async def callback(request: Request, db = Depends(get_database)):
         except Exception:
             pass
 
-    flow = Flow.from_client_config(
-        _build_client_config(),
-        scopes=SCOPES,
-        redirect_uri=REDIRECT_URI
-    )
+    flow = Flow.from_client_config(_build_client_config(), scopes=SCOPES, redirect_uri=REDIRECT_URI)
 
     # exchange code for token
     flow.fetch_token(code=code)
 
     # get user info
     session = flow.authorized_session()
-    user_info = session.get('https://www.googleapis.com/oauth2/v2/userinfo').json()
+    user_info = session.get("https://www.googleapis.com/oauth2/v2/userinfo").json()
 
     user_id = user_info.get("id")
     email = user_info.get("email")
@@ -110,14 +121,10 @@ async def callback(request: Request, db = Depends(get_database)):
         "email": email,
         "name": name,
         "picture": user_info.get("picture"),
-        "updated_at": datetime.utcnow()
+        "updated_at": datetime.now(tz=timezone.utc),
     }
 
-    result = await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": user_data},
-        upsert=True
-    )
+    result = await db.users.update_one({"user_id": user_id}, {"$set": user_data}, upsert=True)
 
     # If the update performed an upsert, result.upserted_id will be set
     # — treat this as a new user signup and send the welcome email asynchronously.
@@ -132,17 +139,26 @@ async def callback(request: Request, db = Depends(get_database)):
     access_token = create_access_token(data={"sub": user_id})
     refresh_token = create_refresh_token(data={"sub": user_id})
 
-    # redirect to the target frontend url directly with the tokens in the query string
+    # redirect with tokens in URL fragment (not query params) to avoid
+    # exposure in server logs, browser history, and referrer headers
     if redirect_url:
-        params = urllib.parse.urlencode({
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "token_type": "bearer",
-        })
-        target = f"{redirect_url}?{params}"
+        fragment = urllib.parse.urlencode(
+            {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer",
+            }
+        )
+        target = f"{redirect_url}#{fragment}"
         return RedirectResponse(url=target)
 
-    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer", "user": user_data}
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": user_data,
+    }
+
 
 @router.post("/refresh")
 async def refresh_token(request: RefreshTokenRequest):
@@ -158,8 +174,9 @@ async def refresh_token(request: RefreshTokenRequest):
     new_access_token = create_access_token(data={"sub": user_id})
     return {"access_token": new_access_token, "token_type": "bearer"}
 
+
 @router.get("/me")
-async def read_users_me(current_user: dict = Depends(get_current_user), db = Depends(get_database)):
+async def read_users_me(current_user: dict = Depends(get_current_user), db=Depends(get_database)):
     """Get current user details."""
     if "_id" in current_user:
         current_user["_id"] = str(current_user["_id"])
@@ -174,23 +191,21 @@ async def read_users_me(current_user: dict = Depends(get_current_user), db = Dep
 
     return current_user
 
+
 @router.patch("/me")
 async def update_user_profile(
     data: UserProfileUpdate,
     current_user: dict = Depends(get_current_user),
-    db = Depends(get_database)
+    db=Depends(get_database),
 ):
     """Update current user's profile details."""
     user_id = current_user["user_id"]
-    
+
     update_data = data.model_dump(exclude_none=True)
     if not update_data:
         return {"status": "success"}
 
-    update_data["updated_at"] = datetime.utcnow()
-    
-    await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": update_data}
-    )
+    update_data["updated_at"] = datetime.now(tz=timezone.utc)
+
+    await db.users.update_one({"user_id": user_id}, {"$set": update_data})
     return {"status": "success"}

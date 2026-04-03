@@ -8,6 +8,7 @@ Uses Google Gemini with native tool use to:
 
 Conversation history is stored in MongoDB.
 """
+
 import json
 import logging
 from datetime import datetime, timezone
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 # gemini client
 _client = None
 
+
 def _get_client():
     global _client
     if _client is None:
@@ -34,138 +36,139 @@ def _get_client():
     return _client
 
 
-# tool definitions (gemini function declarations)
-
 TOOLS = [
-    types.Tool(function_declarations=[
-        types.FunctionDeclaration(
-            name="search_knowledge_base",
-            description=(
-                "Search the company's knowledge base and documentation for relevant information. "
-                "Use this when a customer asks a question that might be answered by company "
-                "documentation, FAQs, policies, or guides. Do NOT use this for simple greetings, "
-                "small talk, or follow-up questions where you already have the context."
-            ),
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "query": types.Schema(
-                        type="STRING",
-                        description="The search query to find relevant documents. Use the customer's question or a refined version of it.",
-                    ),
-                },
-                required=["query"],
-            ),
-        ),
-        types.FunctionDeclaration(
-            name="lookup_transaction",
-            description=(
-                "Look up a blockchain transaction by its hash. Use this when a customer "
-                "pastes a transaction hash (tx hash). Returns transaction details including "
-                "status, gas used, value, confirmations, and more."
-            ),
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "hash": types.Schema(
-                        type="STRING",
-                        description="The transaction hash to look up",
-                    ),
-                    "chain": types.Schema(
-                        type="STRING",
-                        description=(
-                            "Optional blockchain chain name: ethereum, bsc, polygon, "
-                            "arbitrum, base, avalanche, or bitcoin. If not provided, "
-                            "the chain will be auto-detected."
+    types.Tool(
+        function_declarations=[
+            types.FunctionDeclaration(
+                name="search_knowledge_base",
+                description=(
+                    "Search the company's knowledge base and documentation for relevant information. "
+                    "Use this when a customer asks a question that might be answered by company "
+                    "documentation, FAQs, policies, or guides. Do NOT use this for simple greetings, "
+                    "small talk, or follow-up questions where you already have the context."
+                ),
+                parameters=types.Schema(
+                    type="OBJECT",
+                    properties={
+                        "query": types.Schema(
+                            type="STRING",
+                            description="The search query to find relevant documents. Use the customer's question or a refined version of it.",
                         ),
-                    ),
-                },
-                required=["hash"],
+                    },
+                    required=["query"],
+                ),
             ),
-        ),
-        types.FunctionDeclaration(
-            name="lookup_wallet",
-            description=(
-                "Look up a blockchain wallet/address. Use this when a customer pastes "
-                "a wallet address. Returns balance, transaction count, recent activity."
-            ),
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "address": types.Schema(
-                        type="STRING",
-                        description="The wallet address to look up",
-                    ),
-                    "chain": types.Schema(
-                        type="STRING",
-                        description=(
-                            "Optional blockchain chain name: ethereum, bsc, polygon, "
-                            "arbitrum, base, avalanche, or bitcoin. If not provided, "
-                            "the chain will be auto-detected."
+            types.FunctionDeclaration(
+                name="lookup_transaction",
+                description=(
+                    "Look up a blockchain transaction by its hash. Use this when a customer "
+                    "pastes a transaction hash (tx hash). Returns transaction details including "
+                    "status, gas used, value, confirmations, and more."
+                ),
+                parameters=types.Schema(
+                    type="OBJECT",
+                    properties={
+                        "hash": types.Schema(
+                            type="STRING",
+                            description="The transaction hash to look up",
                         ),
-                    ),
-                },
-                required=["address"],
+                        "chain": types.Schema(
+                            type="STRING",
+                            description=(
+                                "Optional blockchain chain name: ethereum, bsc, polygon, "
+                                "arbitrum, base, avalanche, or bitcoin. If not provided, "
+                                "the chain will be auto-detected."
+                            ),
+                        ),
+                    },
+                    required=["hash"],
+                ),
             ),
-        ),
-        types.FunctionDeclaration(
-            name="diagnose_problem",
-            description=(
-                "Diagnose issues with a transaction. Use this AFTER looking up a "
-                "transaction to analyze what went wrong. Checks for common failure modes "
-                "like low gas, reverted contracts, missing deposits, suspicious activity, etc."
+            types.FunctionDeclaration(
+                name="lookup_wallet",
+                description=(
+                    "Look up a blockchain wallet/address. Use this when a customer pastes "
+                    "a wallet address. Returns balance, transaction count, recent activity."
+                ),
+                parameters=types.Schema(
+                    type="OBJECT",
+                    properties={
+                        "address": types.Schema(
+                            type="STRING",
+                            description="The wallet address to look up",
+                        ),
+                        "chain": types.Schema(
+                            type="STRING",
+                            description=(
+                                "Optional blockchain chain name: ethereum, bsc, polygon, "
+                                "arbitrum, base, avalanche, or bitcoin. If not provided, "
+                                "the chain will be auto-detected."
+                            ),
+                        ),
+                    },
+                    required=["address"],
+                ),
             ),
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "tx_data": types.Schema(
-                        type="STRING",
-                        description="JSON string of the transaction data from lookup_transaction",
-                    ),
-                    "customer_complaint": types.Schema(
-                        type="STRING",
-                        description="Description of the customer's issue in plain text",
-                    ),
-                },
-                required=["tx_data", "customer_complaint"],
+            types.FunctionDeclaration(
+                name="diagnose_problem",
+                description=(
+                    "Diagnose issues with a transaction. Use this AFTER looking up a "
+                    "transaction to analyze what went wrong. Checks for common failure modes "
+                    "like low gas, reverted contracts, missing deposits, suspicious activity, etc."
+                ),
+                parameters=types.Schema(
+                    type="OBJECT",
+                    properties={
+                        "tx_data": types.Schema(
+                            type="STRING",
+                            description="JSON string of the transaction data from lookup_transaction",
+                        ),
+                        "customer_complaint": types.Schema(
+                            type="STRING",
+                            description="Description of the customer's issue in plain text",
+                        ),
+                    },
+                    required=["tx_data", "customer_complaint"],
+                ),
             ),
-        ),
-        types.FunctionDeclaration(
-            name="get_dashboard_navigation",
-            description=(
-                "Get the full navigation report of the customer's dashboard. "
-                "Returns a detailed map of all pages, their interactive elements, screenshots, "
-                "and how they connect. Use this when a customer asks how to find something, "
-                "where something is, or how to navigate to a specific page or setting in the dashboard. "
-                "After reading the report, you MUST respond with a ```navigation_steps JSON block "
-                "listing the ordered steps."
+            types.FunctionDeclaration(
+                name="get_dashboard_navigation",
+                description=(
+                    "Get the full navigation report of the customer's dashboard. "
+                    "Returns a detailed map of all pages, their interactive elements, screenshots, "
+                    "and how they connect. Use this when a customer asks how to find something, "
+                    "where something is, or how to navigate to a specific page or setting in the dashboard. "
+                    "After reading the report, you MUST respond with a ```navigation_steps JSON block "
+                    "listing the ordered steps."
+                ),
+                parameters=types.Schema(
+                    type="OBJECT",
+                    properties={
+                        "query": types.Schema(
+                            type="STRING",
+                            description="The feature, page, or setting the user is looking for",
+                        ),
+                    },
+                    required=["query"],
+                ),
             ),
-            parameters=types.Schema(
-                type="OBJECT",
-                properties={
-                    "query": types.Schema(
-                        type="STRING",
-                        description="The feature, page, or setting the user is looking for",
-                    ),
-                },
-                required=["query"],
-            ),
-        ),
-    ])
+        ]
+    )
 ]
 
 
 # user-friendly labels for each tool, streamed as thinking stages
 TOOL_STAGE_LABELS = {
     "search_knowledge_base": "Searching knowledge base…",
-    "lookup_transaction":    "Looking up transaction…",
-    "lookup_wallet":         "Looking up wallet…",
-    "diagnose_problem":        "Diagnosing transaction issue…",
-    "get_dashboard_navigation":  "Searching dashboard navigation…",
+    "lookup_transaction": "Looking up transaction…",
+    "lookup_wallet": "Looking up wallet…",
+    "diagnose_problem": "Diagnosing transaction issue…",
+    "get_dashboard_navigation": "Searching dashboard navigation…",
 }
 
 
 # system prompt builder
+
 
 def _build_system_prompt(company: dict) -> str:
     company_name = company.get("name", "the company")
@@ -231,6 +234,7 @@ RESPONSE FORMAT:
 
 
 # tool execution
+
 
 async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
     """Execute a tool call and return the result."""
@@ -313,7 +317,9 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
                 price_data = await prices.get_price(chain)
                 if "price_usd" in price_data:
                     native_bal = result.get("balance_native") or result.get("balance_btc", 0)
-                    result["balance_usd"] = prices.convert_to_usd(native_bal, price_data["price_usd"])
+                    result["balance_usd"] = prices.convert_to_usd(
+                        native_bal, price_data["price_usd"]
+                    )
 
             return result or {"error": "Address not found"}
 
@@ -339,7 +345,10 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
                     "found": True,
                     "navigation_report": report_data["report"],
                 }
-            return {"found": False, "message": "No dashboard navigation data available. A stroll has not been run yet."}
+            return {
+                "found": False,
+                "message": "No dashboard navigation data available. A stroll has not been run yet.",
+            }
 
         else:
             return {"error": f"Unknown tool: {name}"}
@@ -351,12 +360,15 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
 
 # conversation management
 
+
 async def _load_conversation(company_id: str, session_id: str) -> list[dict]:
     """Load conversation history from MongoDB."""
-    convo = await db.widget_conversations.find_one({
-        "company_id": company_id,
-        "session_id": session_id,
-    })
+    convo = await db.widget_conversations.find_one(
+        {
+            "company_id": company_id,
+            "session_id": session_id,
+        }
+    )
     if convo:
         return convo.get("messages", [])
     return []
@@ -384,6 +396,7 @@ async def _save_conversation(company_id: str, session_id: str, messages: list[di
 
 
 # main chat function
+
 
 async def chat(company_id: str, session_id: str, user_message: str) -> dict:
     """
@@ -431,7 +444,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=settings.GEMINI_MODEL,
             contents=gemini_history,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
@@ -466,10 +479,12 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
                 # Track knowledge sources
                 if fc.name == "search_knowledge_base" and isinstance(result, dict):
                     for r in result.get("results", []):
-                        sources.append({
-                            "title": r.get("title", ""),
-                            "score": r.get("score", 0),
-                        })
+                        sources.append(
+                            {
+                                "title": r.get("title", ""),
+                                "score": r.get("score", 0),
+                            }
+                        )
 
                 tool_results.append(
                     types.Part.from_function_response(
@@ -480,13 +495,11 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
 
             # Add the model's tool call and tool results to history
             gemini_history.append(response.candidates[0].content)
-            gemini_history.append(
-                types.Content(role="user", parts=tool_results)
-            )
+            gemini_history.append(types.Content(role="user", parts=tool_results))
 
             # Call Gemini again with tool results
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=settings.GEMINI_MODEL,
                 contents=gemini_history,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
@@ -513,8 +526,20 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
         )
 
     # save conversation
-    history.append({"role": "user", "content": user_message, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
-    history.append({"role": "assistant", "content": reply, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
+    history.append(
+        {
+            "role": "user",
+            "content": user_message,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        }
+    )
+    history.append(
+        {
+            "role": "assistant",
+            "content": reply,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        }
+    )
     await _save_conversation(company_id, session_id, history)
 
     return {
@@ -525,6 +550,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
 
 
 # streaming chat (SSE)
+
 
 async def chat_stream(company_id: str, session_id: str, user_message: str):
     """
@@ -574,7 +600,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
         yield {"type": "thinking", "message": "Thinking…"}
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=settings.GEMINI_MODEL,
             contents=gemini_history,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
@@ -613,15 +639,23 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
 
                 if fc.name == "search_knowledge_base" and isinstance(result, dict):
                     for r in result.get("results", []):
-                        sources.append({
-                            "title": r.get("title", ""),
-                            "score": r.get("score", 0),
-                        })
+                        sources.append(
+                            {
+                                "title": r.get("title", ""),
+                                "score": r.get("score", 0),
+                            }
+                        )
 
                 # capture nav report data for later reconstruction
-                if fc.name == "get_dashboard_navigation" and isinstance(result, dict) and result.get("found"):
+                if (
+                    fc.name == "get_dashboard_navigation"
+                    and isinstance(result, dict)
+                    and result.get("found")
+                ):
                     company_id_val = company.get("id", "")
-                    nav_report_data = await stroll_index_service.generate_navigation_report(company_id_val)
+                    nav_report_data = await stroll_index_service.generate_navigation_report(
+                        company_id_val
+                    )
 
                 tool_results.append(
                     types.Part.from_function_response(
@@ -632,15 +666,13 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
 
             # Add the model's tool call and tool results to history
             gemini_history.append(response.candidates[0].content)
-            gemini_history.append(
-                types.Content(role="user", parts=tool_results)
-            )
+            gemini_history.append(types.Content(role="user", parts=tool_results))
 
             yield {"type": "thinking", "message": "Preparing response…"}
 
             # Call Gemini again with tool results
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=settings.GEMINI_MODEL,
                 contents=gemini_history,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
@@ -675,8 +707,20 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
         )
 
     # save conversation
-    history.append({"role": "user", "content": user_message, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
-    history.append({"role": "assistant", "content": reply, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
+    history.append(
+        {
+            "role": "user",
+            "content": user_message,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        }
+    )
+    history.append(
+        {
+            "role": "assistant",
+            "content": reply,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        }
+    )
     await _save_conversation(company_id, session_id, history)
 
     # emit final events

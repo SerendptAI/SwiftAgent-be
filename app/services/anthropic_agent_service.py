@@ -8,6 +8,7 @@ Uses Claude with native tool use to:
 
 Conversation history is stored in MongoDB.
 """
+
 import json
 import logging
 from datetime import datetime, timezone
@@ -34,7 +35,7 @@ def _get_client() -> anthropic.AsyncAnthropic:
     return _client
 
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = settings.ANTHROPIC_MODEL
 
 
 # tool definitions (anthropic tool-use format)
@@ -159,15 +160,16 @@ TOOLS = [
 
 # user-friendly labels for each tool, streamed as thinking stages
 TOOL_STAGE_LABELS = {
-    "search_knowledge_base":   "Searching knowledge base…",
-    "lookup_transaction":      "Looking up transaction…",
-    "lookup_wallet":           "Looking up wallet…",
-    "diagnose_problem":        "Diagnosing transaction issue…",
-    "get_dashboard_navigation":  "Searching dashboard navigation…",
+    "search_knowledge_base": "Searching knowledge base…",
+    "lookup_transaction": "Looking up transaction…",
+    "lookup_wallet": "Looking up wallet…",
+    "diagnose_problem": "Diagnosing transaction issue…",
+    "get_dashboard_navigation": "Searching dashboard navigation…",
 }
 
 
 # system prompt builder
+
 
 def _build_system_prompt(company: dict) -> str:
     company_name = company.get("name", "the company")
@@ -241,6 +243,7 @@ RESPONSE FORMAT:
 
 
 # tool execution (shared with gemini service)
+
 
 async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
     """Execute a tool call and return the result."""
@@ -323,7 +326,9 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
                 price_data = await prices.get_price(chain)
                 if "price_usd" in price_data:
                     native_bal = result.get("balance_native") or result.get("balance_btc", 0)
-                    result["balance_usd"] = prices.convert_to_usd(native_bal, price_data["price_usd"])
+                    result["balance_usd"] = prices.convert_to_usd(
+                        native_bal, price_data["price_usd"]
+                    )
 
             return result or {"error": "Address not found"}
 
@@ -349,7 +354,10 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
                     "found": True,
                     "navigation_report": report_data["report"],
                 }
-            return {"found": False, "message": "No dashboard navigation data available. A stroll has not been run yet."}
+            return {
+                "found": False,
+                "message": "No dashboard navigation data available. A stroll has not been run yet.",
+            }
 
         else:
             return {"error": f"Unknown tool: {name}"}
@@ -361,12 +369,15 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
 
 # conversation management
 
+
 async def _load_conversation(company_id: str, session_id: str) -> list[dict]:
     """Load conversation history from MongoDB."""
-    convo = await db.widget_conversations.find_one({
-        "company_id": company_id,
-        "session_id": session_id,
-    })
+    convo = await db.widget_conversations.find_one(
+        {
+            "company_id": company_id,
+            "session_id": session_id,
+        }
+    )
     if convo:
         return convo.get("messages", [])
     return []
@@ -394,6 +405,7 @@ async def _save_conversation(company_id: str, session_id: str, messages: list[di
 
 
 # main chat function
+
 
 async def chat(company_id: str, session_id: str, user_message: str) -> dict:
     """
@@ -450,10 +462,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
         nav_report_data = None
         for _ in range(max_tool_rounds):
             # check if Claude wants to use tools
-            tool_use_blocks = [
-                block for block in response.content
-                if block.type == "tool_use"
-            ]
+            tool_use_blocks = [block for block in response.content if block.type == "tool_use"]
 
             if not tool_use_blocks:
                 break
@@ -473,21 +482,31 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
                 # track knowledge sources
                 if block.name == "search_knowledge_base" and isinstance(result, dict):
                     for r in result.get("results", []):
-                        sources.append({
-                            "title": r.get("title", ""),
-                            "score": r.get("score", 0),
-                        })
+                        sources.append(
+                            {
+                                "title": r.get("title", ""),
+                                "score": r.get("score", 0),
+                            }
+                        )
 
                 # capture nav report data for later reconstruction
-                if block.name == "get_dashboard_navigation" and isinstance(result, dict) and result.get("found"):
+                if (
+                    block.name == "get_dashboard_navigation"
+                    and isinstance(result, dict)
+                    and result.get("found")
+                ):
                     company_id_val = company.get("id", "")
-                    nav_report_data = await stroll_index_service.generate_navigation_report(company_id_val)
+                    nav_report_data = await stroll_index_service.generate_navigation_report(
+                        company_id_val
+                    )
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": json.dumps(result, default=str),
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": json.dumps(result, default=str),
+                    }
+                )
 
             # add tool results and call Claude again
             claude_messages.append({"role": "user", "content": tool_results})
@@ -519,7 +538,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
 
     # extract navigation_steps from reply and reconstruct guide
     guide_dump = None
-    if 'nav_report_data' in locals() and nav_report_data:
+    if "nav_report_data" in locals() and nav_report_data:
         nav_steps, reply = extract_navigation_steps(reply)
         if nav_steps:
             guide = reconstruct_navigation_guide(nav_steps, nav_report_data["page_lookup"])
@@ -527,11 +546,21 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
                 guide_dump = guide.model_dump()
 
     # save conversation
-    history.append({"role": "user", "content": user_message, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
+    history.append(
+        {
+            "role": "user",
+            "content": user_message,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        }
+    )
 
-    assistant_msg = {"role": "assistant", "content": reply, "timestamp": datetime.now(tz=timezone.utc).isoformat()}
+    assistant_msg = {
+        "role": "assistant",
+        "content": reply,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
     if guide_dump:
-        assistant_msg['navigation_guide'] = guide_dump
+        assistant_msg["navigation_guide"] = guide_dump
     history.append(assistant_msg)
 
     await _save_conversation(company_id, session_id, history)
@@ -545,6 +574,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
 
 
 # streaming chat (SSE)
+
 
 async def chat_stream(company_id: str, session_id: str, user_message: str):
     """
@@ -601,10 +631,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
         nav_report_data = None  # store report data for reconstruction
 
         for _ in range(max_tool_rounds):
-            tool_use_blocks = [
-                block for block in response.content
-                if block.type == "tool_use"
-            ]
+            tool_use_blocks = [block for block in response.content if block.type == "tool_use"]
 
             if not tool_use_blocks:
                 break
@@ -625,21 +652,31 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
 
                 if block.name == "search_knowledge_base" and isinstance(result, dict):
                     for r in result.get("results", []):
-                        sources.append({
-                            "title": r.get("title", ""),
-                            "score": r.get("score", 0),
-                        })
+                        sources.append(
+                            {
+                                "title": r.get("title", ""),
+                                "score": r.get("score", 0),
+                            }
+                        )
 
                 # capture nav report data for later reconstruction
-                if block.name == "get_dashboard_navigation" and isinstance(result, dict) and result.get("found"):
+                if (
+                    block.name == "get_dashboard_navigation"
+                    and isinstance(result, dict)
+                    and result.get("found")
+                ):
                     company_id_val = company.get("id", "")
-                    nav_report_data = await stroll_index_service.generate_navigation_report(company_id_val)
+                    nav_report_data = await stroll_index_service.generate_navigation_report(
+                        company_id_val
+                    )
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": json.dumps(result, default=str),
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": json.dumps(result, default=str),
+                    }
+                )
 
             claude_messages.append({"role": "user", "content": tool_results})
 
@@ -679,13 +716,23 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
         )
 
     # save conversation
-    history.append({"role": "user", "content": user_message, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
-    
-    assistant_msg = {"role": "assistant", "content": reply, "timestamp": datetime.now(tz=timezone.utc).isoformat()}
-    if 'guide' in locals() and guide:
-        assistant_msg['navigation_guide'] = guide.model_dump()
+    history.append(
+        {
+            "role": "user",
+            "content": user_message,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        }
+    )
+
+    assistant_msg = {
+        "role": "assistant",
+        "content": reply,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+    if "guide" in locals() and guide:
+        assistant_msg["navigation_guide"] = guide.model_dump()
     history.append(assistant_msg)
-    
+
     await _save_conversation(company_id, session_id, history)
 
     # emit final events
@@ -695,4 +742,3 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
         yield {"type": "sources", "sources": sources, "blockchain_data": blockchain_data}
 
     yield {"type": "done"}
-
