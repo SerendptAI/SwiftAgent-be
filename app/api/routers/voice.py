@@ -12,7 +12,8 @@ Protocol (JSON messages over WebSocket):
     {"type": "reply_text", "text": "..."}     — agent text reply
     {"type": "error", "message": "..."}       — error occurred
 """
-from datetime import datetime
+
+from datetime import datetime, timezone
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -52,11 +53,13 @@ async def voice_call(websocket: WebSocket, company_id: str):
                 session_id = msg.get("session_id", "")
 
                 # record the call in database
-                await db.calls.insert_one({
-                    "company_id": company_id,
-                    "session_id": session_id,
-                    "timestamp": datetime.utcnow(),
-                })
+                await db.calls.insert_one(
+                    {
+                        "company_id": company_id,
+                        "session_id": session_id,
+                        "timestamp": datetime.now(tz=timezone.utc),
+                    }
+                )
 
                 await websocket.send_json({"type": "status", "status": "ready"})
                 logger.info(f"Call started: company={company_id}, session={session_id}")
@@ -67,10 +70,12 @@ async def voice_call(websocket: WebSocket, company_id: str):
 
                 if not isinstance(text, str):
                     logger.warning(f"Invalid text data type received: {type(text)}")
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": "Invalid text data: expected a string",
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Invalid text data: expected a string",
+                        }
+                    )
                     continue
 
                 if not text.strip():
@@ -78,14 +83,20 @@ async def voice_call(websocket: WebSocket, company_id: str):
                     continue
 
                 if not session_id:
-                    await websocket.send_json({"type": "error", "message": "Session not started"})
+                    await websocket.send_json(
+                        {"type": "error", "message": "Session not started"}
+                    )
                     continue
 
                 # agent — process through existing chat pipeline
                 await websocket.send_json({"type": "status", "status": "thinking"})
                 try:
-                    result = await anthropic_agent_service.chat(company_id, session_id, text)
-                    reply = result.get("reply", "I'm sorry, I couldn't generate a response.")
+                    result = await anthropic_agent_service.chat(
+                        company_id, session_id, text
+                    )
+                    reply = result.get(
+                        "reply", "I'm sorry, I couldn't generate a response."
+                    )
                 except Exception as e:
                     logger.error(f"Agent chat failed: {e}")
                     reply = "I'm sorry, I'm having trouble right now. Please try again."
@@ -111,7 +122,9 @@ async def voice_call(websocket: WebSocket, company_id: str):
     except Exception as e:
         logger.exception(f"Call error: {e}")
         try:
-            await websocket.send_json({"type": "error", "message": "Internal server error"})
+            await websocket.send_json(
+                {"type": "error", "message": "Internal server error"}
+            )
             await websocket.close()
         except Exception:
             pass

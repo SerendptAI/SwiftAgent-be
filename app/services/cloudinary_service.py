@@ -3,12 +3,12 @@ Cloudinary file upload service.
 Handles image uploads (logos) and raw document uploads (PDFs, DOCX, TXT, etc.).
 """
 
+import asyncio
 import cloudinary
 import cloudinary.uploader
 from fastapi import UploadFile
 from app.core.config import settings
 
-# configure cloudinary sdk on module load
 cloudinary.config(
     cloud_name=settings.CLOUDINARY_CLOUD_NAME,
     api_key=settings.CLOUDINARY_API_KEY,
@@ -18,12 +18,10 @@ cloudinary.config(
 
 
 async def upload_image(file: UploadFile, folder: str = "logos") -> str:
-    """
-    Upload an image file to Cloudinary and return its secure URL.
-    Applies automatic format and quality optimisation.
-    """
+    """Upload an image file to Cloudinary and return its secure URL."""
     contents = await file.read()
-    result = cloudinary.uploader.upload(
+    result = await asyncio.to_thread(
+        cloudinary.uploader.upload,
         contents,
         folder=folder,
         resource_type="image",
@@ -34,13 +32,12 @@ async def upload_image(file: UploadFile, folder: str = "logos") -> str:
     return result["secure_url"]
 
 
-async def upload_document(content: bytes, filename: str, folder: str = "documents") -> dict:
-    """
-    Upload a raw document (PDF, DOCX, TXT, CSV, etc.) to Cloudinary.
-    Accepts pre-read bytes to avoid double-reading the UploadFile.
-    Returns a dict with 'secure_url' and 'public_id'.
-    """
-    result = cloudinary.uploader.upload(
+async def upload_document(
+    content: bytes, filename: str, folder: str = "documents"
+) -> dict:
+    """Upload a raw document to Cloudinary. Returns dict with 'secure_url' and 'public_id'."""
+    result = await asyncio.to_thread(
+        cloudinary.uploader.upload,
         content,
         folder=folder,
         resource_type="raw",
@@ -56,5 +53,7 @@ async def upload_document(content: bytes, filename: str, folder: str = "document
 
 async def delete_file(public_id: str, resource_type: str = "image") -> bool:
     """Delete a file from Cloudinary by its public ID."""
-    result = cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+    result = await asyncio.to_thread(
+        cloudinary.uploader.destroy, public_id, resource_type=resource_type
+    )
     return result.get("result") == "ok"
