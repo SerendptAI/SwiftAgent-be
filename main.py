@@ -25,6 +25,7 @@ from app.api.routers import (
     chat,
     stroll,
     stroll_public,
+    email,
 )
 from app.core.config import settings
 from app.services.stroll_service import init_browser, close_browser
@@ -120,6 +121,8 @@ class WidgetCorsBypassMiddleware:
         "/api/v1/chat",
         "/api/v1/public/stroll",
         "/api/v1/stroll",
+        "/api/v1/email/inbound",
+        "/api/v1/email/resolve",
     )
     BYPASS_SUFFIXES = ("/visitors/log",)
 
@@ -188,6 +191,7 @@ app.include_router(voice.router, prefix="/api/v1/voice")
 app.include_router(chat.router, prefix="/api/v1/chat")
 app.include_router(stroll.router, prefix="/api/v1/stroll")
 app.include_router(stroll_public.router, prefix="/api/v1/public/stroll")
+app.include_router(email.router, prefix="/api/v1/email")
 
 
 # global exception handler

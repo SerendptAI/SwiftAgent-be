@@ -2,14 +2,60 @@ from datetime import datetime, timezone
 from uuid import uuid4
 from app.core.database import db
 from app.core.cache import company_cache
+from app.core.config import settings
 from typing import Optional
+import re
+
+
+def _sanitize_slug(name: str) -> str:
+    """Convert a company name to a valid email slug."""
+    slug = name.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
+    slug = slug.strip("-")
+    slug = re.sub(r"-{2,}", "-", slug)
+    # enforce length
+    if len(slug) > 30:
+        slug = slug[:30].rstrip("-")
+    if len(slug) < 3:
+        slug = slug + "co"
+    return slug
+
+
+async def check_slug_availability(slug: str) -> bool:
+    """Check if an email slug is available."""
+    existing = await db.companies.find_one({"email_slug": slug})
+    return existing is None
+
+
+async def suggest_slug(name: str) -> str:
+    """Generate an available slug from a company name."""
+    base = _sanitize_slug(name)
+    if await check_slug_availability(base):
+        return base
+    # try appending numbers
+    for i in range(2, 100):
+        candidate = f"{base}{i}" if len(f"{base}{i}") <= 30 else f"{base[:27]}{i}"
+        if await check_slug_availability(candidate):
+            return candidate
+    return f"{base}-{str(uuid4())[:4]}"
+
+
+def _compute_email_address(slug: Optional[str]) -> Optional[str]:
+    """Compute full email address from slug."""
+    if not slug:
+        return None
+    return f"{slug}@{settings.EMAIL_DOMAIN}"
 
 
 async def create_company(user_id: str, data: dict) -> dict:
+    email_slug = data.get("email_slug")
+
     doc = {
         "id": str(uuid4()),
         "user_id": user_id,
         "name": data["name"],
+        "email_slug": email_slug,
+        "email_address": _compute_email_address(email_slug),
         "website": data.get("website"),
         "industry": data.get("industry"),
         "company_size": data.get("company_size"),
@@ -50,6 +96,11 @@ async def get_company(company_id: str, user_id: Optional[str] = None) -> Optiona
     if company:
         await company_cache.set(cache_key, company)
     return company
+
+
+async def get_company_by_slug(slug: str) -> Optional[dict]:
+    """Look up a company by its email slug."""
+    return await db.companies.find_one({"email_slug": slug})
 
 
 async def invalidate_company_cache(company_id: str):
@@ -126,3 +177,12 @@ async def update_voice(company_id: str, user_id: str, data: dict) -> dict:
 
 async def update_logo(company_id: str, user_id: str, logo_url: str) -> dict:
     return await _update_and_return(company_id, user_id, {"logo_url": logo_url})
+
+
+async def update_email_slug(company_id: str, user_id: str, slug: str) -> dict:
+    """Set or update the company's email slug."""
+    email_address = _compute_email_address(slug)
+    return await _update_and_return(
+        company_id, user_id, {"email_slug": slug, "email_address": email_address}
+    )
+

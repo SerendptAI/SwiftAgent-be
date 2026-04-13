@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List
 from app.core.auth import get_current_user
 from app.models.company_models import (
@@ -12,6 +12,11 @@ from app.models.company_models import (
     VoiceSettingsUpdate,
     CompanyResponse,
     CompanySummary,
+)
+from app.models.email_models import (
+    EmailSlugCheck,
+    EmailSlugCheckResponse,
+    EmailSlugUpdate,
 )
 from app.services import company_service, cloudinary_service
 from fastapi import UploadFile, File, Form
@@ -179,3 +184,54 @@ async def update_logo(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Logo upload failed: {e}")
     return await company_service.update_logo(company_id, user_id, logo_url)
+
+
+@router.get("/{company_id}/email-slug/check", response_model=EmailSlugCheckResponse)
+async def check_email_slug(
+    company_id: str,
+    slug: str = Query(..., min_length=3, max_length=30),
+    current_user: dict = Depends(get_current_user),
+):
+    """Check if an email slug is available."""
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    slug = slug.strip().lower()
+    available = await company_service.check_slug_availability(slug)
+
+    suggestion = None
+    if not available:
+        # check if this company already owns this slug
+        if company.get("email_slug") == slug:
+            return {"available": True}
+        suggestion = await company_service.suggest_slug(company.get("name", slug))
+
+    return {"available": available, "suggestion": suggestion}
+
+
+@router.patch("/{company_id}/email-slug", response_model=CompanyResponse)
+async def update_email_slug(
+    company_id: str,
+    data: EmailSlugUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Set or update the company's email slug."""
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    slug = data.email_slug
+
+    # check availability (allow if company already owns it)
+    if company.get("email_slug") != slug:
+        available = await company_service.check_slug_availability(slug)
+        if not available:
+            raise HTTPException(
+                status_code=409,
+                detail="Sorry, this email slug is already in use. Pick another.",
+            )
+
+    return await company_service.update_email_slug(company_id, user_id, slug)

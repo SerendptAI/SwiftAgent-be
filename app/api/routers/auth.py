@@ -22,7 +22,7 @@ from app.models.auth_models import (
     ReferralRequest,
 )
 import asyncio
-from app.services.email_service import send_welcome_email
+from app.services.welcome_email_service import send_welcome_email
 
 router = APIRouter(tags=["Auth"])
 logger = logging.getLogger(__name__)

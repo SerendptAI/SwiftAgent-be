@@ -18,7 +18,7 @@ import anthropic
 
 from app.core.config import settings
 from app.core.database import db
-from app.services import knowledge_service, chain_service, stroll_index_service
+from app.services import knowledge_service, chain_service, stroll_index_service, company_email_service
 from app.services.stroll_index_service import extract_navigation_steps, reconstruct_navigation_guide
 from app.services.blockchain import detect, evm, bitcoin, prices
 
@@ -155,6 +155,41 @@ TOOLS = [
             "required": ["query"],
         },
     },
+    {
+        "name": "create_support_ticket",
+        "description": (
+            "Create a support ticket when you cannot resolve the customer's issue and it "
+            "requires human intervention from the company's support team. Before using this "
+            "tool, you MUST: 1) Attempt to resolve the issue using other tools first, "
+            "2) Ask the customer for their email address, 3) Get confirmation they want "
+            "to create a ticket. Provide a clear summary of the issue and what was tried."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "customer_email": {
+                    "type": "string",
+                    "description": "The customer's email address for ticket correspondence",
+                },
+                "customer_name": {
+                    "type": "string",
+                    "description": "The customer's name, if provided",
+                },
+                "subject": {
+                    "type": "string",
+                    "description": "A brief subject line summarizing the issue (max 100 chars)",
+                },
+                "summary": {
+                    "type": "string",
+                    "description": (
+                        "A detailed summary of the issue for the support team. Include: "
+                        "what the customer's problem is, what you tried, and why it couldn't be resolved."
+                    ),
+                },
+            },
+            "required": ["customer_email", "subject", "summary"],
+        },
+    },
 ]
 
 
@@ -165,6 +200,7 @@ TOOL_STAGE_LABELS = {
     "lookup_wallet": "Looking up wallet…",
     "diagnose_problem": "Diagnosing transaction issue…",
     "get_dashboard_navigation": "Searching dashboard navigation…",
+    "create_support_ticket": "Creating support ticket…",
 }
 
 
@@ -239,6 +275,14 @@ RESPONSE FORMAT:
 - For simple greetings or casual messages, respond briefly and naturally (1-2 sentences).
 - Only use structured responses (sections, bullet points) for complex or technical questions.
 - Keep answers concise and to the point. Avoid unnecessary preamble or filler.
+
+TICKET ESCALATION:
+- If you genuinely cannot resolve a customer's issue after trying available tools, offer to \
+create a support ticket so the company's human team can help.
+- You MUST ask for the customer's email address before creating a ticket.
+- You MUST get the customer's confirmation before creating the ticket.
+- After creating the ticket, tell the customer the ticket ID and that the team will follow up via email.
+- Never create a ticket without the customer's explicit consent.
 """
 
 
@@ -358,6 +402,45 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
                 "found": False,
                 "message": "No dashboard navigation data available. A stroll has not been run yet.",
             }
+
+        elif name == "create_support_ticket":
+            if not company:
+                return {"error": "Company context not available"}
+            customer_email = args.get("customer_email", "")
+            customer_name = args.get("customer_name")
+            subject = args.get("subject", "Support request")
+            summary = args.get("summary", "")
+            company_id = company.get("id", "")
+
+            if not customer_email or "@" not in customer_email:
+                return {"error": "A valid customer email address is required"}
+
+            # check if company has email configured
+            if not company.get("email_slug"):
+                return {
+                    "error": "Email ticketing is not configured for this company. "
+                    "Please ask the customer to contact support directly."
+                }
+
+            try:
+                # get session_id from context if available
+                session_id = args.get("_session_id")  # injected by caller
+                ticket = await company_email_service.create_ticket(
+                    company_id=company_id,
+                    customer_email=customer_email,
+                    subject=subject,
+                    chat_summary=summary,
+                    chat_session_id=session_id,
+                    customer_name=customer_name,
+                )
+                return {
+                    "success": True,
+                    "ticket_id": ticket["id"],
+                    "message": f"Ticket #{ticket['id']} created. The support team will follow up at {customer_email}.",
+                }
+            except Exception as e:
+                logger.exception("Failed to create support ticket")
+                return {"error": f"Failed to create ticket: {str(e)}"}
 
         else:
             return {"error": f"Unknown tool: {name}"}

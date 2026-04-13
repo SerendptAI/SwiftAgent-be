@@ -76,6 +76,11 @@ class Settings(BaseSettings):
     ZOHO_SMTP_PORT: int = 465
     ZOHO_SMTP_SERVER: str = "smtp.zoho.com"
 
+    # SendGrid (company email ticketing)
+    SENDGRID_API_KEY: str = ""
+    SENDGRID_WEBHOOK_VERIFICATION_KEY: str = ""
+    EMAIL_DOMAIN: str = "swfty.email"
+
     # pagination defaults
     DEFAULT_PAGE_LIMIT: int = 20
     MAX_PAGE_LIMIT: int = 100
