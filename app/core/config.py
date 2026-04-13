@@ -78,7 +78,6 @@ class Settings(BaseSettings):
 
     # SendGrid (company email ticketing)
     SENDGRID_API_KEY: str = ""
-    SENDGRID_WEBHOOK_VERIFICATION_KEY: str = ""
     EMAIL_DOMAIN: str = "swfty.email"
 
     # pagination defaults
