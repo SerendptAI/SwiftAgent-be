@@ -10,16 +10,45 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.core.database import db
-from app.services import stroll_service, stroll_index_service
+from app.services import stroll_service
 
 logger = logging.getLogger(__name__)
 
 # Global scheduler instance
 _scheduler = AsyncIOScheduler()
 
+# Concurrency guard — prevents overlapping strolls for the same company.
+# Protects against: cron firing while a previous run is still in progress,
+# or a manual trigger overlapping with a scheduled one.
+_running_strolls: set[str] = set()
+
+
+def is_stroll_running(company_id: str) -> bool:
+    """Check if a stroll is currently running for a company."""
+    return company_id in _running_strolls
+
+
+def mark_stroll_running(company_id: str) -> bool:
+    """Mark a stroll as running. Returns False if already running (skip)."""
+    if company_id in _running_strolls:
+        return False
+    _running_strolls.add(company_id)
+    return True
+
+
+def mark_stroll_done(company_id: str):
+    """Mark a stroll as done (remove from running set)."""
+    _running_strolls.discard(company_id)
+
 
 async def _scheduled_stroll_task(company_id: str):
     """The actual job function executed by the scheduler."""
+    if not mark_stroll_running(company_id):
+        logger.warning(
+            f"Stroll already running for company {company_id}, skipping scheduled run"
+        )
+        return
+
     logger.info(f"Starting scheduled stroll for company {company_id}")
     try:
         config = await stroll_service.get_stroll_config(company_id)
@@ -34,7 +63,7 @@ async def _scheduled_stroll_task(company_id: str):
         if version.status != "success":
             logger.error(f"Scheduled stroll failed for {company_id}: {version.status}")
             version.diff = None
-            await stroll_service.db.stroll_versions.insert_one(version.model_dump())
+            await db.stroll_versions.insert_one(version.model_dump())
             return
 
         prev = await stroll_service.get_latest_version(company_id)
@@ -48,6 +77,8 @@ async def _scheduled_stroll_task(company_id: str):
 
     except Exception as e:
         logger.exception(f"Scheduled stroll encountered an error for {company_id}: {e}")
+    finally:
+        mark_stroll_done(company_id)
 
 
 def _cron_to_trigger(cron_expr: str) -> CronTrigger:

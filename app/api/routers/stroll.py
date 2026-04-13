@@ -20,7 +20,12 @@ from pydantic import BaseModel
 from app.core.auth import get_current_user
 from app.core.database import db
 from app.services import stroll_service
-from app.services.stroll_scheduler import schedule_stroll_job
+from app.services.stroll_scheduler import (
+    schedule_stroll_job,
+    is_stroll_running,
+    mark_stroll_running,
+    mark_stroll_done,
+)
 from app.models.stroll_models import StrollConfigCreate, WidgetStrollReport
 
 logger = logging.getLogger(__name__)
@@ -31,6 +36,10 @@ router = APIRouter(tags=["Stroll"])
 
 async def _run_stroll_background(company_id: str):
     """Run a full stroll cycle in the background: crawl → diff → commit → index."""
+    if not mark_stroll_running(company_id):
+        logger.warning(f"Stroll already running for company {company_id}, skipping manual run")
+        return
+
     try:
         config = await stroll_service.get_stroll_config(company_id)
         if not config:
@@ -60,6 +69,8 @@ async def _run_stroll_background(company_id: str):
 
     except Exception as e:
         logger.exception(f"Background stroll failed for company {company_id}: {e}")
+    finally:
+        mark_stroll_done(company_id)
 
 @router.get("/{company_id}/config")
 async def get_config(company_id: str, user: dict = Depends(get_current_user)):
@@ -96,6 +107,12 @@ async def trigger_stroll(
         raise HTTPException(
             status_code=400,
             detail="Stroll configuration not set. Use PUT /config first.",
+        )
+
+    if is_stroll_running(company_id):
+        raise HTTPException(
+            status_code=409,
+            detail="A stroll is already in progress for this company.",
         )
 
     background_tasks.add_task(_run_stroll_background, company_id)

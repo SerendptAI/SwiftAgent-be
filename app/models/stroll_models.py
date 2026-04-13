@@ -113,10 +113,42 @@ class StrollVersion(BaseModel):
 
 class StrollCredentials(BaseModel):
     """Credentials for accessing authenticated dashboards."""
-    login_url: Optional[str] = None
-    username: Optional[str] = None
-    password: Optional[str] = None              # encrypted at rest
-    pre_auth_url: Optional[str] = None          # alternative: pre-authenticated URL/token
+
+    login_url: Optional[str] = Field(
+        default=None,
+        description="URL of the login page. Falls back to dashboard_url if not provided.",
+        examples=["https://app.example.com/login", "https://dashboard.acme.io/auth/signin"],
+    )
+    username: Optional[str] = Field(
+        default=None,
+        description="Username or email for form-based login (primary auth method).",
+        examples=["admin@company.com", "support-bot@acme.io"],
+    )
+    password: Optional[str] = Field(
+        default=None,
+        description="Password for form-based login. Encrypted at rest.",
+        examples=["s3cur3P@ssw0rd"],
+    )
+    pre_auth_url: Optional[str] = Field(
+        default=None,
+        description="Pre-authenticated URL with embedded token. Used as fallback when username/password are not provided.",
+        examples=["https://app.example.com/auto-login?token=abc123"],
+    )
+    username_selector: Optional[str] = Field(
+        default=None,
+        description="CSS selector for the username/email input field. The frontend widget can detect this from the login page. When provided, overrides auto-detection.",
+        examples=["#email-input", "input[name='user']", "input[data-testid='login-email']"],
+    )
+    password_selector: Optional[str] = Field(
+        default=None,
+        description="CSS selector for the password input field. When provided, overrides auto-detection.",
+        examples=["#password-input", "input[name='password']", "input[data-testid='login-password']"],
+    )
+    submit_selector: Optional[str] = Field(
+        default=None,
+        description="CSS selector for the login submit button. When provided, overrides auto-detection.",
+        examples=["button.login-btn", "#login-submit", "button[data-testid='login-button']"],
+    )
 
 
 class StrollConfig(BaseModel):
