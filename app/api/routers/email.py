@@ -1,9 +1,5 @@
-"""
-Email Ticketing Router — handles inbound webhooks from SendGrid,
-company ticket management, replies, and ticket resolution.
-"""
-
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -21,21 +17,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Email"])
 
+TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "email_templates"
+RESOLVE_CONFIRM_TEMPLATE = TEMPLATES_DIR / "resolve_confirm.html"
+RESOLVED_TEMPLATE = TEMPLATES_DIR / "resolved.html"
 
-# ---------------------------------------------------------------------------
-# Inbound webhook (SendGrid Inbound Parse)
-# ---------------------------------------------------------------------------
+
+def _load_template(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
 
 
 @router.post("/inbound")
 async def inbound_email_webhook(request: Request):
-    """
-    Receive inbound emails from SendGrid Inbound Parse.
-
-    SendGrid sends multipart/form-data POST with parsed email fields.
-    This endpoint is unauthenticated — relies on URL obscurity
-    and optional SendGrid webhook signature verification.
-    """
+    """Receive inbound emails from SendGrid Inbound Parse."""
     try:
         form = await request.form()
         payload = {key: form[key] for key in form}
@@ -51,13 +44,7 @@ async def inbound_email_webhook(request: Request):
         return result
     except Exception as e:
         logger.exception("Error processing inbound email: %s", e)
-        # always return 200 to SendGrid so it doesn't retry forever
         return {"status": "error", "message": str(e)}
-
-
-# ---------------------------------------------------------------------------
-# Ticket resolution (public — token-based auth)
-# ---------------------------------------------------------------------------
 
 
 @router.get("/resolve/{token}", response_class=HTMLResponse)
@@ -68,15 +55,17 @@ async def resolve_ticket_page(token: str):
         raise HTTPException(status_code=404, detail="Ticket not found")
 
     if ticket["status"] == "resolved":
-        return HTMLResponse(
-            content=_resolved_page_html(ticket, already_resolved=True),
-            status_code=200,
-        )
+        html = _load_template(RESOLVED_TEMPLATE)
+        html = html.replace("{{message}}", "This ticket was already resolved.")
+        html = html.replace("{{ticket_id}}", ticket["id"])
+        html = html.replace("{{ticket_subject}}", ticket["subject"])
+        return HTMLResponse(content=html, status_code=200)
 
-    return HTMLResponse(
-        content=_resolve_confirm_page_html(ticket, token),
-        status_code=200,
-    )
+    html = _load_template(RESOLVE_CONFIRM_TEMPLATE)
+    html = html.replace("{{ticket_id}}", ticket["id"])
+    html = html.replace("{{ticket_subject}}", ticket["subject"])
+    html = html.replace("{{resolve_token}}", token)
+    return HTMLResponse(content=html, status_code=200)
 
 
 @router.post("/resolve/{token}/confirm")
@@ -89,11 +78,6 @@ async def confirm_resolve_ticket(token: str):
             return {"status": "already_resolved"}
         raise HTTPException(status_code=404, detail="Ticket not found")
     return {"status": "resolved", "ticket_id": result["id"]}
-
-
-# ---------------------------------------------------------------------------
-# Company ticket management (JWT-authenticated)
-# ---------------------------------------------------------------------------
 
 
 @router.get("/{company_id}/tickets")
@@ -189,121 +173,3 @@ async def mark_ticket_seen(
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
     return {"status": "success"}
-
-
-# ---------------------------------------------------------------------------
-# HTML pages for ticket resolution
-# ---------------------------------------------------------------------------
-
-
-def _resolve_confirm_page_html(ticket: dict, token: str) -> str:
-    """Confirmation page HTML — asks customer to confirm resolution."""
-    return f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Resolve Ticket</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: #e2e8f0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-        }}
-        .card {{
-            background: rgba(30, 41, 59, 0.8);
-            border: 1px solid rgba(148, 163, 184, 0.1);
-            border-radius: 16px;
-            padding: 48px;
-            max-width: 480px;
-            width: 100%;
-            text-align: center;
-            backdrop-filter: blur(12px);
-        }}
-        h1 {{ font-size: 24px; margin-bottom: 16px; color: #f1f5f9; }}
-        .subject {{ color: #94a3b8; font-size: 14px; margin-bottom: 32px; }}
-        .btn {{
-            display: inline-block;
-            background: #10b981;
-            color: #fff;
-            padding: 14px 40px;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            border: none;
-            cursor: pointer;
-            text-decoration: none;
-            transition: background 0.2s;
-        }}
-        .btn:hover {{ background: #059669; }}
-        .note {{ color: #64748b; font-size: 13px; margin-top: 24px; }}
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h1>Resolve your ticket?</h1>
-        <p class="subject">Ticket #{ticket['id']} — {ticket['subject']}</p>
-        <form action="/api/v1/email/resolve/{token}/confirm" method="POST">
-            <button type="submit" class="btn">✓ Confirm Resolution</button>
-        </form>
-        <p class="note">This will close your support ticket.</p>
-    </div>
-</body>
-</html>"""
-
-
-def _resolved_page_html(ticket: dict, already_resolved: bool = False) -> str:
-    """Success page after ticket is resolved."""
-    message = "This ticket was already resolved." if already_resolved else "Your ticket has been resolved!"
-    return f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Ticket Resolved</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: #e2e8f0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-        }}
-        .card {{
-            background: rgba(30, 41, 59, 0.8);
-            border: 1px solid rgba(148, 163, 184, 0.1);
-            border-radius: 16px;
-            padding: 48px;
-            max-width: 480px;
-            width: 100%;
-            text-align: center;
-            backdrop-filter: blur(12px);
-        }}
-        .check {{
-            font-size: 48px;
-            margin-bottom: 16px;
-        }}
-        h1 {{ font-size: 24px; margin-bottom: 12px; color: #10b981; }}
-        .subject {{ color: #94a3b8; font-size: 14px; margin-bottom: 8px; }}
-        .note {{ color: #64748b; font-size: 13px; margin-top: 24px; }}
-    </style>
-</head>
-<body>
-    <div class="card">
-        <div class="check">✓</div>
-        <h1>{message}</h1>
-        <p class="subject">Ticket #{ticket['id']} — {ticket['subject']}</p>
-        <p class="note">Thank you for your feedback.</p>
-    </div>
-</body>
-</html>"""
