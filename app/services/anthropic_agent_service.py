@@ -18,9 +18,16 @@ import anthropic
 
 from app.core.config import settings
 from app.core.database import db
-from app.services import knowledge_service, chain_service, stroll_index_service, company_email_service
+from app.services import (
+    knowledge_service,
+    chain_service,
+    stroll_index_service,
+    company_email_service,
+)
 from app.services.stroll_index_service import extract_navigation_steps, reconstruct_navigation_guide
 from app.services.blockchain import detect, evm, bitcoin, prices
+from app.services import memory_service
+from app.models.memory_models import WorkingMemory
 
 logger = logging.getLogger(__name__)
 
@@ -207,11 +214,15 @@ TOOL_STAGE_LABELS = {
 # system prompt builder
 
 
-def _build_system_prompt(company: dict) -> str:
+def _build_system_prompt(company: dict, memory_context: str = "") -> str:
     company_name = company.get("name", "the company")
     brand_tone = company.get("brand_tone", "professional and helpful")
     description = company.get("description", "")
     company_type = company.get("company_type", "")
+
+    memory_section = ""
+    if memory_context:
+        memory_section = f"\nMEMORY CONTEXT (from previous conversations):\n{memory_context}\n"
 
     return f"""You are a senior customer support agent for {company_name}. \
 You respond with expertise, empathy, and clarity.
@@ -221,6 +232,7 @@ COMPANY CONTEXT:
 - Type: {company_type}
 - Description: {description}
 - Tone: {brand_tone}
+{memory_section}
 
 YOUR BEHAVIOR:
 1. You are warm, professional, and knowledgeable.
@@ -490,7 +502,7 @@ async def _save_conversation(company_id: str, session_id: str, messages: list[di
 # main chat function
 
 
-async def chat(company_id: str, session_id: str, user_message: str) -> dict:
+async def chat(company_id: str, session_id: str, user_message: str, user_id: str = None) -> dict:
     """
     Process a chat message from the widget using Anthropic Claude.
 
@@ -513,8 +525,21 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
     # load conversation history
     history = await _load_conversation(company_id, session_id)
 
+    memory_context = await memory_service.load_memory_context(
+        company_id=company_id,
+        user_id=user_id,
+        session_id=session_id,
+    )
+    memory_str = memory_service.format_memory_context(memory_context)
+
+    working_mem = memory_context.working_memory
+    if not working_mem:
+        working_mem = WorkingMemory(session_id=session_id)
+        if user_id:
+            working_mem.identified_user = True
+
     # build system prompt and messages
-    system_prompt = _build_system_prompt(company)
+    system_prompt = _build_system_prompt(company, memory_str)
 
     # convert history to Claude format
     claude_messages = []
@@ -648,6 +673,12 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
 
     await _save_conversation(company_id, session_id, history)
 
+    if user_id:
+        await memory_service.extract_and_store_facts(user_id, company_id, history[-10:])
+
+    working_mem.context_window = history[-10:]
+    await memory_service.save_working_memory(working_mem)
+
     return {
         "reply": reply,
         "sources": sources,
@@ -659,7 +690,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
 # streaming chat (SSE)
 
 
-async def chat_stream(company_id: str, session_id: str, user_message: str):
+async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None):
     """
     Async generator that streams the agent chat flow as events.
 
@@ -683,8 +714,21 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
     # load conversation history
     history = await _load_conversation(company_id, session_id)
 
+    memory_context = await memory_service.load_memory_context(
+        company_id=company_id,
+        user_id=user_id,
+        session_id=session_id,
+    )
+    memory_str = memory_service.format_memory_context(memory_context)
+
+    working_mem = memory_context.working_memory
+    if not working_mem:
+        working_mem = WorkingMemory(session_id=session_id)
+        if user_id:
+            working_mem.identified_user = True
+
     # build system prompt and messages
-    system_prompt = _build_system_prompt(company)
+    system_prompt = _build_system_prompt(company, memory_str)
 
     claude_messages = []
     for msg in history[-10:]:
@@ -817,6 +861,12 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
     history.append(assistant_msg)
 
     await _save_conversation(company_id, session_id, history)
+
+    if user_id:
+        await memory_service.extract_and_store_facts(user_id, company_id, history[-10:])
+
+    working_mem.context_window = history[-10:]
+    await memory_service.save_working_memory(working_mem)
 
     # emit final events
     yield {"type": "text", "content": reply}

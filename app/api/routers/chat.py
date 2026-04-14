@@ -21,12 +21,12 @@ Stages:
 import json
 import logging
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 
 from app.core.database import db
-from app.services import anthropic_agent_service
+from app.services import anthropic_agent_service, memory_service
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ router = APIRouter(tags=["Chat"])
 class ChatRequest(BaseModel):
     session_id: str
     message: str
+    user_id: str = None
 
     @field_validator("message")
     @classmethod
@@ -66,7 +67,7 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
         response_text = ""
 
         async for event in anthropic_agent_service.chat_stream(
-            company_id, req.session_id, req.message
+            company_id, req.session_id, req.message, req.user_id
         ):
             event_type = event.get("type")
 
@@ -101,16 +102,31 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
                 )
 
             elif event_type == "error":
-                logger.error(
-                    f"Agent error for company {company_id}: {event.get('message')}"
-                )
+                logger.error(f"Agent error for company {company_id}: {event.get('message')}")
                 friendly = "I'm having trouble right now. Please try again in a moment."
                 if not response_text.strip():
                     response_text = friendly
                 yield _sse("stream", message=friendly)
 
         yield _sse("done")
-    except Exception as e:
+
+        if req.user_id:
+            conversation = await db.widget_conversations.find_one(
+                {"company_id": company_id, "session_id": req.session_id}
+            )
+            if conversation and len(conversation.get("messages", [])) > 2:
+                history = conversation.get("messages", [])
+                await memory_service.generate_session_summary(
+                    session_id=req.session_id,
+                    company_id=company_id,
+                    user_id=req.user_id,
+                    messages=history,
+                    tools_used=[],
+                    outcome="completed",
+                )
+                await memory_service.delete_working_memory(req.session_id)
+
+    except Exception:
         logger.exception(f"Chat SSE error for company {company_id}")
         yield _sse("error", message="An internal error occurred")
         yield _sse("done")
