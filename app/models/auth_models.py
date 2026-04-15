@@ -1,62 +1,29 @@
-from pydantic import BaseModel, EmailStr, field_validator
-from typing import Literal, Optional
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 
 
-# ── existing ──────────────────────────────────────────────────────────────────
+# ── existing ─────────────────────────────────────────────
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
-
 class UserProfileUpdate(BaseModel):
-    personal_email: Optional[str] = None
+    personal_email: Optional[EmailStr] = None
     personal_phone: Optional[str] = None
-
 
 class ReferralRequest(BaseModel):
     code: str
 
 
-# ── credential auth ───────────────────────────────────────────────────────────
+# ── unified passwordless flow ────────────────────────────
 
-class SignupRequest(BaseModel):
-    full_name: str
+class OTPSendRequest(BaseModel):
     email: EmailStr
-    password: str
-    confirm_password: str
-
-    @field_validator("full_name")
-    @classmethod
-    def name_not_blank(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("full_name cannot be blank")
-        return v.strip().title()
-
-    @field_validator("password")
-    @classmethod
-    def password_strength(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        return v
-
-
-class SignupResponse(BaseModel):
-    message: str
-    email: str
-
-
-class CredentialLoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class CredentialLoginResponse(BaseModel):
-    message: str
-    email: str
-    otp_required: bool
-    access_token: Optional[str] = None
-    refresh_token: Optional[str] = None
-    token_type: Optional[str] = "bearer"
+    full_name: Optional[str] = None
+    
+    # Allows a hint on whether they click "Sign In" or "Sign Up"
+    # just to customize the email subject, defaults to login.
+    is_signup: bool = False
 
 
 class OTPVerifyRequest(BaseModel):
@@ -64,28 +31,13 @@ class OTPVerifyRequest(BaseModel):
     otp_code: str
 
 
-class OTPResendRequest(BaseModel):
-    email: EmailStr
-    purpose: Literal["signup", "login", "password_reset"]
-
-
-class ForgotPasswordInitRequest(BaseModel):
-    email: EmailStr
-
-
-class ForgotPasswordVerifyRequest(BaseModel):
-    email: EmailStr
-    otp_code: str
-
-
-class ForgotPasswordResetRequest(BaseModel):
-    email: EmailStr
-    new_password: str
-    confirm_new_password: str
-
-    @field_validator("new_password")
-    @classmethod
-    def password_strength(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        return v
+class LoginResponse(BaseModel):
+    message: str
+    email: str
+    otp_required: bool
+    is_new_user: bool = False
+    
+    # Present if otp_required = False
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    token_type: Optional[str] = None

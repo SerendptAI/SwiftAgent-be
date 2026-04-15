@@ -1,3 +1,17 @@
+"""
+Auth router — /api/v1/auth
+
+Supports two auth methods that share one user account per email address:
+
+  1. Google OAuth (existing)            — /login, /callback
+  2. Passwordless OTP                   — /otp/send, /otp/verify
+
+Account linking:
+  All users are keyed by a stable UUID ``user_id``.  Email is the dedup key.
+  If a Google OAuth user and a passwordless user share the same address they
+  resolve to the same document and can use either login method.
+"""
+
 import asyncio
 import json
 import base64
@@ -17,26 +31,18 @@ from app.core.config import settings
 from app.core.database import get_database
 from app.core.security import create_access_token, create_refresh_token, decode_refresh_token
 from app.models.auth_models import (
-    CredentialLoginRequest,
-    CredentialLoginResponse,
-    ForgotPasswordInitRequest,
-    ForgotPasswordResetRequest,
-    ForgotPasswordVerifyRequest,
-    OTPResendRequest,
+    LoginResponse,
+    OTPSendRequest,
     OTPVerifyRequest,
     ReferralRequest,
     RefreshTokenRequest,
-    SignupRequest,
-    SignupResponse,
     UserProfileUpdate,
 )
 from app.services.credential_auth_service import (
-    build_new_credential_user,
+    build_new_passwordless_user,
     generate_otp,
-    hash_password,
     otp_is_valid,
     send_otp_email,
-    verify_password,
     within_otp_grace_period,
 )
 from app.services.welcome_email_service import send_welcome_email
@@ -103,7 +109,6 @@ async def _upsert_google_user(db, google_id: str, email: str, name: str, picture
         "picture": picture,
         "google_id": google_id,
         "is_verified": True,
-        "password": None,
         "otp_code": None,
         "otp_expires": None,
         "last_otp_login_at": None,
@@ -186,7 +191,7 @@ async def callback(request: Request, db=Depends(get_database)):
         fragment = urllib.parse.urlencode(tokens)
         return RedirectResponse(url=f"{redirect_url}#{fragment}")
 
-    safe_user = {k: v for k, v in user.items() if k not in ("_id", "password", "otp_code")}
+    safe_user = {k: v for k, v in user.items() if k not in ("_id", "otp_code")}
     return {**tokens, "user": safe_user}
 
 
@@ -211,7 +216,6 @@ async def get_me(current_user: dict = Depends(get_current_user), db=Depends(get_
     """Return the authenticated user's profile."""
     if "_id" in current_user:
         current_user["_id"] = str(current_user["_id"])
-    current_user.pop("password", None)
     current_user.pop("otp_code", None)
 
     company = await db.companies.find_one(
@@ -238,296 +242,109 @@ async def update_me(
     return {"status": "success"}
 
 
-# --- signup ---
+# --- unified passwordless flow ---
 
-@router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
-async def signup(body: SignupRequest, db=Depends(get_database)):
-    """Register a new account with email and password, sending an OTP for verification."""
+@router.post("/otp/send", response_model=LoginResponse)
+async def send_otp(body: OTPSendRequest, db=Depends(get_database)):
+    """
+    Unified entrypoint for passwordless login and signup.
+    If the user exists and is within the grace period, returns tokens immediately.
+    Otherwise sends an OTP. If the email is completely new, creates an unverified user record.
+    """
     _smtp_guard()
 
-    if body.password != body.confirm_password:
-        raise HTTPException(status_code=400, detail="Passwords do not match")
-
     email = body.email.lower()
-    existing = await db.users.find_one({"email": email})
+    now = datetime.now(tz=timezone.utc)
+    user = await db.users.find_one({"email": email})
+    is_new = getattr(body, "is_signup", False)
 
-    if existing:
-        if existing.get("is_verified") and existing.get("password"):
-            raise HTTPException(
-                status_code=409,
-                detail="An account with this email already exists. Please sign in.",
-            )
-
-        # Google-only user adding a password — link credentials, re-send OTP to verify
-        if existing.get("is_verified") and existing.get("google_id") and not existing.get("password"):
-            otp_code = generate_otp()
-            ttl = settings.OTP_TTL_SIGNUP_MINUTES
-            await db.users.update_one(
-                {"email": email},
-                {
-                    "$set": {
-                        "password": hash_password(body.password),
-                        "otp_code": otp_code,
-                        "otp_expires": datetime.now(tz=timezone.utc) + timedelta(minutes=ttl),
-                        "updated_at": datetime.now(tz=timezone.utc),
-                    }
-                },
-            )
-            sent = await send_otp_email(email, otp_code, ttl, purpose="signup")
-            if not sent:
-                raise HTTPException(status_code=503, detail="Failed to send verification email.")
-            return SignupResponse(
-                message="Verification code sent. Please verify your email to enable password login.",
+    if not user:
+        # brand new user -> unverified document placeholder
+        otp_code = generate_otp()
+        ttl = settings.OTP_TTL_SIGNUP_MINUTES
+        new_user = build_new_passwordless_user(body.full_name, email, otp_code, ttl)
+        await db.users.insert_one(new_user)
+        is_new = True
+        user = new_user
+    else:
+        # existing user
+        # skip OTP if user recently completed OTP verification
+        if within_otp_grace_period(user):
+            tokens = _token_pair(user["user_id"])
+            return LoginResponse(
+                message="Welcome back!",
                 email=email,
+                otp_required=False,
+                is_new_user=False,
+                **tokens,
             )
 
-        if not existing.get("is_verified"):
-            raise HTTPException(
-                status_code=409,
-                detail="An unverified account already exists. Use /auth/otp/resend to get a new code.",
-            )
+        # refresh OTP logic
+        otp_code = generate_otp()
+        ttl = settings.OTP_TTL_LOGIN_MINUTES
+        await db.users.update_one(
+            {"email": email},
+            {"$set": {"otp_code": otp_code, "otp_expires": now + timedelta(minutes=ttl), "updated_at": now}},
+        )
 
-    otp_code = generate_otp()
-    ttl = settings.OTP_TTL_SIGNUP_MINUTES
-    new_user = build_new_credential_user(body.full_name, email, hash_password(body.password), otp_code, ttl)
-    await db.users.insert_one(new_user)
+    # Dispatch email
+    purpose = "email verification" if is_new else "login verification"
+    sent = await send_otp_email(email, otp_code, ttl, purpose_label=purpose)
 
-    sent = await send_otp_email(email, otp_code, ttl, purpose="signup")
     if not sent:
-        await db.users.delete_one({"email": email, "is_verified": False})
+        # Rollback partial signups to not pollute the db with unverified garbage
+        if is_new:
+            await db.users.delete_one({"email": email, "is_verified": False})
         raise HTTPException(status_code=503, detail="Failed to send verification email. Please try again.")
 
-    return SignupResponse(
-        message="Account created. Check your email for a verification code.",
+    return LoginResponse(
+        message="A verification code has been sent to your email.",
         email=email,
+        otp_required=True,
+        is_new_user=is_new,
     )
 
 
-@router.post("/signup/verify", response_model=CredentialLoginResponse)
-async def verify_signup(body: OTPVerifyRequest, db=Depends(get_database)):
-    """Confirm signup OTP, mark account verified, and return a JWT token pair."""
+@router.post("/otp/verify", response_model=LoginResponse)
+async def verify_otp(body: OTPVerifyRequest, db=Depends(get_database)):
+    """Confirm the OTP and return a JWT token pair."""
     email = body.email.lower()
     user = await db.users.find_one({"email": email})
 
     if not user:
         raise HTTPException(status_code=404, detail="No account found for this email.")
-    if user.get("is_verified") and not user.get("otp_code"):
-        raise HTTPException(status_code=400, detail="Account is already verified. Please sign in.")
 
     ok, reason = otp_is_valid(user, body.otp_code)
     if not ok:
         raise HTTPException(status_code=400, detail=reason)
 
+    was_new = not user.get("is_verified")
+    
     now = datetime.now(tz=timezone.utc)
     await db.users.update_one(
         {"email": email},
-        {"$set": {"is_verified": True, "otp_code": None, "otp_expires": None, "updated_at": now}},
+        {
+            "$set": {
+                "is_verified": True, 
+                "otp_code": None, 
+                "otp_expires": None, 
+                "last_otp_login_at": now, 
+                "updated_at": now
+            }
+        },
     )
 
-    # welcome email for brand-new credential users (fire-and-forget)
-    if not user.get("google_id"):
+    if was_new and not user.get("google_id"):
         try:
             asyncio.create_task(send_welcome_email(email, user.get("name", "")))
         except Exception:
             pass
 
     tokens = _token_pair(user["user_id"])
-    return CredentialLoginResponse(
-        message="Email verified. Welcome to Swift Agent!",
+    return LoginResponse(
+        message="Verification successful. Welcome!",
         email=email,
         otp_required=False,
+        is_new_user=was_new,
         **tokens,
     )
-
-
-# --- signin ---
-
-@router.post("/signin", response_model=CredentialLoginResponse)
-async def signin(body: CredentialLoginRequest, db=Depends(get_database)):
-    """Sign in with email and password. Returns tokens directly if within grace period, otherwise sends an OTP."""
-    email = body.email.lower()
-    user = await db.users.find_one({"email": email})
-
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
-    if not user.get("is_verified"):
-        raise HTTPException(
-            status_code=403,
-            detail="Account not verified. Please complete signup verification first.",
-        )
-    if not user.get("password"):
-        raise HTTPException(
-            status_code=400,
-            detail="This account uses Google Sign-In. Please use the Google login option.",
-        )
-    if not verify_password(body.password, user["password"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password.")
-
-    # skip OTP if user recently completed OTP verification
-    if within_otp_grace_period(user):
-        tokens = _token_pair(user["user_id"])
-        return CredentialLoginResponse(
-            message="Welcome back!",
-            email=email,
-            otp_required=False,
-            **tokens,
-        )
-
-    _smtp_guard()
-    otp_code = generate_otp()
-    ttl = settings.OTP_TTL_LOGIN_MINUTES
-    now = datetime.now(tz=timezone.utc)
-    await db.users.update_one(
-        {"email": email},
-        {"$set": {"otp_code": otp_code, "otp_expires": now + timedelta(minutes=ttl), "updated_at": now}},
-    )
-
-    sent = await send_otp_email(email, otp_code, ttl, purpose="login")
-    if not sent:
-        raise HTTPException(status_code=503, detail="Failed to send login verification email.")
-
-    return CredentialLoginResponse(
-        message="A verification code has been sent to your email.",
-        email=email,
-        otp_required=True,
-    )
-
-
-@router.post("/signin/verify", response_model=CredentialLoginResponse)
-async def verify_signin(body: OTPVerifyRequest, db=Depends(get_database)):
-    """Confirm the login OTP and return a JWT token pair."""
-    email = body.email.lower()
-    user = await db.users.find_one({"email": email})
-
-    if not user:
-        raise HTTPException(status_code=404, detail="No account found for this email.")
-
-    ok, reason = otp_is_valid(user, body.otp_code)
-    if not ok:
-        raise HTTPException(status_code=400, detail=reason)
-
-    now = datetime.now(tz=timezone.utc)
-    await db.users.update_one(
-        {"email": email},
-        {"$set": {"otp_code": None, "otp_expires": None, "last_otp_login_at": now, "updated_at": now}},
-    )
-
-    tokens = _token_pair(user["user_id"])
-    return CredentialLoginResponse(
-        message="Sign-in successful.",
-        email=email,
-        otp_required=False,
-        **tokens,
-    )
-
-
-# --- OTP resend ---
-
-@router.post("/otp/resend")
-async def resend_otp(body: OTPResendRequest, db=Depends(get_database)):
-    """Resend an OTP for signup, login, or password_reset."""
-    _smtp_guard()
-
-    email = body.email.lower()
-    user = await db.users.find_one({"email": email})
-
-    if not user:
-        raise HTTPException(status_code=404, detail="No account found for this email.")
-
-    if body.purpose == "signup":
-        if user.get("is_verified"):
-            raise HTTPException(status_code=400, detail="Account is already verified.")
-        ttl = settings.OTP_TTL_SIGNUP_MINUTES
-    else:
-        if not user.get("is_verified"):
-            raise HTTPException(status_code=403, detail="Account is not verified yet.")
-        ttl = settings.OTP_TTL_LOGIN_MINUTES
-
-    otp_code = generate_otp()
-    now = datetime.now(tz=timezone.utc)
-    await db.users.update_one(
-        {"email": email},
-        {"$set": {"otp_code": otp_code, "otp_expires": now + timedelta(minutes=ttl), "updated_at": now}},
-    )
-
-    sent = await send_otp_email(email, otp_code, ttl, purpose=body.purpose)
-    if not sent:
-        raise HTTPException(status_code=503, detail="Failed to send verification email.")
-
-    label = body.purpose.replace("_", " ")
-    return {"message": f"A new {label} code has been sent to your email."}
-
-
-# --- forgot password (send → verify → reset) ---
-
-@router.post("/password/forgot")
-async def forgot_password(body: ForgotPasswordInitRequest, db=Depends(get_database)):
-    """Send a password-reset OTP. Always returns 200 to prevent email enumeration."""
-    _smtp_guard()
-
-    email = body.email.lower()
-    user = await db.users.find_one({"email": email})
-
-    # always return the same message to prevent user-enumeration
-    neutral = {"message": "If that email is registered you will receive a reset code shortly."}
-
-    if not user or not user.get("is_verified"):
-        return neutral
-
-    otp_code = generate_otp()
-    ttl = settings.OTP_TTL_LOGIN_MINUTES
-    now = datetime.now(tz=timezone.utc)
-    await db.users.update_one(
-        {"email": email},
-        {"$set": {"otp_code": otp_code, "otp_expires": now + timedelta(minutes=ttl), "updated_at": now}},
-    )
-    await send_otp_email(email, otp_code, ttl, purpose="password_reset")
-    return neutral
-
-
-@router.post("/password/verify")
-async def verify_password_otp(body: ForgotPasswordVerifyRequest, db=Depends(get_database)):
-    """Verify the password-reset OTP without resetting yet."""
-    email = body.email.lower()
-    user = await db.users.find_one({"email": email})
-
-    if not user:
-        raise HTTPException(status_code=404, detail="No account found for this email.")
-
-    ok, reason = otp_is_valid(user, body.otp_code)
-    if not ok:
-        raise HTTPException(status_code=400, detail=reason)
-
-    return {"message": "Code verified. You may now reset your password."}
-
-
-@router.post("/password/reset")
-async def reset_password(body: ForgotPasswordResetRequest, db=Depends(get_database)):
-    """Set a new password using the verified reset OTP."""
-    if body.new_password != body.confirm_new_password:
-        raise HTTPException(status_code=400, detail="Passwords do not match.")
-
-    email = body.email.lower()
-    user = await db.users.find_one({"email": email})
-
-    if not user:
-        raise HTTPException(status_code=404, detail="No account found for this email.")
-
-    # re-validate the OTP is still in the DB and not expired
-    ok, reason = otp_is_valid(user, user.get("otp_code", ""))
-    if not ok:
-        raise HTTPException(status_code=400, detail=f"Reset session expired: {reason}")
-
-    now = datetime.now(tz=timezone.utc)
-    await db.users.update_one(
-        {"email": email},
-        {
-            "$set": {
-                "password": hash_password(body.new_password),
-                "otp_code": None,
-                "otp_expires": None,
-                "updated_at": now,
-            }
-        },
-    )
-    return {"message": "Password reset successfully. You can now sign in with your new password."}

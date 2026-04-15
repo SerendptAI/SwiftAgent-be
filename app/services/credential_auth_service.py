@@ -1,4 +1,4 @@
-"""Credential-based authentication helpers: password hashing, OTP, email dispatch."""
+"""Credential-based authentication helpers: OTP generation and email dispatch."""
 
 import asyncio
 import logging
@@ -11,33 +11,11 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-import bcrypt
-
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 _TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "email_templates" / "otp_email.html"
-
-_PURPOSE_LABELS = {
-    "signup": "email verification",
-    "login": "login verification",
-    "password_reset": "password reset",
-}
-
-
-# --- password ---
-
-def hash_password(password: str) -> str:
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    try:
-        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
-    except Exception:
-        return False
 
 
 # --- OTP generation ---
@@ -53,13 +31,11 @@ def _is_smtp_ready() -> bool:
     return bool(settings.ZOHO_EMAIL and settings.ZOHO_APP_PASSWORD and settings.ZOHO_SMTP_SERVER)
 
 
-async def send_otp_email(to_email: str, otp_code: str, ttl_minutes: int, purpose: str = "signup") -> bool:
+async def send_otp_email(to_email: str, otp_code: str, ttl_minutes: int, purpose_label: str = "login verification") -> bool:
     """Send an OTP email via Zoho SMTP. Returns True on success."""
     if not _is_smtp_ready():
         logger.error("SMTP not configured — cannot send OTP to %s", to_email)
         return False
-
-    purpose_label = _PURPOSE_LABELS.get(purpose, purpose.replace("_", " "))
 
     try:
         html = _TEMPLATE_PATH.read_text(encoding="utf-8")
@@ -94,7 +70,7 @@ async def send_otp_email(to_email: str, otp_code: str, ttl_minutes: int, purpose
             with smtplib.SMTP_SSL(settings.ZOHO_SMTP_SERVER, settings.ZOHO_SMTP_PORT) as smtp:
                 smtp.login(settings.ZOHO_EMAIL, settings.ZOHO_APP_PASSWORD)
                 smtp.send_message(msg)
-            logger.info("OTP email (%s) sent to %s", purpose, to_email)
+            logger.info("OTP email (%s) sent to %s", purpose_label, to_email)
             return True
         except smtplib.SMTPAuthenticationError:
             logger.error("SMTP auth failed sending OTP to %s", to_email)
@@ -108,15 +84,15 @@ async def send_otp_email(to_email: str, otp_code: str, ttl_minutes: int, purpose
 
 # --- user document builder ---
 
-def build_new_credential_user(full_name: str, email: str, hashed_password: str, otp_code: str, ttl_minutes: int) -> dict:
-    """Return a ready-to-insert user document for an email/password signup."""
+def build_new_passwordless_user(full_name: Optional[str], email: str, otp_code: str, ttl_minutes: int) -> dict:
+    """Return a ready-to-insert user document for a passwordless signup."""
     now = datetime.now(tz=timezone.utc)
     return {
         "user_id": str(uuid4()),
         "email": email,
-        "name": full_name,
+        "name": full_name or "",
         "picture": None,
-        "password": hashed_password,
+        "google_id": None,
         "is_verified": False,
         "otp_code": otp_code,
         "otp_expires": now + timedelta(minutes=ttl_minutes),
@@ -148,7 +124,7 @@ def otp_is_valid(user: dict, otp_code: str) -> tuple[bool, str]:
 
 
 def within_otp_grace_period(user: dict) -> bool:
-    """Return True if the user completed OTP login within the configured grace window."""
+    """Return True if the user completed an OTP login within the configured grace window."""
     last: Optional[datetime] = user.get("last_otp_login_at")
     if not last:
         return False
