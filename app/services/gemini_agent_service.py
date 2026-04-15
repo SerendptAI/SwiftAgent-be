@@ -19,9 +19,10 @@ from google.genai import types
 
 from app.core.config import settings
 from app.core.database import db
-from app.services import knowledge_service, chain_service, stroll_index_service
+from app.services import knowledge_service, chain_service, stroll_index_service, memory_service
 from app.services.stroll_index_service import extract_navigation_steps, reconstruct_navigation_guide
 from app.services.blockchain import detect, evm, bitcoin, prices
+from app.models.memory_models import WorkingMemory
 
 logger = logging.getLogger(__name__)
 
@@ -170,11 +171,18 @@ TOOL_STAGE_LABELS = {
 # system prompt builder
 
 
-def _build_system_prompt(company: dict) -> str:
+def _build_system_prompt(company: dict, memory_context: str = "") -> str:
     company_name = company.get("name", "the company")
     brand_tone = company.get("brand_tone", "professional and helpful")
     description = company.get("description", "")
     company_type = company.get("company_type", "")
+
+    memory_section = ""
+    if memory_context:
+        memory_section = f"""
+MEMORY CONTEXT:
+{memory_context}
+"""
 
     return f"""You are a senior customer support agent for {company_name}. \
 You respond with expertise, empathy, and clarity.
@@ -183,7 +191,7 @@ COMPANY CONTEXT:
 - Name: {company_name}
 - Type: {company_type}
 - Description: {description}
-- Tone: {brand_tone}
+- Tone: {brand_tone}{memory_section}
 
 YOUR BEHAVIOR:
 1. You are warm, professional, and knowledgeable.
@@ -398,16 +406,17 @@ async def _save_conversation(company_id: str, session_id: str, messages: list[di
 # main chat function
 
 
-async def chat(company_id: str, session_id: str, user_message: str) -> dict:
+async def chat(company_id: str, session_id: str, user_message: str, user_id: str = None) -> dict:
     """
     Process a chat message from the widget.
 
     Flow:
     1. Load conversation history
-    2. Build messages array with system prompt + history + new message
-    3. Send to Gemini with tools (including search_knowledge_base)
-    4. If tool call → execute, feed result back → get final response
-    5. Save conversation, return response
+    2. Load working memory context (if user_id provided)
+    3. Build messages array with system prompt + history + new message
+    4. Send to Gemini with tools (including search_knowledge_base)
+    5. If tool call → execute, feed result back → get final response
+    6. Save conversation, save working memory, extract facts
     """
     # load company info
     company = await db.companies.find_one({"id": company_id})
@@ -421,8 +430,14 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
     # load conversation history
     history = await _load_conversation(company_id, session_id)
 
+    # load memory context
+    memory_str = ""
+    if user_id:
+        memory_data = await memory_service.load_memory(user_id)
+        memory_str = memory_data.get("memory_context", "") if memory_data else ""
+
     # build system prompt and messages
-    system_prompt = _build_system_prompt(company)
+    system_prompt = _build_system_prompt(company, memory_str)
 
     # Convert history to Gemini format
     gemini_history = []
@@ -542,6 +557,19 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
     )
     await _save_conversation(company_id, session_id, history)
 
+    # save working memory and extract facts
+    if user_id:
+        working_memory = WorkingMemory(
+            user_id=user_id,
+            company_id=company_id,
+            session_id=session_id,
+            messages=history[-4:],
+        )
+        await memory_service.save_working_memory(working_memory)
+        extracted_facts = await memory_service.extract_facts(user_message, reply)
+        if extracted_facts:
+            await memory_service.add_facts(user_id, extracted_facts)
+
     return {
         "reply": reply,
         "sources": sources,
@@ -552,7 +580,7 @@ async def chat(company_id: str, session_id: str, user_message: str) -> dict:
 # streaming chat (SSE)
 
 
-async def chat_stream(company_id: str, session_id: str, user_message: str):
+async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None):
     """
     Async generator that streams the Gemini agent chat flow as events.
 
@@ -576,8 +604,14 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
     # load conversation history
     history = await _load_conversation(company_id, session_id)
 
+    # load memory context
+    memory_str = ""
+    if user_id:
+        memory_data = await memory_service.load_memory(user_id)
+        memory_str = memory_data.get("memory_context", "") if memory_data else ""
+
     # build system prompt and messages
-    system_prompt = _build_system_prompt(company)
+    system_prompt = _build_system_prompt(company, memory_str)
 
     # Convert history to Gemini format
     gemini_history = []
@@ -722,6 +756,19 @@ async def chat_stream(company_id: str, session_id: str, user_message: str):
         }
     )
     await _save_conversation(company_id, session_id, history)
+
+    # save working memory and extract facts
+    if user_id:
+        working_memory = WorkingMemory(
+            user_id=user_id,
+            company_id=company_id,
+            session_id=session_id,
+            messages=history[-4:],
+        )
+        await memory_service.save_working_memory(working_memory)
+        extracted_facts = await memory_service.extract_facts(user_message, reply)
+        if extracted_facts:
+            await memory_service.add_facts(user_id, extracted_facts)
 
     # emit final events
     yield {"type": "text", "content": reply}
