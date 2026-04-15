@@ -61,6 +61,21 @@ async def create_indexes():
     await db.documents.create_index("user_id")
     await db.users.create_index("user_id", unique=True)
 
+    # credential auth — query performance indexes (always safe)
+    await db.users.create_index([("email", 1), ("is_verified", 1)])
+    await db.users.create_index("otp_expires", expireAfterSeconds=0, sparse=True)
+
+    # unique email index — skipped if duplicate data exists in the collection.
+    try:
+        await db.users.create_index("email", unique=True, sparse=True)
+    except Exception as e:
+        import logging as _log
+        _log.getLogger(__name__).warning(
+            "Could not create unique email index (duplicate data exists): %s. "
+            "Run scripts/dedup_users.py to clean up, then restart.",
+            e,
+        )
+
     # email tickets
     await db.email_tickets.create_index("company_id")
     await db.email_tickets.create_index(

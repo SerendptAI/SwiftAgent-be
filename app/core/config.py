@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     SENDGRID_API_KEY: str = ""
     EMAIL_DOMAIN: str = "swfty.email"
 
+    # otp / credential auth
+    OTP_TTL_SIGNUP_MINUTES: int = 15
+    OTP_TTL_LOGIN_MINUTES: int = 10
+    OTP_GRACE_PERIOD_DAYS: int = 30  # skip OTP if last verified within N days
+
     # pagination defaults
     DEFAULT_PAGE_LIMIT: int = 20
     MAX_PAGE_LIMIT: int = 100

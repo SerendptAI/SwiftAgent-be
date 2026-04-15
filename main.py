@@ -28,6 +28,7 @@ from app.api.routers import (
     email,
 )
 from app.core.config import settings
+from app.core.database import create_indexes
 from app.services.stroll_service import init_browser, close_browser
 from app.services.stroll_scheduler import init_scheduler, close_scheduler
 
@@ -40,6 +41,11 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        await create_indexes()
+    except Exception as e:
+        logging.getLogger(__name__).warning("DB index creation failed: %s", e)
+
     try:
         await init_browser()
     except Exception:
