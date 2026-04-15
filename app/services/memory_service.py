@@ -238,7 +238,7 @@ Conversation:
     try:
         gemini_client = _get_gemini_client()
         response = await gemini_client.aio.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=fact_extraction_prompt,
             config={"response_mime_type": "application/json"},
         )
@@ -299,7 +299,7 @@ Conversation:
     try:
         gemini_client = _get_gemini_client()
         response = await gemini_client.aio.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=summary_prompt,
             config={"response_mime_type": "application/json"},
         )
