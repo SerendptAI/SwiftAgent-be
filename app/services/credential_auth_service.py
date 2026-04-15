@@ -11,13 +11,11 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-from passlib.context import CryptContext
+import bcrypt
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 _TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "email_templates" / "otp_email.html"
 
@@ -31,11 +29,15 @@ _PURPOSE_LABELS = {
 # --- password ---
 
 def hash_password(password: str) -> str:
-    return _pwd_context.hash(password)
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
 
 
 # --- OTP generation ---
