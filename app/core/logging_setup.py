@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import logging
+import contextvars
 
 _installed = False
+
+request_id_context_var: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "request_id", default="-"
+)
 
 
 def install_default_log_record_fields() -> None:
@@ -19,7 +24,7 @@ def install_default_log_record_fields() -> None:
     def record_factory(*args, **kwargs):
         record = old_factory(*args, **kwargs)
         if not hasattr(record, "request_id"):
-            record.request_id = "-"
+            record.request_id = request_id_context_var.get()
         return record
 
     logging.setLogRecordFactory(record_factory)

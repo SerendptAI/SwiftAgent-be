@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from pymongo import ReturnDocument
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
     Mail,
@@ -369,7 +370,7 @@ async def resolve_ticket(token: str) -> dict | None:
                 "updated_at": now,
             }
         },
-        return_document=1,
+        return_document=ReturnDocument.AFTER,
     )
 
     if result:

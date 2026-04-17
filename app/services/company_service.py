@@ -4,6 +4,7 @@ from app.core.database import db
 from app.core.cache import company_cache
 from app.core.config import settings
 from typing import Optional
+from pymongo import ReturnDocument
 import re
 
 
@@ -135,7 +136,7 @@ async def _update_and_return(
     result = await db.companies.find_one_and_update(
         {"id": company_id, "user_id": user_id},
         {"$set": update_fields},
-        return_document=1,
+        return_document=ReturnDocument.AFTER,
     )
     if result:
         await invalidate_company_cache(company_id)

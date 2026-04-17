@@ -99,19 +99,16 @@ class RequestIdMiddleware:
             request_id = str(uuid.uuid4())
             scope["state"] = scope.get("state", {})
             scope["state"]["request_id"] = request_id
-            # patch the logging filter via context
-            import logging
-
-            old_factory = logging.getLogRecordFactory()
-
-            def record_factory(*args, **kwargs):
-                record = old_factory(*args, **kwargs)
-                record.request_id = request_id
-                return record
-
-            logging.setLogRecordFactory(record_factory)
-
-        await self.app(scope, receive, send)
+            
+            from app.core.logging_setup import request_id_context_var
+            token = request_id_context_var.set(request_id)
+            
+            try:
+                await self.app(scope, receive, send)
+            finally:
+                request_id_context_var.reset(token)
+        else:
+            await self.app(scope, receive, send)
 
 
 class WidgetCorsBypassMiddleware:
