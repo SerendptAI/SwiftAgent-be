@@ -12,8 +12,6 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from app.api.routers import (
     auth,
@@ -28,15 +26,11 @@ from app.api.routers import (
     stroll,
     stroll_public,
     email,
-    health,
 )
 from app.core.config import settings
-from app.core.database import create_indexes, redis_client
+from app.core.database import create_indexes
 from app.services.stroll_service import init_browser, close_browser
 from app.services.stroll_scheduler import init_scheduler, close_scheduler
-
-# Rate limiter
-limiter = Limiter(key_func=get_remote_address)
 
 # structured logging setup
 logging.basicConfig(
@@ -105,19 +99,16 @@ class RequestIdMiddleware:
             request_id = str(uuid.uuid4())
             scope["state"] = scope.get("state", {})
             scope["state"]["request_id"] = request_id
-            # patch the logging filter via context
-            import logging
-
-            old_factory = logging.getLogRecordFactory()
-
-            def record_factory(*args, **kwargs):
-                record = old_factory(*args, **kwargs)
-                record.request_id = request_id
-                return record
-
-            logging.setLogRecordFactory(record_factory)
-
-        await self.app(scope, receive, send)
+            
+            from app.core.logging_setup import request_id_context_var
+            token = request_id_context_var.set(request_id)
+            
+            try:
+                await self.app(scope, receive, send)
+            finally:
+                request_id_context_var.reset(token)
+        else:
+            await self.app(scope, receive, send)
 
 
 class WidgetCorsBypassMiddleware:
@@ -204,10 +195,6 @@ app.include_router(chat.router, prefix="/api/v1/chat")
 app.include_router(stroll.router, prefix="/api/v1/stroll")
 app.include_router(stroll_public.router, prefix="/api/v1/public/stroll")
 app.include_router(email.router, prefix="/api/v1/email")
-app.include_router(health.router, prefix="/api/v1")
-
-# Rate limiting state
-app.state.limiter = limiter
 
 
 # global exception handler
@@ -249,4 +236,6 @@ async def health_check():
         checks["qdrant"] = f"error: {e}"
 
     status_code = 200 if all(v == "ok" for v in checks.values()) else 503
-    return JSONResponse(status_code=status_code, content={"status": "healthy", "checks": checks})
+    return JSONResponse(
+        status_code=status_code, content={"status": "healthy", "checks": checks}
+    )

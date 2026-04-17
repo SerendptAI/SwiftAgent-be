@@ -233,15 +233,198 @@ async def _upload_screenshot(screenshot_data: bytes | str, company_id: str, page
         return result["secure_url"]
 
 
+
+# --- Heuristic selectors for auto-detecting login form fields ---
+_USERNAME_SELECTORS = [
+    'input[type="email"]',
+    'input[name="email"]',
+    'input[name="username"]',
+    'input[name="user"]',
+    'input[id*="email"]',
+    'input[id*="user"]',
+    'input[id*="login"]',
+    'input[type="text"]',  # last resort — first visible text input
+]
+
+_PASSWORD_SELECTORS = [
+    'input[type="password"]',
+    'input[name="password"]',
+    'input[id*="password"]',
+    'input[id*="pass"]',
+]
+
+_SUBMIT_SELECTORS = [
+    'button[type="submit"]',
+    'input[type="submit"]',
+    'form button',
+    'button:has-text("Log in")',
+    'button:has-text("Login")',
+    'button:has-text("Sign in")',
+    'button:has-text("Submit")',
+]
+
+
+async def _find_element(page: Page, custom_selector: Optional[str], fallback_selectors: list[str]):
+    """
+    Try a custom selector first (from widget), then fall through heuristic selectors.
+    Returns the first visible element found, or None.
+    """
+    if custom_selector:
+        try:
+            el = page.locator(custom_selector).first
+            if await el.is_visible(timeout=2000):
+                return el
+        except Exception:
+            pass  # fall through to heuristics
+
+    for selector in fallback_selectors:
+        try:
+            el = page.locator(selector).first
+            if await el.is_visible(timeout=1000):
+                return el
+        except Exception:
+            continue
+    return None
+
+
+async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> bool:
+    """
+    Handle dashboard authentication.
+
+    Priority:
+      1. Username + password form-based login (primary)
+      2. Pre-authenticated URL / token (fallback)
+
+    Returns True if auth succeeded (or was not needed), False on failure.
+    """
+    creds = config.credentials
+    if not creds:
+        return True  # no auth needed
+
+    # --- Primary path: form-based login with username + password ---
+    if creds.username and creds.password:
+        login_url = creds.login_url or config.dashboard_url
+        logger.info(f"Attempting form-based login for company {company_id} at {login_url}")
+
+        try:
+            await page.goto(
+                login_url,
+                timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                wait_until="networkidle",
+            )
+        except Exception as e:
+            logger.error(f"Failed to navigate to login page {login_url}: {e}")
+            return False
+
+        # find and fill username field
+        username_el = await _find_element(
+            page, creds.username_selector, _USERNAME_SELECTORS
+        )
+        if not username_el:
+            logger.error(
+                f"Could not find username field on {login_url} for company {company_id}"
+            )
+            return False
+
+        await username_el.fill(creds.username)
+
+        # find and fill password field
+        password_el = await _find_element(
+            page, creds.password_selector, _PASSWORD_SELECTORS
+        )
+        if not password_el:
+            logger.error(
+                f"Could not find password field on {login_url} for company {company_id}"
+            )
+            return False
+
+        await password_el.fill(creds.password)
+
+        # find and click submit
+        submit_el = await _find_element(
+            page, creds.submit_selector, _SUBMIT_SELECTORS
+        )
+        if not submit_el:
+            logger.error(
+                f"Could not find submit button on {login_url} for company {company_id}"
+            )
+            return False
+
+        # click submit and wait for navigation
+        try:
+            async with page.expect_navigation(
+                timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                wait_until="networkidle",
+            ):
+                await submit_el.click()
+        except Exception:
+            # some SPAs don't trigger a full navigation — wait for network idle instead
+            try:
+                await page.wait_for_load_state("networkidle", timeout=settings.STROLL_PAGE_TIMEOUT_MS)
+            except Exception as e:
+                logger.warning(f"Post-login wait timed out for company {company_id}: {e}")
+
+        # --- verify login succeeded ---
+        # heuristic: password field should no longer be visible if login succeeded
+        try:
+            pw_still_visible = await page.locator('input[type="password"]').first.is_visible(timeout=2000)
+        except Exception:
+            pw_still_visible = False
+
+        if pw_still_visible:
+            logger.error(
+                f"Login appears to have failed for company {company_id} — "
+                f"password field still visible after submit"
+            )
+            return False
+
+        logger.info(f"Login succeeded for company {company_id}, now at {page.url}")
+
+        # navigate to dashboard URL if we're not already there
+        current = page.url.split("?")[0].rstrip("/")
+        target = config.dashboard_url.split("?")[0].rstrip("/")
+        if current != target:
+            try:
+                await page.goto(
+                    config.dashboard_url,
+                    timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                    wait_until="networkidle",
+                )
+            except Exception as e:
+                logger.error(f"Failed to navigate to dashboard after login: {e}")
+                return False
+
+        return True
+
+    # --- Fallback path: pre-authenticated URL / token ---
+    if creds.pre_auth_url:
+        logger.info(f"Using pre-auth URL for company {company_id}")
+        try:
+            await page.goto(
+                creds.pre_auth_url,
+                timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                wait_until="networkidle",
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Pre-auth URL navigation failed for company {company_id}: {e}")
+            return False
+
+    # no credentials usable
+    logger.warning(f"Credentials provided but insufficient for company {company_id}")
+    return True  # proceed unauthenticated
+
+
 async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
     """
     Execute a full BFS crawl of the customer's dashboard.
 
     1. Health-check the dashboard URL
-    2. BFS over navigation elements
-    3. Screenshot + Claude vision analysis per page
-    4. Build NavGraph with enriched labels and pre-computed instructions
-    5. Upload screenshots to Cloudinary
+    2. Authenticate if credentials provided
+    3. BFS over navigation elements
+    4. Screenshot + Claude vision analysis per page
+    5. Build NavGraph with enriched labels and pre-computed instructions
+    6. Upload screenshots to Cloudinary
     """
     global _browser
     if not _browser:
@@ -284,15 +467,17 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
                 status="failed",
             )
 
-        # — handle authentication if credentials provided —
-        if config.credentials:
-            if config.credentials.pre_auth_url:
-                await page.goto(
-                    config.credentials.pre_auth_url,
-                    timeout=settings.STROLL_PAGE_TIMEOUT_MS,
-                    wait_until="networkidle",
-                )
-            # TODO: add form-based login flow if username/password provided
+        # — authenticate if credentials provided —
+        auth_ok = await _authenticate(page, config, company_id)
+        if not auth_ok:
+            logger.error(f"Authentication failed for company {company_id}")
+            return StrollVersion(
+                id=f"stroll_{str(uuid4())[:8]}",
+                company_id=company_id,
+                timestamp=datetime.now(tz=timezone.utc),
+                graph=NavGraph(),
+                status="failed",
+            )
 
         # — BFS crawl —
         crawl_queue: deque[str] = deque([config.dashboard_url])

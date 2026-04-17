@@ -1,33 +1,55 @@
+"""
+Auth router — /api/v1/auth
+
+Supports two auth methods that share one user account per email address:
+
+  1. Google OAuth (existing)            — /login, /callback
+  2. Passwordless OTP                   — /otp/send, /otp/verify
+
+Account linking:
+  All users are keyed by a stable UUID ``user_id``.  Email is the dedup key.
+  If a Google OAuth user and a passwordless user share the same address they
+  resolve to the same document and can use either login method.
+"""
+
+import asyncio
 import json
 import base64
 import logging
 import os
 import urllib.parse
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-from datetime import datetime, timezone
-from fastapi import APIRouter, Request, Depends, HTTPException
-from fastapi.responses import RedirectResponse, JSONResponse
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from google_auth_oauthlib.flow import Flow
+
+from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_database
-from app.core.security import (
-    create_access_token,
-    create_refresh_token,
-    decode_refresh_token,
-)
-from app.core.auth import get_current_user
+from app.core.security import create_access_token, create_refresh_token, decode_refresh_token
 from app.models.auth_models import (
+    LoginResponse,
+    OTPSendRequest,
+    OTPVerifyRequest,
+    ReferralRequest,
     RefreshTokenRequest,
     UserProfileUpdate,
-    ReferralRequest,
 )
-import asyncio
-from app.services.email_service import send_welcome_email
+from app.services.credential_auth_service import (
+    build_new_passwordless_user,
+    generate_otp,
+    otp_is_valid,
+    send_otp_email,
+    within_otp_grace_period,
+)
+from app.services.welcome_email_service import send_welcome_email
 
 router = APIRouter(tags=["Auth"])
 logger = logging.getLogger(__name__)
 
-# only allow insecure transport in development
 if settings.is_development:
     os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
@@ -51,45 +73,87 @@ def _build_client_config():
     }
 
 
+def _smtp_guard():
+    """Raise 503 if SMTP is not configured."""
+    if not (settings.ZOHO_EMAIL and settings.ZOHO_APP_PASSWORD and settings.ZOHO_SMTP_SERVER):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email service is not configured on the server.",
+        )
+
+
+def _token_pair(user_id: str) -> dict:
+    return {
+        "access_token": create_access_token(data={"sub": user_id}),
+        "refresh_token": create_refresh_token(data={"sub": user_id}),
+        "token_type": "bearer",
+    }
+
+
+async def _upsert_google_user(db, google_id: str, email: str, name: str, picture: Optional[str]) -> dict:
+    """Look up by email first to support account linking, then upsert."""
+    now = datetime.now(tz=timezone.utc)
+    existing = await db.users.find_one({"email": email})
+
+    if existing:
+        patch: dict = {"updated_at": now}
+        if not existing.get("google_id"):
+            patch["google_id"] = google_id
+        await db.users.update_one({"email": email}, {"$set": patch})
+        return {**existing, **patch}
+
+    new_user = {
+        "user_id": str(uuid4()),
+        "email": email,
+        "name": name,
+        "picture": picture,
+        "google_id": google_id,
+        "is_verified": True,
+        "otp_code": None,
+        "otp_expires": None,
+        "last_otp_login_at": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.users.insert_one(new_user)
+    return new_user
+
+
+# --- referral ---
+
 @router.post("/verify-referral")
 async def verify_referral(request: ReferralRequest):
     """Verify if the provided referral code is valid."""
     if not settings.REFERRAL_CODE:
-        # If no code is configured, accept any code or disable invite-only
         return {"status": "success", "message": "Invites are open"}
-
     if request.code != settings.REFERRAL_CODE:
         raise HTTPException(status_code=400, detail="Invalid referral code")
-
     return {"status": "success", "message": "Valid referral code"}
 
 
+# --- Google OAuth ---
+
 @router.get("/login")
 async def login(redirect_url: Optional[str] = None):
-    """Initiates the Google OAuth flow."""
+    """Initiate the Google OAuth flow."""
     flow = Flow.from_client_config(_build_client_config(), scopes=SCOPES, redirect_uri=REDIRECT_URI)
-
-    # encode redirect_url into oauth state so it survives the round-trip
     state_data = json.dumps({"redirect_url": redirect_url or ""})
     state = base64.urlsafe_b64encode(state_data.encode()).decode()
-
     authorization_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         state=state,
     )
-
     return RedirectResponse(authorization_url)
 
 
 @router.get("/callback")
 async def callback(request: Request, db=Depends(get_database)):
-    """Handles the callback from Google."""
+    """Handle the Google OAuth callback and issue JWT tokens."""
     code = request.query_params.get("code")
     if not code:
-        raise HTTPException(status_code=400, detail="Missing code")
+        raise HTTPException(status_code=400, detail="Missing authorization code")
 
-    # decode redirect_url from state
     redirect_url = None
     state = request.query_params.get("state")
     if state:
@@ -100,112 +164,187 @@ async def callback(request: Request, db=Depends(get_database)):
             pass
 
     flow = Flow.from_client_config(_build_client_config(), scopes=SCOPES, redirect_uri=REDIRECT_URI)
-
-    # exchange code for token
     flow.fetch_token(code=code)
 
-    # get user info
     session = flow.authorized_session()
     user_info = session.get("https://www.googleapis.com/oauth2/v2/userinfo").json()
 
-    user_id = user_info.get("id")
-    email = user_info.get("email")
-    name = user_info.get("name")
+    google_id = user_info.get("id")
+    email = user_info.get("email", "").lower()
+    name = user_info.get("name", "")
 
-    if not user_id:
-        raise HTTPException(status_code=400, detail="Failed to get user info")
+    if not google_id or not email:
+        raise HTTPException(status_code=400, detail="Failed to retrieve user info from Google")
 
-    # upsert user in db
-    user_data = {
-        "user_id": user_id,
-        "email": email,
-        "name": name,
-        "picture": user_info.get("picture"),
-        "updated_at": datetime.now(tz=timezone.utc),
-    }
+    is_new = not bool(await db.users.find_one({"email": email}))
+    user = await _upsert_google_user(db, google_id, email, name, user_info.get("picture"))
 
-    result = await db.users.update_one({"user_id": user_id}, {"$set": user_data}, upsert=True)
-
-    # If the update performed an upsert, result.upserted_id will be set
-    # — treat this as a new user signup and send the welcome email asynchronously.
-    if getattr(result, "upserted_id", None):
+    if is_new:
         try:
             asyncio.create_task(send_welcome_email(email, name))
         except Exception:
-            # don't fail the auth flow if email send scheduling fails
             pass
 
-    # create jwt
-    access_token = create_access_token(data={"sub": user_id})
-    refresh_token = create_refresh_token(data={"sub": user_id})
+    tokens = _token_pair(user["user_id"])
 
-    # redirect with tokens in URL fragment (not query params) to avoid
-    # exposure in server logs, browser history, and referrer headers
     if redirect_url:
-        fragment = urllib.parse.urlencode(
-            {
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-                "token_type": "bearer",
-            }
-        )
-        target = f"{redirect_url}#{fragment}"
-        return RedirectResponse(url=target)
+        fragment = urllib.parse.urlencode(tokens)
+        return RedirectResponse(url=f"{redirect_url}#{fragment}")
 
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "user": user_data,
-    }
+    safe_user = {k: v for k, v in user.items() if k not in ("_id", "otp_code")}
+    return {**tokens, "user": safe_user}
 
+
+# --- token management ---
 
 @router.post("/refresh")
 async def refresh_token(request: RefreshTokenRequest):
-    """Refreshes the access token using a valid refresh token."""
+    """Exchange a valid refresh token for a new access token."""
     payload = decode_refresh_token(request.refresh_token)
     if not payload:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
-
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
     user_id = payload.get("sub")
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        raise HTTPException(status_code=401, detail="Invalid refresh token payload")
+    return {"access_token": create_access_token(data={"sub": user_id}), "token_type": "bearer"}
 
-    new_access_token = create_access_token(data={"sub": user_id})
-    return {"access_token": new_access_token, "token_type": "bearer"}
 
+# --- current user ---
 
 @router.get("/me")
-async def read_users_me(current_user: dict = Depends(get_current_user), db=Depends(get_database)):
-    """Get current user details."""
+async def get_me(current_user: dict = Depends(get_current_user), db=Depends(get_database)):
+    """Return the authenticated user's profile."""
     if "_id" in current_user:
         current_user["_id"] = str(current_user["_id"])
+    current_user.pop("otp_code", None)
 
-    # check if the user has completed company onboarding
     company = await db.companies.find_one(
         {"user_id": current_user["user_id"], "setup_complete": True},
         {"_id": 0, "id": 1},
     )
     current_user["onboarding_completed"] = company is not None
     current_user["company_id"] = company["id"] if company else None
-
     return current_user
 
 
 @router.patch("/me")
-async def update_user_profile(
+async def update_me(
     data: UserProfileUpdate,
     current_user: dict = Depends(get_current_user),
     db=Depends(get_database),
 ):
-    """Update current user's profile details."""
-    user_id = current_user["user_id"]
-
+    """Update the authenticated user's profile."""
     update_data = data.model_dump(exclude_none=True)
     if not update_data:
         return {"status": "success"}
-
     update_data["updated_at"] = datetime.now(tz=timezone.utc)
-
-    await db.users.update_one({"user_id": user_id}, {"$set": update_data})
+    await db.users.update_one({"user_id": current_user["user_id"]}, {"$set": update_data})
     return {"status": "success"}
+
+
+# --- unified passwordless flow ---
+
+@router.post("/otp/send", response_model=LoginResponse)
+async def send_otp(body: OTPSendRequest, db=Depends(get_database)):
+    """
+    Unified entrypoint for passwordless login and signup.
+    If the user exists and is within the grace period, returns tokens immediately.
+    Otherwise sends an OTP. If the email is completely new, creates an unverified user record.
+    """
+    _smtp_guard()
+
+    email = body.email.lower()
+    now = datetime.now(tz=timezone.utc)
+    user = await db.users.find_one({"email": email})
+    is_new = getattr(body, "is_signup", False)
+
+    if not user:
+        # brand new user -> unverified document placeholder
+        otp_code = generate_otp()
+        ttl = settings.OTP_TTL_SIGNUP_MINUTES
+        new_user = build_new_passwordless_user(body.full_name, email, otp_code, ttl)
+        await db.users.insert_one(new_user)
+        is_new = True
+        user = new_user
+    else:
+        # existing user
+        # skip OTP if user recently completed OTP verification
+        if within_otp_grace_period(user):
+            tokens = _token_pair(user["user_id"])
+            return LoginResponse(
+                message="Welcome back!",
+                email=email,
+                otp_required=False,
+                is_new_user=False,
+                **tokens,
+            )
+
+        # refresh OTP logic
+        otp_code = generate_otp()
+        ttl = settings.OTP_TTL_LOGIN_MINUTES
+        await db.users.update_one(
+            {"email": email},
+            {"$set": {"otp_code": otp_code, "otp_expires": now + timedelta(minutes=ttl), "updated_at": now}},
+        )
+
+    # Dispatch email
+    purpose = "email verification" if is_new else "login verification"
+    sent = await send_otp_email(email, otp_code, ttl, purpose_label=purpose)
+
+    if not sent:
+        # Rollback partial signups to not pollute the db with unverified garbage
+        if is_new:
+            await db.users.delete_one({"email": email, "is_verified": False})
+        raise HTTPException(status_code=503, detail="Failed to send verification email. Please try again.")
+
+    return LoginResponse(
+        message="A verification code has been sent to your email.",
+        email=email,
+        otp_required=True,
+        is_new_user=is_new,
+    )
+
+
+@router.post("/otp/verify", response_model=LoginResponse)
+async def verify_otp(body: OTPVerifyRequest, db=Depends(get_database)):
+    """Confirm the OTP and return a JWT token pair."""
+    email = body.email.lower()
+    user = await db.users.find_one({"email": email})
+
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found for this email.")
+
+    ok, reason = otp_is_valid(user, body.otp_code)
+    if not ok:
+        raise HTTPException(status_code=400, detail=reason)
+
+    was_new = not user.get("is_verified")
+    
+    now = datetime.now(tz=timezone.utc)
+    await db.users.update_one(
+        {"email": email},
+        {
+            "$set": {
+                "is_verified": True, 
+                "otp_code": None, 
+                "otp_expires": None, 
+                "last_otp_login_at": now, 
+                "updated_at": now
+            }
+        },
+    )
+
+    if was_new and not user.get("google_id"):
+        try:
+            asyncio.create_task(send_welcome_email(email, user.get("name", "")))
+        except Exception:
+            pass
+
+    tokens = _token_pair(user["user_id"])
+    return LoginResponse(
+        message="Verification successful. Welcome!",
+        email=email,
+        otp_required=False,
+        is_new_user=was_new,
+        **tokens,
+    )

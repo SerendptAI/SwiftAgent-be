@@ -105,7 +105,7 @@ async def get_stats(company_id: str) -> dict:
 
 async def get_visitors(company_id: str, limit: int = 20) -> list:
     cursor = (
-        db.visitors.find({"company_id": company_id}).sort("timestamp", -1).limit(limit)
+        db.visitors.find({"company_id": company_id}, {"_id": 0}).sort("timestamp", -1).limit(limit)
     )
     return await cursor.to_list(length=limit)
 
@@ -118,6 +118,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
         {"$limit": limit},
         {
             "$project": {
+                "_id": 0,
                 "id": 1,
                 "company_id": 1,
                 "session_id": 1,
@@ -134,7 +135,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
 
 async def get_chat_by_id(company_id: str, chat_id: str) -> dict:
     return await db.widget_conversations.find_one(
-        {"company_id": company_id, "id": chat_id}
+        {"company_id": company_id, "id": chat_id}, {"_id": 0}
     )
 
 

@@ -4,12 +4,14 @@ from datetime import datetime
 
 class CompanyInfoCreate(BaseModel):
     name: str
+    email_slug: Optional[str] = None
     website: Optional[str] = None
     industry: Optional[str] = None
     company_size: Optional[str] = None
     country: Optional[str] = None
     timezone: Optional[str] = None
     contact_email: str
+    support_email: Optional[str] = None
     phone_number: Optional[str] = None
 
 class CompanyInfoUpdate(BaseModel):
@@ -20,6 +22,7 @@ class CompanyInfoUpdate(BaseModel):
     country: Optional[str] = None
     timezone: Optional[str] = None
     contact_email: Optional[str] = None
+    support_email: Optional[str] = None
     phone_number: Optional[str] = None
 
 class CompanySecurityUpdate(BaseModel):
@@ -49,6 +52,8 @@ class CompanyResponse(BaseModel):
     id: str
     user_id: str
     name: str
+    email_slug: Optional[str] = None
+    email_address: Optional[str] = None
     logo_url: Optional[str] = None
     company_type: Optional[str] = None
     onboarding_step: int = 1
@@ -60,6 +65,7 @@ class CompanyResponse(BaseModel):
     country: Optional[str] = None
     timezone: Optional[str] = None
     contact_email: Optional[str] = None
+    support_email: Optional[str] = None
     phone_number: Optional[str] = None
     # step 2
     description: Optional[str] = None
@@ -78,6 +84,8 @@ class CompanyResponse(BaseModel):
 class CompanySummary(BaseModel):
     id: str
     name: str
+    email_slug: Optional[str] = None
+    email_address: Optional[str] = None
     logo_url: Optional[str] = None
     setup_complete: bool = False
     onboarding_step: int = 1

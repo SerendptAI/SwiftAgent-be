@@ -2,7 +2,7 @@
 Chat SSE router — streaming text-based agent responses via Server-Sent Events.
 
 POST /{company_id}/chat
-  Body: {"session_id": "...", "message": "...", "user_id": "..."}
+  Body: {"session_id": "...", "message": "..."}
   Returns: text/event-stream
 
 SSE event format (matches my-health-diary-be agent v2):
@@ -14,24 +14,19 @@ Stages:
   thinking      – agent is working (with a user-friendly label)
   tool          – a specific tool is being invoked
   stream        – final agent reply text
-  sources       – knowledge-base sources & blockchain data
+  sources       – knowledge-base sources / blockchain data
   done          – stream complete
 """
 
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from app.core.config import settings
 
 from app.core.database import db
 from app.services import anthropic_agent_service, memory_service
-
-limiter = Limiter(key_func=get_remote_address)
 
 logger = logging.getLogger(__name__)
 
@@ -138,8 +133,7 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
 
 
 @router.post("/{company_id}/chat")
-@limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
-async def chat_endpoint(request: Request, company_id: str, req: ChatRequest):
+async def chat_endpoint(company_id: str, req: ChatRequest):
     """Stream agent chat responses as Server-Sent Events."""
     if not company_id or not company_id.strip():
         raise HTTPException(status_code=400, detail="company_id is required")

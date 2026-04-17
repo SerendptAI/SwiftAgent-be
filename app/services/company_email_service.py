@@ -1,0 +1,378 @@
+import logging
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+from uuid import uuid4
+
+from pymongo import ReturnDocument
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import (
+    Mail,
+    From,
+    To,
+    Subject,
+    Content,
+    Header,
+    MimeType,
+)
+
+from app.core.config import settings
+from app.core.database import db
+from app.services import company_service
+
+logger = logging.getLogger(__name__)
+
+_sg_client = None
+
+TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "email_templates"
+TICKET_REPLY_TEMPLATE = TEMPLATES_DIR / "ticket_reply.html"
+
+_TICKET_ID_RE = re.compile(r"\[Ticket\s*#([A-Z0-9]{8})\]", re.IGNORECASE)
+
+
+def _get_sendgrid_client() -> SendGridAPIClient:
+    global _sg_client
+    if _sg_client is None:
+        _sg_client = SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
+    return _sg_client
+
+
+def _load_template(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+async def create_ticket(
+    company_id: str,
+    customer_email: str,
+    subject: str,
+    chat_summary: str,
+    chat_session_id: str | None = None,
+    customer_name: str | None = None,
+) -> dict:
+    """Create a new support ticket (called by the AI agent)."""
+    ticket_id = str(uuid4())[:8].upper()
+    resolve_token = str(uuid4())
+    now = datetime.now(tz=timezone.utc)
+
+    doc = {
+        "id": ticket_id,
+        "company_id": company_id,
+        "customer_email": customer_email,
+        "customer_name": customer_name,
+        "subject": subject,
+        "status": "pending",
+        "resolve_token": resolve_token,
+        "messages": [
+            {
+                "direction": "system",
+                "body_text": chat_summary,
+                "body_html": None,
+                "sender_email": "system",
+                "message_id": None,
+                "timestamp": now,
+                "seen": False,
+            }
+        ],
+        "unseen_count": 1,
+        "chat_session_id": chat_session_id,
+        "chat_summary": chat_summary,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    await db.email_tickets.insert_one(doc)
+    logger.info("Created ticket %s for company %s", ticket_id, company_id)
+    return doc
+
+
+async def get_ticket(company_id: str, ticket_id: str) -> dict | None:
+    return await db.email_tickets.find_one(
+        {"company_id": company_id, "id": ticket_id}
+    )
+
+
+async def list_tickets(
+    company_id: str,
+    status: str | None = None,
+    limit: int = 50,
+    skip: int = 0,
+) -> list:
+    query: dict = {"company_id": company_id}
+    if status:
+        query["status"] = status
+
+    pipeline = [
+        {"$match": query},
+        {"$sort": {"updated_at": -1}},
+        {"$skip": skip},
+        {"$limit": limit},
+        {
+            "$project": {
+                "id": 1,
+                "company_id": 1,
+                "customer_email": 1,
+                "customer_name": 1,
+                "subject": 1,
+                "status": 1,
+                "unseen_count": 1,
+                "message_count": {"$size": {"$ifNull": ["$messages", []]}},
+                "created_at": 1,
+                "updated_at": 1,
+            }
+        },
+    ]
+    cursor = db.email_tickets.aggregate(pipeline)
+    return await cursor.to_list(length=limit)
+
+
+async def count_tickets(company_id: str, status: str | None = None) -> int:
+    query: dict = {"company_id": company_id}
+    if status:
+        query["status"] = status
+    return await db.email_tickets.count_documents(query)
+
+
+async def mark_ticket_seen(company_id: str, ticket_id: str) -> bool:
+    result = await db.email_tickets.update_one(
+        {"company_id": company_id, "id": ticket_id},
+        {
+            "$set": {
+                "messages.$[].seen": True,
+                "unseen_count": 0,
+            }
+        },
+    )
+    return result.modified_count > 0
+
+
+def _build_reply_html(
+    body_html: str,
+    company_name: str,
+    resolve_url: str,
+    logo_url: str | None = None,
+) -> str:
+    logo_block = ""
+    if logo_url:
+        logo_block = (
+            f'<img src="{logo_url}" alt="{company_name}" '
+            f'style="max-height:40px;margin-bottom:16px;" />'
+        )
+
+    html = _load_template(TICKET_REPLY_TEMPLATE)
+    html = html.replace("{{logo_block}}", logo_block)
+    html = html.replace("{{body_html}}", body_html)
+    html = html.replace("{{resolve_url}}", resolve_url)
+    html = html.replace("{{company_name}}", company_name)
+    return html
+
+
+async def send_ticket_reply(
+    company_id: str,
+    ticket_id: str,
+    body_text: str,
+    body_html: str | None = None,
+) -> dict:
+    """Send a reply from the company to the customer via SendGrid."""
+    ticket = await get_ticket(company_id, ticket_id)
+    if not ticket:
+        raise ValueError(f"Ticket {ticket_id} not found")
+
+    company = await company_service.get_company(company_id)
+    if not company:
+        raise ValueError(f"Company {company_id} not found")
+
+    email_slug = company.get("email_slug")
+    if not email_slug:
+        raise ValueError("Company has no email slug configured")
+
+    company_name = company.get("name", "Support")
+    from_email = f"{email_slug}@{settings.EMAIL_DOMAIN}"
+    resolve_url = f"{settings.API_BASE_URL}/api/v1/email/resolve/{ticket['resolve_token']}"
+    logo_url = company.get("logo_url")
+
+    html_body = body_html or f"<p>{body_text}</p>"
+    full_html = _build_reply_html(html_body, company_name, resolve_url, logo_url)
+
+    subject = f"Re: [Ticket #{ticket_id}] {ticket['subject']}"
+
+    last_message_id = None
+    for msg in reversed(ticket.get("messages", [])):
+        if msg.get("message_id"):
+            last_message_id = msg["message_id"]
+            break
+
+    outbound_message_id = f"<{uuid4()}@{settings.EMAIL_DOMAIN}>"
+
+    message = Mail(
+        from_email=From(from_email, company_name),
+        to_emails=To(ticket["customer_email"]),
+        subject=Subject(subject),
+    )
+    message.add_content(Content(MimeType.text, body_text))
+    message.add_content(Content(MimeType.html, full_html))
+
+    message.add_header(Header("Message-ID", outbound_message_id))
+    if last_message_id:
+        message.add_header(Header("In-Reply-To", last_message_id))
+        message.add_header(Header("References", last_message_id))
+    message.add_header(Header("X-Swift-Ticket-ID", ticket_id))
+
+    try:
+        sg = _get_sendgrid_client()
+        response = sg.send(message)
+        logger.info(
+            "Sent ticket reply for %s, status=%s", ticket_id, response.status_code
+        )
+    except Exception as e:
+        logger.exception("Failed to send email for ticket %s: %s", ticket_id, e)
+        raise
+
+    now = datetime.now(tz=timezone.utc)
+    outbound_msg = {
+        "direction": "outbound",
+        "body_text": body_text,
+        "body_html": body_html,
+        "sender_email": from_email,
+        "message_id": outbound_message_id,
+        "timestamp": now,
+        "seen": True,
+    }
+
+    await db.email_tickets.update_one(
+        {"id": ticket_id, "company_id": company_id},
+        {
+            "$push": {"messages": outbound_msg},
+            "$set": {
+                "status": "awaiting_customer",
+                "updated_at": now,
+            },
+        },
+    )
+
+    return {"status": "sent", "message_id": outbound_message_id}
+
+
+def _extract_ticket_id_from_subject(subject: str) -> str | None:
+    match = _TICKET_ID_RE.search(subject)
+    return match.group(1).upper() if match else None
+
+
+def _extract_slug_from_recipient(to_email: str) -> str | None:
+    if "@" not in to_email:
+        return None
+    local_part = to_email.split("@")[0].strip().lower()
+    return local_part if local_part else None
+
+
+async def process_inbound_email(payload: dict) -> dict:
+    """Process an inbound email from SendGrid Inbound Parse webhook."""
+    sender_raw = payload.get("from", "")
+    to_raw = payload.get("to", "")
+    subject = payload.get("subject", "")
+    body_text = payload.get("text", "")
+    body_html = payload.get("html")
+
+    email_match = re.search(r"<([^>]+)>", sender_raw)
+    sender_email = email_match.group(1) if email_match else sender_raw.strip()
+
+    slug = None
+    for addr in re.findall(r"[\w.\-+]+@[\w.\-]+", to_raw):
+        if addr.endswith(f"@{settings.EMAIL_DOMAIN}"):
+            slug = _extract_slug_from_recipient(addr)
+            break
+
+    if not slug:
+        logger.warning("Inbound email with no matching slug. to=%s", to_raw)
+        return {"status": "ignored", "reason": "no matching recipient"}
+
+    company = await company_service.get_company_by_slug(slug)
+    if not company:
+        logger.warning("Inbound email for unknown slug: %s", slug)
+        return {"status": "ignored", "reason": "unknown company slug"}
+
+    company_id = company["id"]
+
+    ticket_id = _extract_ticket_id_from_subject(subject)
+
+    if not ticket_id:
+        headers_raw = payload.get("headers", "")
+        in_reply_to_match = re.search(r"In-Reply-To:\s*<([^>]+)>", headers_raw)
+        if in_reply_to_match:
+            ref_message_id = f"<{in_reply_to_match.group(1)}>"
+            ticket = await db.email_tickets.find_one(
+                {
+                    "company_id": company_id,
+                    "messages.message_id": ref_message_id,
+                }
+            )
+            if ticket:
+                ticket_id = ticket["id"]
+
+    if not ticket_id:
+        logger.warning(
+            "Inbound email could not be matched to a ticket. subject=%s, from=%s",
+            subject,
+            sender_email,
+        )
+        return {"status": "ignored", "reason": "no matching ticket found"}
+
+    ticket = await get_ticket(company_id, ticket_id)
+    if not ticket:
+        logger.warning("Ticket %s not found for company %s", ticket_id, company_id)
+        return {"status": "ignored", "reason": "ticket not found"}
+
+    message_id = None
+    headers_raw = payload.get("headers", "")
+    msg_id_match = re.search(r"Message-ID:\s*(<[^>]+>)", headers_raw, re.IGNORECASE)
+    if msg_id_match:
+        message_id = msg_id_match.group(1)
+
+    now = datetime.now(tz=timezone.utc)
+    inbound_msg = {
+        "direction": "inbound",
+        "body_text": body_text,
+        "body_html": body_html,
+        "sender_email": sender_email,
+        "message_id": message_id,
+        "timestamp": now,
+        "seen": False,
+    }
+
+    await db.email_tickets.update_one(
+        {"id": ticket_id, "company_id": company_id},
+        {
+            "$push": {"messages": inbound_msg},
+            "$set": {
+                "status": "follow_up",
+                "updated_at": now,
+            },
+            "$inc": {"unseen_count": 1},
+        },
+    )
+
+    logger.info(
+        "Stored inbound email on ticket %s from %s", ticket_id, sender_email
+    )
+    return {"status": "stored", "ticket_id": ticket_id}
+
+
+async def get_ticket_by_resolve_token(token: str) -> dict | None:
+    return await db.email_tickets.find_one({"resolve_token": token})
+
+
+async def resolve_ticket(token: str) -> dict | None:
+    now = datetime.now(tz=timezone.utc)
+    result = await db.email_tickets.find_one_and_update(
+        {"resolve_token": token, "status": {"$ne": "resolved"}},
+        {
+            "$set": {
+                "status": "resolved",
+                "updated_at": now,
+            }
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+
+    if result:
+        logger.info("Ticket %s resolved via token", result["id"])
+    return result

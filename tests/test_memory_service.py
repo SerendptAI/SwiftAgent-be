@@ -5,6 +5,42 @@ import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 
 
+class TestMemoryServiceWorkingMemory:
+    def setup_method(self):
+        from app.services import memory_service
+
+        memory_service._working_memory_store.clear()
+
+    def test_save_and_get_working_memory(self):
+        from app.models.memory_models import WorkingMemory
+        from app.services import memory_service
+
+        wm = WorkingMemory(
+            session_id="sess_123",
+            identified_user=True,
+            user_name="John",
+        )
+
+        asyncio.run(memory_service.save_working_memory(wm))
+        retrieved = asyncio.run(memory_service.get_working_memory("sess_123"))
+
+        assert retrieved is not None
+        assert retrieved.session_id == "sess_123"
+        assert retrieved.user_name == "John"
+        assert retrieved.identified_user is True
+
+    def test_delete_working_memory(self):
+        from app.models.memory_models import WorkingMemory
+        from app.services import memory_service
+
+        wm = WorkingMemory(session_id="sess_123")
+        asyncio.run(memory_service.save_working_memory(wm))
+        asyncio.run(memory_service.delete_working_memory("sess_123"))
+
+        result = asyncio.run(memory_service.get_working_memory("sess_123"))
+        assert result is None
+
+
 class TestFormatMemoryContext:
     def test_format_empty_context(self):
         from app.models.memory_models import MemoryContext
@@ -101,26 +137,26 @@ class TestFormatMemoryContext:
         assert "Jane" in formatted
 
 
-class TestIdentifyUserFromConversation:
+class TestLoadMemoryContext:
     @pytest.mark.asyncio
-    async def test_extract_user_identity(self):
-        """Test user identity extraction from messages."""
+    async def test_load_memory_context_empty(self):
         from app.services import memory_service
-        from unittest.mock import AsyncMock, patch
+        import app.services.memory_service as ms
 
-        messages = [
-            {"role": "user", "content": "Hi, my name is John Doe and my email is john@example.com"}
-        ]
+        ms._working_memory_store.clear()
 
-        # This test would require mocking the Gemini client
-        # Just verify the function signature for now
-        assert callable(memory_service.identify_user_from_conversation)
+        with patch("app.services.memory_service.db") as mock_db:
+            mock_db.episodic_episodes.find.return_value.sort.return_value.limit.return_value.to_list = AsyncMock(
+                return_value=[]
+            )
+            mock_db.qdrant_client.query_points = AsyncMock(return_value=MagicMock(points=[]))
 
+            ctx = await memory_service.load_memory_context(
+                company_id="comp_123",
+                user_id=None,
+                session_id=None,
+            )
 
-class TestCleanupOldMemories:
-    @pytest.mark.asyncio
-    async def test_cleanup_function_exists(self):
-        """Test that cleanup function exists."""
-        from app.services import memory_service
-
-        assert callable(memory_service.cleanup_old_memories)
+            assert ctx.episodic_memories == []
+            assert ctx.semantic_memories == []
+            assert ctx.working_memory is None

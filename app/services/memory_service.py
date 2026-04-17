@@ -1,13 +1,13 @@
 from typing import List, Optional, Dict, Any
 import logging
 from uuid import uuid4
-from datetime import datetime, timedelta
+from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
 
 from app.core.config import settings
-from app.core.database import db, qdrant_client, redis_client
+from app.core.database import db, qdrant_client
 from app.models.memory_models import (
     EpisodeSummary,
     EpisodicEvent,
@@ -175,30 +175,20 @@ async def get_user_memories(
     return memories
 
 
-from app.core.database import db, qdrant_client, redis_client
-
-WORKING_MEMORY_PREFIX = "working_memory:"
-WORKING_MEMORY_TTL = settings.WORKING_MEMORY_TTL_SECONDS
+_working_memory_store: Dict[str, WorkingMemory] = {}
 
 
 async def save_working_memory(memory: WorkingMemory):
     memory.updated_at = datetime.utcnow()
-    key = f"{WORKING_MEMORY_PREFIX}{memory.session_id}"
-    data = memory.model_dump_json()
-    await redis_client.setex(key, WORKING_MEMORY_TTL, data)
+    _working_memory_store[memory.session_id] = memory
 
 
 async def get_working_memory(session_id: str) -> Optional[WorkingMemory]:
-    key = f"{WORKING_MEMORY_PREFIX}{session_id}"
-    data = await redis_client.get(key)
-    if data:
-        return WorkingMemory.model_validate_json(data)
-    return None
+    return _working_memory_store.get(session_id)
 
 
 async def delete_working_memory(session_id: str):
-    key = f"{WORKING_MEMORY_PREFIX}{session_id}"
-    await redis_client.delete(key)
+    _working_memory_store.pop(session_id, None)
 
 
 async def load_memory_context(
@@ -234,28 +224,13 @@ async def extract_and_store_facts(
         f"{m.get('role', 'user')}: {m.get('content', '')}" for m in messages
     )
 
-    # Enhanced fact extraction with user entity detection
-    fact_extraction_prompt = f"""Extract key facts and user identity from this conversation. Focus on:
+    fact_extraction_prompt = f"""Extract key facts from this conversation that should be remembered for future interactions. Focus on:
+- User preferences (tone, language, communication style)
+- Important information about the user (name, email, wallet address, project names)
+- Topics they've asked about or shown interest in
+- Any commitments or follow-ups promised
 
-1. USER IDENTITY (extract these fields):
-   - name: User's name if mentioned
-   - email: User's email address if provided  
-   - wallet: Any wallet address (ETH/ BTC) mentioned
-
-2. USER PREFERENCES:
-   - Tone preference (formal/casual)
-   - Language preference
-   - Communication style
-
-3. IMPORTANT INFORMATION:
-   - Project names or ticket IDs mentioned
-   - Issues they're experiencing
-   - Topics of interest
-
-Return a JSON object with these fields:
-- "user_identity": {{"name": "...", "email": "...", "wallet": "..."}} or null
-- "preferences": array of preference facts
-- "other_facts": array of other important facts
+Return a JSON array of facts, each as a short sentence. If no important facts, return empty array.
 
 Conversation:
 {conversation_text}"""
@@ -270,42 +245,12 @@ Conversation:
 
         import json
 
-        result = json.loads(response.text)
-        if not isinstance(result, dict):
-            result = {}
+        facts = json.loads(response.text)
+        if not isinstance(facts, list):
+            facts = []
 
         stored_ids = []
-
-        # Store user identity if found
-        user_identity = result.get("user_identity")
-        if user_identity:
-            for key, value in user_identity.items():
-                if value and isinstance(value, str) and len(value) > 2:
-                    memory = SemanticMemory(
-                        user_id=user_id,
-                        company_id=company_id,
-                        memory_type=f"identity_{key}",
-                        content=f"{key}: {value}",
-                        importance=0.9,
-                    )
-                    mem_id = await save_semantic_memory(memory)
-                    stored_ids.append(mem_id)
-
-        # Store preferences
-        for fact in result.get("preferences", []):
-            if isinstance(fact, str) and len(fact) > 5:
-                memory = SemanticMemory(
-                    user_id=user_id,
-                    company_id=company_id,
-                    memory_type="preference",
-                    content=fact,
-                    importance=0.7,
-                )
-                mem_id = await save_semantic_memory(memory)
-                stored_ids.append(mem_id)
-
-        # Store other facts
-        for fact in result.get("other_facts", []):
+        for fact in facts:
             if isinstance(fact, str) and len(fact) > 10:
                 memory = SemanticMemory(
                     user_id=user_id,
@@ -413,76 +358,3 @@ def format_memory_context(context: MemoryContext) -> str:
             parts.append(f"- {ep.summary} ({ep.outcome})")
 
     return "\n".join(parts) if parts else ""
-
-
-async def cleanup_old_memories() -> dict:
-    """Remove memories older than retention policy."""
-    from app.core.config import settings
-    from datetime import timedelta
-
-    deleted = {"episodes": 0, "semantic": 0}
-
-    # Cleanup episodic memories
-    cut_off = datetime.utcnow() - timedelta(days=settings.EPISODIC_RETENTION_DAYS)
-    result = await db.episodic_episodes.delete_many({"created_at": {"$lt": cut_off}})
-    deleted["episodes"] = result.deleted_count
-
-    return deleted
-
-
-async def identify_user_from_conversation(
-    messages: List[Dict[str, str]],
-) -> Optional[Dict[str, str]]:
-    """Auto-detect user identity from conversation messages."""
-    if not messages:
-        return None
-
-    conversation_text = "\n".join(
-        f"{m.get('role', 'user')}: {m.get('content', '')}" for m in messages[-20:]
-    )
-
-    extraction_prompt = f"""Extract user contact information from this conversation. Look for:
-- Email addresses (user@example.com)
-- Wallet addresses (0x... or bc1...)
-- Names mentioned as "my name is..."
-
-Return JSON with found fields:
-{{"name": "...", "email": "...", "wallet": "..."}}
-
-Only include fields you find with high confidence.
-
-Conversation:
-{conversation_text}"""
-
-    try:
-        gemini_client = _get_gemini_client()
-        response = await gemini_client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=extraction_prompt,
-            config={"response_mime_type": "application/json"},
-        )
-
-        import json
-
-        result = json.loads(response.text)
-        if isinstance(result, dict):
-            # Filter out null values
-            return {k: v for k, v in result.items() if v}
-        return None
-    except Exception as e:
-        logger.error(f"Failed to identify user: {e}")
-        return None
-
-
-async def update_working_memory_from_identity(
-    session_id: str,
-    identity: Dict[str, str],
-):
-    """Update working memory with auto-detected user identity."""
-    working = await get_working_memory(session_id)
-    if working:
-        if identity.get("name") and not working.user_name:
-            working.user_name = identity["name"]
-        if identity.get("email") and not working.user_email:
-            working.user_email = identity["email"]
-        await save_working_memory(working)
