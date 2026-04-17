@@ -46,3 +46,25 @@ class TTLCache:
 
 
 company_cache = TTLCache(default_ttl=300)
+
+
+async def get_cached_company(company_id: str) -> Optional[dict]:
+    """Get company from cache or database."""
+    from app.core.database import db
+
+    # Check cache first
+    cached = await company_cache.get(company_id)
+    if cached:
+        return cached
+
+    # Fetch from DB
+    company = await db.companies.find_one({"id": company_id})
+    if company:
+        # Cache for 5 minutes
+        await company_cache.set(company_id, company, ttl=300)
+    return company
+
+
+async def invalidate_company_cache(company_id: str):
+    """Invalidate company cache when updated."""
+    await company_cache.delete(company_id)
