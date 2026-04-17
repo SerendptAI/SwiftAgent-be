@@ -11,6 +11,7 @@ class CompanyInfoCreate(BaseModel):
     country: Optional[str] = None
     timezone: Optional[str] = None
     contact_email: str
+    support_email: Optional[str] = None
     phone_number: Optional[str] = None
 
 class CompanyInfoUpdate(BaseModel):
@@ -21,6 +22,7 @@ class CompanyInfoUpdate(BaseModel):
     country: Optional[str] = None
     timezone: Optional[str] = None
     contact_email: Optional[str] = None
+    support_email: Optional[str] = None
     phone_number: Optional[str] = None
 
 class CompanySecurityUpdate(BaseModel):
@@ -63,6 +65,7 @@ class CompanyResponse(BaseModel):
     country: Optional[str] = None
     timezone: Optional[str] = None
     contact_email: Optional[str] = None
+    support_email: Optional[str] = None
     phone_number: Optional[str] = None
     # step 2
     description: Optional[str] = None

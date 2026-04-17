@@ -62,6 +62,7 @@ async def create_company(user_id: str, data: dict) -> dict:
         "country": data.get("country"),
         "timezone": data.get("timezone"),
         "contact_email": data["contact_email"],
+        "support_email": data.get("support_email"),
         "phone_number": data.get("phone_number"),
         "logo_url": None,
         "company_type": None,
