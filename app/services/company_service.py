@@ -49,6 +49,8 @@ def _compute_email_address(slug: Optional[str]) -> Optional[str]:
 
 async def create_company(user_id: str, data: dict) -> dict:
     email_slug = data.get("email_slug")
+    if not email_slug:
+        email_slug = await suggest_slug(data["name"])
 
     doc = {
         "id": str(uuid4()),
