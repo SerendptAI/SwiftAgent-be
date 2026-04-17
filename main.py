@@ -114,9 +114,8 @@ class RequestIdMiddleware:
 class WidgetCorsBypassMiddleware:
     """
     Middleware to bypass CORS for public widget endpoints.
-    Starlette's CORSMiddleware rejects requests from unallowed origins.
-    Since the voice widget is embedded on various websites, we strip the Origin
-    header for widget-facing routes so they aren't blocked by the allowlist.
+    Allows all origins for the specified paths instead of stripping the origin header,
+    which breaks browsers' preflight verification.
     """
 
     BYPASS_PREFIXES = (
@@ -133,15 +132,33 @@ class WidgetCorsBypassMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] in ("http", "websocket"):
+        is_http = scope["type"] == "http"
+        is_ws = scope["type"] == "websocket"
+        if is_http or is_ws:
             path = scope.get("path", "")
             if any(path.startswith(p) for p in self.BYPASS_PREFIXES) or any(
                 path.endswith(s) for s in self.BYPASS_SUFFIXES
             ):
-                if "headers" in scope:
-                    scope["headers"] = [
-                        (k, v) for k, v in scope["headers"] if k.lower() != b"origin"
-                    ]
+                if is_http and scope["method"] == "OPTIONS":
+                    from starlette.responses import Response
+                    response = Response(status_code=200, headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "*",
+                        "Access-Control-Allow-Headers": "*",
+                    })
+                    await response(scope, receive, send)
+                    return
+                else:
+                    async def custom_send(message):
+                        if getattr(message, "get", None) and message.get("type") in ("http.response.start", "websocket.accept"):
+                            headers = message.get("headers", [])
+                            headers = [(k, v) for k, v in headers if k.lower() != b"access-control-allow-origin"]
+                            headers.append((b"access-control-allow-origin", b"*"))
+                            message["headers"] = headers
+                        await send(message)
+                    await self.app(scope, receive, custom_send)
+                    return
+
         await self.app(scope, receive, send)
 
 
