@@ -1,0 +1,16 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: self-hosted
+
+    steps:
+      - name: Deploy Backend
+        run: ./deploy.sh backend
+        working-directory: /home/ghrunner/swift-agents-prod
