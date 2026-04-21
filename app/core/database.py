@@ -79,6 +79,11 @@ async def create_indexes():
 
     # email slug uniqueness
     await db.companies.create_index("email_slug", unique=True, sparse=True)
+    
+    # members
+    await db.companies.create_index("members.user_id")
+    await db.companies.create_index("members.email")
+    await db.companies.create_index("pending_invites.token")
 
     # memory indexes
     await db.episodic_episodes.create_index("session_id")

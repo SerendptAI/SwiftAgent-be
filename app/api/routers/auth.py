@@ -219,11 +219,15 @@ async def get_me(current_user: dict = Depends(get_current_user), db=Depends(get_
     current_user.pop("otp_code", None)
 
     company = await db.companies.find_one(
-        {"user_id": current_user["user_id"], "setup_complete": True},
-        {"_id": 0, "id": 1},
+        {
+            "$or": [{"user_id": current_user["user_id"]}, {"members.user_id": current_user["user_id"]}],
+            "setup_complete": True
+        },
+        {"_id": 0, "id": 1, "user_id": 1},
     )
     current_user["onboarding_completed"] = company is not None
     current_user["company_id"] = company["id"] if company else None
+    current_user["is_admin"] = (company["user_id"] == current_user["user_id"]) if company else False
     return current_user
 
 

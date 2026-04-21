@@ -12,6 +12,9 @@ from app.models.company_models import (
     VoiceSettingsUpdate,
     CompanyResponse,
     CompanySummary,
+    MemberInviteCreate,
+    AcceptInviteRequest,
+    CompanyMemberResponse,
 )
 from app.models.email_models import (
     EmailSlugCheck,
@@ -31,6 +34,13 @@ async def create_company(
 ):
     """Create a new company (onboarding step 1)."""
     user_id = current_user["user_id"]
+    
+    existing_companies = await company_service.list_companies(user_id)
+    if existing_companies:
+        for c in existing_companies:
+            if c.get("user_id") != user_id:
+                raise HTTPException(status_code=403, detail="Members are not allowed to create companies")
+                
     company = await company_service.create_company(user_id, data.model_dump())
     return company
 
@@ -44,6 +54,22 @@ async def list_companies(
     return await company_service.list_companies(user_id)
 
 
+@router.get("/email-slug/check", response_model=EmailSlugCheckResponse)
+async def check_global_email_slug(
+    slug: str = Query(..., min_length=3, max_length=30),
+    current_user: dict = Depends(get_current_user),
+):
+    """Check if an email slug is available globally (e.g. before company creation)."""
+    slug = slug.strip().lower()
+    available = await company_service.check_slug_availability(slug)
+
+    suggestion = None
+    if not available:
+        suggestion = await company_service.suggest_slug(slug)
+
+    return {"available": available, "suggestion": suggestion}
+
+
 @router.get("/{company_id}", response_model=CompanyResponse)
 async def get_company(
     company_id: str,
@@ -51,7 +77,7 @@ async def get_company(
 ):
     """Get full company details."""
     user_id = current_user["user_id"]
-    company = await company_service.get_company(company_id, user_id)
+    company = await company_service.get_company(company_id, user_id, admin_only=False)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     return company
@@ -79,7 +105,7 @@ async def update_identity(
 ):
     """Update company identity (onboarding step 2)."""
     user_id = current_user["user_id"]
-    company = await company_service.get_company(company_id, user_id)
+    company = await company_service.get_company(company_id, user_id, admin_only=False)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     return await company_service.update_identity(
@@ -95,7 +121,7 @@ async def update_company_info(
 ):
     """Update general company information (Settings page)."""
     user_id = current_user["user_id"]
-    company = await company_service.get_company(company_id, user_id)
+    company = await company_service.get_company(company_id, user_id, admin_only=False)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     return await company_service.update_company_info(
@@ -111,9 +137,9 @@ async def update_security(
 ):
     """Update settings for security, like backup email and access code."""
     user_id = current_user["user_id"]
-    company = await company_service.get_company(company_id, user_id)
+    company = await company_service.get_company(company_id, user_id, admin_only=True)
     if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+        raise HTTPException(status_code=404, detail="Company not found or unauthorized")
     return await company_service.update_security(
         company_id, user_id, data.model_dump(exclude_none=True)
     )
@@ -127,9 +153,9 @@ async def update_company_type(
 ):
     """Set company type — saas_finance or crypto (onboarding step 3)."""
     user_id = current_user["user_id"]
-    company = await company_service.get_company(company_id, user_id)
+    company = await company_service.get_company(company_id, user_id, admin_only=True)
     if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+        raise HTTPException(status_code=404, detail="Company not found or unauthorized")
     return await company_service.update_company_type(
         company_id, user_id, data.company_type
     )
@@ -143,7 +169,7 @@ async def update_boundaries(
 ):
     """Update answer boundaries (onboarding step 4)."""
     user_id = current_user["user_id"]
-    company = await company_service.get_company(company_id, user_id)
+    company = await company_service.get_company(company_id, user_id, admin_only=False)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     return await company_service.update_boundaries(
@@ -235,3 +261,55 @@ async def update_email_slug(
             )
 
     return await company_service.update_email_slug(company_id, user_id, slug)
+
+@router.post("/{company_id}/invites", response_model=dict)
+async def invite_member(
+    company_id: str,
+    data: MemberInviteCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Invite a new member to the company (Admin only)."""
+    user_id = current_user["user_id"]
+    try:
+        invite = await company_service.create_invite(company_id, user_id, data.email)
+        return {"status": "success", "message": "Invite sent", "invite": invite}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/invites/accept", response_model=dict)
+async def accept_invite(
+    data: AcceptInviteRequest,
+):
+    """Accept an invite using a token."""
+    try:
+        result = await company_service.accept_invite(data.token)
+        return {"status": "success", "message": "Invite accepted. You can now log in.", "data": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/{company_id}/members", response_model=List[CompanyMemberResponse])
+async def list_members(
+    company_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """List all active members and pending invites for the company."""
+    user_id = current_user["user_id"]
+    try:
+        members = await company_service.get_unified_members(company_id, user_id)
+        return members
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+@router.delete("/{company_id}/members/{email}")
+async def remove_member_or_invite(
+    company_id: str,
+    email: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove a member or revoke an invite."""
+    user_id = current_user["user_id"]
+    try:
+        await company_service.remove_member_or_invite(company_id, user_id, email)
+        return {"status": "success", "message": "User removed from company"}
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))

@@ -14,9 +14,9 @@ async def get_billing_details(
 ):
     """Get the current billing subscription plan and saved cards for a company."""
     user_id = current_user["user_id"]
-    company = await company_service.get_company(company_id, user_id)
+    company = await company_service.get_company(company_id, user_id, admin_only=True)
     if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+        raise HTTPException(status_code=403, detail="Company not found or unauthorized for billing")
 
     details = await billing_service.get_billing_details(company_id, user_id)
     if not details:
@@ -33,9 +33,9 @@ async def subscribe_plan(
 ):
     """Subscribe or update a billing plan for the company."""
     user_id = current_user["user_id"]
-    company = await company_service.get_company(company_id, user_id)
+    company = await company_service.get_company(company_id, user_id, admin_only=True)
     if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+        raise HTTPException(status_code=403, detail="Company not found or unauthorized for billing")
 
     details = await billing_service.subscribe(company_id, user_id, data.plan_name)
     if not details:

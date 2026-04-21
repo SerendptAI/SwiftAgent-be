@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
 class CompanyInfoCreate(BaseModel):
@@ -30,7 +30,26 @@ class CompanySecurityUpdate(BaseModel):
     access_code: Optional[str] = None
 
 class MemberInviteCreate(BaseModel):
+    email: EmailStr
+
+class AcceptInviteRequest(BaseModel):
+    token: str
+
+class CompanyMember(BaseModel):
+    user_id: str
     email: str
+    role: str = "member"
+    added_at: datetime
+
+class PendingInvite(BaseModel):
+    email: str
+    token: str
+    invited_at: datetime
+
+class CompanyMemberResponse(BaseModel):
+    email: str
+    role: str
+    status: str
 
 class CompanyIdentityUpdate(BaseModel):
     description: Optional[str] = None
@@ -76,7 +95,11 @@ class CompanyResponse(BaseModel):
     enabled_sources: List[str] = []
     custom_info: List[str] = []
     # step 5
+    # step 5
     voice_style: str = "professional"
+    # members
+    members: List[CompanyMember] = []
+    pending_invites: List[PendingInvite] = []
     # timestamps
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
