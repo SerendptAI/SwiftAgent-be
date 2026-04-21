@@ -1,46 +1,192 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Ticket Resolved</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: #e2e8f0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-        }
-        .card {
-            background: rgba(30, 41, 59, 0.8);
-            border: 1px solid rgba(148, 163, 184, 0.1);
-            border-radius: 16px;
-            padding: 48px;
-            max-width: 480px;
-            width: 100%;
-            text-align: center;
-            backdrop-filter: blur(12px);
-        }
-        .check {
-            font-size: 48px;
-            margin-bottom: 16px;
-        }
-        h1 { font-size: 24px; margin-bottom: 12px; color: #10b981; }
-        .subject { color: #94a3b8; font-size: 14px; margin-bottom: 8px; }
-        .note { color: #64748b; font-size: 13px; margin-top: 24px; }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
+  <title>Ticket closed</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');
+
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+    body { margin: 0; padding: 0; width: 100% !important; height: 100% !important; }
+    table { border-collapse: collapse !important; }
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      background-color: #f5f5f4;
+      color: #111111;
+      font-family: 'DM Mono', 'Courier New', Courier, monospace;
+      overflow-x: hidden;
+    }
+
+    .email-container {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #f5f5f4;
+    }
+
+    .display-font {
+      font-family: 'Greed Narrow-TRIAL', 'Arial Narrow', Impact, sans-serif;
+      font-stretch: condensed;
+    }
+
+    .logo-mark {
+      display: block;
+      width: 72px;
+      height: 70px;
+      margin: 0 auto;
+    }
+
+    .heading-text {
+      margin: 0;
+      color: #697454;
+      background-image: url('images/text-bg.jpg');
+      background-position: center center;
+      background-size: cover;
+      background-repeat: no-repeat;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: rgba(0,0,0,0);
+      font-size: 58px;
+      line-height: 1.24;
+      font-weight: 600;
+      letter-spacing: -2.32px;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .body-text {
+      margin: 0;
+      color: #111111;
+      font-family: 'DM Mono', 'Courier New', Courier, monospace;
+      font-size: 18px;
+      line-height: 2;
+      font-weight: 400;
+      letter-spacing: 0;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .hero-frame {
+      position: relative;
+      width: 100%;
+      height: 354px;
+      overflow: hidden;
+      background-color: #d8d3d6;
+    }
+
+    .hero-image {
+      display: block;
+      width: 100%;
+      height: 354px;
+      object-fit: cover;
+      object-position: center center;
+    }
+
+    .hero-copy {
+      position: absolute;
+      left: 210px;
+      bottom: 96px;
+      margin: 0;
+      color: #ffffff;
+      font-family: 'DM Mono', 'Courier New', Courier, monospace;
+      font-size: 18px;
+      line-height: 1.35;
+      font-weight: 400;
+      letter-spacing: 1px;
+      text-align: left;
+      text-transform: uppercase;
+    }
+
+    .notch-left {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
+      width: 82px;
+      height: 82px;
+      background-color: #f5f5f4;
+    }
+
+    .notch-bottom {
+      position: absolute;
+      left: 190px;
+      bottom: 0;
+      z-index: 2;
+      width: 108px;
+      height: 80px;
+      background-color: #f5f5f4;
+    }
+
+    @media only screen and (max-width: 620px) {
+      .email-container { width: 100% !important; max-width: 100% !important; }
+      .logo-cell { padding-top: 82px !important; padding-bottom: 76px !important; }
+      .heading-cell { padding: 0 58px 150px !important; }
+      .heading-text { font-size: 52px !important; line-height: 1.24 !important; letter-spacing: -2.08px !important; }
+      .image-cell { padding: 0 58px 168px !important; }
+      .hero-frame, .hero-image { height: 354px !important; }
+    }
+
+    @media only screen and (max-width: 480px) {
+      .logo-cell { padding-top: 59px !important; padding-bottom: 58px !important; }
+      .logo-mark { width: 50px !important; height: 49px !important; }
+      .heading-cell { padding: 0 28px 112px !important; }
+      .heading-text { font-size: 38px !important; line-height: 1.24 !important; letter-spacing: -1.52px !important; }
+      .image-cell { padding: 0 34px 126px !important; }
+      .hero-frame, .hero-image { height: 266px !important; }
+      .notch-left { top: 0 !important; width: 58px !important; height: 58px !important; }
+      .notch-bottom { left: 154px !important; width: 82px !important; height: 58px !important; }
+      .hero-copy { left: 156px !important; bottom: 70px !important; font-size: 16px !important; line-height: 1.35 !important; letter-spacing: 0.8px !important; }
+    }
+
+    @media only screen and (max-width: 375px) {
+      .heading-cell { padding-left: 20px !important; padding-right: 20px !important; }
+      .heading-text { font-size: 33px !important; letter-spacing: -1.32px !important; }
+      .image-cell { padding-left: 24px !important; padding-right: 24px !important; }
+      .hero-frame, .hero-image { height: 238px !important; }
+      .notch-left { top: 0 !important; width: 50px !important; height: 50px !important; }
+      .notch-bottom { left: 128px !important; width: 76px !important; height: 52px !important; }
+      .hero-copy { left: 126px !important; bottom: 62px !important; font-size: 16px !important; letter-spacing: 0.6px !important; }
+    }
+  </style>
 </head>
-<body>
-    <div class="card">
-        <div class="check">✓</div>
-        <h1>{{message}}</h1>
-        <p class="subject">Ticket #{{ticket_id}} — {{ticket_subject}}</p>
-        <p class="note">Thank you for your feedback.</p>
-    </div>
+<body style="margin: 0; padding: 0; background-color: #f5f5f4;">
+  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
+      <tr>
+        <td class="logo-cell" style="padding: 82px 0 76px; text-align: center;">
+          <img src="images/logo.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
+        </td>
+      </tr>
+
+      <tr>
+        <td class="heading-cell" style="padding: 0 58px 150px; text-align: center;">
+          <h1 class="display-font heading-text">
+            Your ticket has been closed
+          </h1>
+        </td>
+      </tr>
+
+      <tr>
+        <td class="image-cell" style="padding: 0 58px 168px;">
+          <div class="hero-frame">
+            <img src="images/ticket-closed.jpg" width="484" height="354" alt="Ticket closed" class="hero-image">
+            <div class="notch-left"></div>
+            <div class="notch-bottom"></div>
+            <p class="hero-copy">
+              Thank you for<br>
+              everything
+            </p>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </center>
 </body>
 </html>

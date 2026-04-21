@@ -1,191 +1,283 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{{app_name}} — Verification Code</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
+  <title>{{app_name}} - Verification Code</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:AllowPNG/>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+    body { margin: 0; padding: 0; width: 100% !important; height: 100% !important; }
+    table { border-collapse: collapse !important; }
+    *, *::before, *::after { box-sizing: border-box; }
+    a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background-color: #0d0f14;
-      color: #e2e8f0;
-      -webkit-font-smoothing: antialiased;
+      background-color: #f5f5f4;
+      color: #111111;
+      font-family: 'DM Mono', 'Courier New', Courier, monospace;
+      overflow-x: hidden;
     }
 
-    .wrapper {
-      max-width: 560px;
-      margin: 40px auto;
-      padding: 0 16px;
+    .email-container {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #f5f5f4;
     }
 
-    .card {
-      background: linear-gradient(145deg, #161b27 0%, #1a2133 100%);
-      border: 1px solid #2d3a52;
-      border-radius: 20px;
-      overflow: hidden;
+    .display-font {
+      font-family: 'Greed Narrow-TRIAL', 'Arial Narrow', Impact, sans-serif;
+      font-stretch: condensed;
     }
 
-    /* header bar */
-    .header {
-      background: linear-gradient(135deg, #3b5bdb 0%, #228be6 100%);
-      padding: 32px 40px 28px;
+    .logo-mark {
+      display: block;
+      width: 72px;
+      height: 70px;
+      margin: 0 auto;
     }
 
-    .header-logo {
-      font-size: 22px;
-      font-weight: 700;
-      color: #ffffff;
-      letter-spacing: -0.5px;
-    }
-
-    .header-logo span {
-      opacity: 0.75;
-      font-weight: 400;
-    }
-
-    .header-tagline {
-      margin-top: 4px;
-      font-size: 13px;
-      color: rgba(255,255,255,0.7);
-      letter-spacing: 0.3px;
-    }
-
-    /* body */
-    .body {
-      padding: 36px 40px;
-    }
-
-    .body-title {
-      font-size: 20px;
+    .heading-text {
+      margin: 0;
+      color: #697454;
+      background-image: url('images/text-bg.jpg');
+      background-position: center center;
+      background-size: cover;
+      background-repeat: no-repeat;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: rgba(0,0,0,0);
+      font-size: 58px;
+      line-height: 1.24;
       font-weight: 600;
-      color: #f1f5f9;
-      margin-bottom: 10px;
-    }
-
-    .body-subtitle {
-      font-size: 14px;
-      color: #94a3b8;
-      line-height: 1.6;
-      margin-bottom: 32px;
-    }
-
-    /* OTP code block */
-    .otp-block {
-      background: linear-gradient(135deg, rgba(59,91,219,0.15) 0%, rgba(34,139,230,0.10) 100%);
-      border: 1px solid rgba(59,91,219,0.35);
-      border-radius: 14px;
-      padding: 28px;
+      letter-spacing: -1.16px;
       text-align: center;
-      margin-bottom: 28px;
+      vertical-align: middle;
     }
 
-    .otp-label {
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 1.5px;
+    .body-text {
+      margin: 0;
+      color: #111111;
+      font-family: 'DM Mono', 'Courier New', Courier, monospace;
+      font-size: 18px;
+      line-height: 2;
+      font-weight: 400;
+      letter-spacing: 0;
+      text-align: center;
       text-transform: uppercase;
-      color: #74a7f7;
-      margin-bottom: 12px;
+    }
+
+    .code-box {
+      width: 15%;
+      height: 80px;
+      border: 1px solid #111111;
+      color: #030303;
+      font-family: 'Greed Narrow-TRIAL', 'Arial Narrow', Impact, sans-serif;
+      font-size: 44px;
+      line-height: 80px;
+      font-weight: 600;
+      letter-spacing: -0.88px;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .code-gap {
+      width: 2%;
+      font-size: 0;
+      line-height: 0;
     }
 
     .otp-code {
-      font-size: 44px;
-      font-weight: 700;
-      letter-spacing: 14px;
+      width: 100%;
+    }
+
+    .hero-frame {
+      position: relative;
+      width: 100%;
+      height: 354px;
+      overflow: hidden;
+      background-color: #d8d3d6;
+    }
+
+    .hero-image {
+      display: block;
+      width: 100%;
+      height: 354px;
+      object-fit: cover;
+      object-position: center center;
+    }
+
+    .hero-copy {
+      position: absolute;
+      left: 62px;
+      bottom: 88px;
+      margin: 0;
       color: #ffffff;
-      font-variant-numeric: tabular-nums;
+      font-family: 'DM Mono', 'Courier New', Courier, monospace;
+      font-size: 18px;
+      line-height: 1.35;
+      font-weight: 400;
+      letter-spacing: 2px;
+      text-align: left;
+      text-transform: uppercase;
     }
 
-    .otp-expiry {
-      margin-top: 12px;
-      font-size: 12px;
-      color: #64748b;
+    .notch-left {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
+      width: 82px;
+      height: 82px;
+      background-color: #f5f5f4;
     }
 
-    .otp-expiry strong {
-      color: #94a3b8;
+    .notch-bottom {
+      position: absolute;
+      left: 190px;
+      bottom: 0;
+      z-index: 2;
+      width: 108px;
+      height: 80px;
+      background-color: #f5f5f4;
     }
 
-    /* warning box */
-    .warning {
-      background: rgba(245,158,11,0.08);
-      border: 1px solid rgba(245,158,11,0.2);
-      border-radius: 10px;
-      padding: 14px 18px;
-      font-size: 13px;
-      color: #fcd34d;
-      line-height: 1.5;
-      margin-bottom: 28px;
+    @media only screen and (max-width: 620px) {
+      .email-container { width: 100% !important; max-width: 100% !important; }
+      .logo-cell { padding-top: 82px !important; padding-bottom: 102px !important; }
+      .heading-cell { padding: 0 58px 72px !important; }
+      .heading-text { font-size: 52px !important; line-height: 1.24 !important; letter-spacing: -1.04px !important; }
+      .copy-cell { padding: 0 90px 76px !important; }
+      .code-cell { padding: 0 49px 88px !important; }
+      .image-cell { padding: 0 58px 92px !important; }
+      .hero-frame, .hero-image { height: 354px !important; }
     }
 
-    .warning strong { color: #fde68a; }
-
-    /* footer */
-    .footer {
-      padding: 20px 40px 28px;
-      border-top: 1px solid #1e2a3d;
+    @media only screen and (max-width: 480px) {
+      .logo-cell { padding-top: 59px !important; padding-bottom: 78px !important; }
+      .logo-mark { width: 50px !important; height: 49px !important; }
+      .heading-cell { padding: 0 34px 56px !important; }
+      .heading-text { font-size: 38px !important; line-height: 1.24 !important; letter-spacing: -0.76px !important; }
+      .copy-cell { padding: 0 34px 58px !important; }
+      .body-text { font-size: 16px !important; line-height: 2 !important; }
+      .code-cell { padding: 0 22px 70px !important; }
+      .code-box { width: 15% !important; height: 58px !important; font-size: 32px !important; line-height: 58px !important; letter-spacing: -0.64px !important; }
+      .code-gap { width: 2% !important; }
+      .image-cell { padding: 0 34px 70px !important; }
+      .hero-frame, .hero-image { height: 266px !important; }
+      .notch-left { top: 0 !important; width: 58px !important; height: 58px !important; }
+      .notch-bottom { display: block !important; left: 154px !important; width: 82px !important; height: 58px !important; }
+      .hero-copy { left: 44px !important; bottom: 68px !important; font-size: 16px !important; line-height: 1.35 !important; letter-spacing: 1.5px !important; }
     }
 
-    .footer-text {
-      font-size: 12px;
-      color: #475569;
-      line-height: 1.6;
-    }
-
-    .footer-brand {
-      margin-top: 12px;
-      font-size: 11px;
-      color: #334155;
-      letter-spacing: 0.3px;
+    @media only screen and (max-width: 375px) {
+      .heading-cell { padding-left: 24px !important; padding-right: 24px !important; }
+      .heading-text { font-size: 33px !important; letter-spacing: -0.66px !important; }
+      .copy-cell { padding-left: 24px !important; padding-right: 24px !important; }
+      .code-cell { padding-left: 12px !important; padding-right: 12px !important; }
+      .code-box { width: 15% !important; height: 52px !important; font-size: 30px !important; line-height: 52px !important; }
+      .code-gap { width: 2% !important; }
+      .image-cell { padding-left: 24px !important; padding-right: 24px !important; }
+      .hero-frame, .hero-image { height: 238px !important; }
+      .notch-left { top: 0 !important; width: 50px !important; height: 50px !important; }
+      .notch-bottom { display: block !important; left: 128px !important; width: 76px !important; height: 52px !important; }
+      .hero-copy { left: 34px !important; bottom: 58px !important; font-size: 16px !important; letter-spacing: 1.2px !important; }
     }
   </style>
 </head>
-<body>
-  <div class="wrapper">
-    <div class="card">
-
-      <!-- header -->
-      <div class="header">
-        <div class="header-logo">Swift<span>Agent</span></div>
-        <div class="header-tagline">Voice-first AI support platform</div>
-      </div>
-
-      <!-- body -->
-      <div class="body">
-        <div class="body-title">Your verification code</div>
-        <div class="body-subtitle">
-          You requested a code for <strong>{{purpose_label}}</strong>.<br />
-          Enter it in the app to continue.
-        </div>
-
-        <div class="otp-block">
-          <div class="otp-label">One-time code</div>
-          <div class="otp-code">{{otp_code}}</div>
-          <div class="otp-expiry">
-            Expires in <strong>{{ttl_minutes}} minutes</strong>
-          </div>
-        </div>
-
-        <div class="warning">
-          <strong>Didn't request this?</strong> Someone may have entered your email by mistake.
-          You can safely ignore this email — your account is not at risk.
-        </div>
-      </div>
-
-      <!-- footer -->
-      <div class="footer">
-        <div class="footer-text">
-          This is an automated message from {{app_name}}. Please do not reply to this email.
-          If you need help, contact us through the app.
-        </div>
-        <div class="footer-brand">© 2025 Swift Agent. All rights reserved.</div>
-      </div>
-
-    </div>
+<body style="margin: 0; padding: 0; background-color: #f5f5f4;">
+  <div style="display: none; max-height: 0; overflow: hidden;">
+    Here is your one-time password.
+    &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
   </div>
+
+  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4;">
+    <!--[if mso | IE]>
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" align="center" style="width:600px;">
+    <tr>
+    <td>
+    <![endif]-->
+
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
+      <tr>
+        <td class="logo-cell" style="padding: 82px 0 102px; text-align: center;">
+          <img src="images/logo.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
+        </td>
+      </tr>
+
+      <tr>
+        <td class="heading-cell" style="padding: 0 58px 72px; text-align: center;">
+          <h1 class="display-font heading-text">Here's your OTP</h1>
+        </td>
+      </tr>
+
+      <tr>
+        <td class="copy-cell" style="padding: 0 90px 76px;">
+          <p class="body-text">
+            Here is your one-time password<br>
+            (OTP). If you did not request this,<br>
+            please disregard this message.
+          </p>
+        </td>
+      </tr>
+
+      <tr>
+        <td class="code-cell" style="padding: 0 49px 88px;">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="otp-code">
+            <tr>
+              <td class="code-box">1</td>
+              <td class="code-gap">&nbsp;</td>
+              <td class="code-box">6</td>
+              <td class="code-gap">&nbsp;</td>
+              <td class="code-box">2</td>
+              <td class="code-gap">&nbsp;</td>
+              <td class="code-box">5</td>
+              <td class="code-gap">&nbsp;</td>
+              <td class="code-box">7</td>
+              <td class="code-gap">&nbsp;</td>
+              <td class="code-box">0</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <tr>
+        <td class="image-cell" style="padding: 0 58px 92px;">
+          <div class="hero-frame">
+            <img src="images/building.jpg" width="484" height="354" alt="OTP verification" class="hero-image">
+            <div class="notch-left"></div>
+            <div class="notch-bottom"></div>
+            <p class="hero-copy">
+              The start of something<br>
+              exciting
+            </p>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <!--[if mso | IE]>
+    </td>
+    </tr>
+    </table>
+    <![endif]-->
+  </center>
 </body>
 </html>
