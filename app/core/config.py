@@ -93,6 +93,15 @@ class Settings(BaseSettings):
     # context window
     MAX_CONTEXT_MESSAGES: int = 10
 
+    # redis (working memory cache)
+    REDIS_URL: str = "redis://localhost:6379"
+    REDIS_MAX_CONNECTIONS: int = 10
+    WORKING_MEMORY_TTL_SECONDS: int = 3600  # 1 hour
+
+    # memory retention
+    EPISODIC_RETENTION_DAYS: int = 90
+    SEMANTIC_RETENTION_DAYS: int = 365
+
     @field_validator("MONGO_URI", "QDRANT_URL", "SECRET_KEY", mode="before")
     @classmethod
     def validate_required_fields(cls, v: str) -> str:

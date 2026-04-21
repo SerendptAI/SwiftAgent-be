@@ -1,5 +1,6 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from qdrant_client import AsyncQdrantClient
+import redis.asyncio as redis
 
 from app.core.config import settings
 
@@ -14,6 +15,12 @@ db = mongo_client[settings.MONGO_DB_NAME]
 qdrant_client = AsyncQdrantClient(
     url=settings.QDRANT_URL,
     api_key=settings.QDRANT_API_KEY,
+)
+
+redis_client = redis.from_url(
+    settings.REDIS_URL,
+    max_connections=settings.REDIS_MAX_CONNECTIONS,
+    decode_responses=True,
 )
 
 
@@ -65,6 +72,7 @@ async def create_indexes():
         await db.users.create_index("email", unique=True, sparse=True)
     except Exception as e:
         import logging as _log
+
         _log.getLogger(__name__).warning(
             "Could not create unique email index (duplicate data exists): %s. "
             "Run scripts/dedup_users.py to clean up, then restart.",

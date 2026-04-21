@@ -1,47 +1,26 @@
-from typing import List, Optional, Dict, Any
+"""
+Session-scoped memory for chat conversations.
+
+Users are anonymous - they are clients' end users who chat via widget.
+Memory is only for the current session to maintain context during conversation.
+"""
+
+from typing import List, Optional, Dict
 import logging
-from uuid import uuid4
 from datetime import datetime
-from motor.motor_asyncio import AsyncIOMotorClient
-from qdrant_client import AsyncQdrantClient
-from qdrant_client.http import models
 
 from app.core.config import settings
-from app.core.database import db, qdrant_client
+from app.core.database import db, redis_client
 from app.models.memory_models import (
     EpisodeSummary,
-    EpisodicEvent,
-    SemanticMemory,
     WorkingMemory,
     MemoryContext,
 )
-from app.services.knowledge_service import _get_gemini_client, ensure_collection
 
 logger = logging.getLogger(__name__)
 
-MEMORY_COLLECTION_NAME = "semantic_memory"
-EMBEDDING_DIMENSION = 3072
-
-
-async def ensure_memory_collection():
-    if not await qdrant_client.collection_exists(MEMORY_COLLECTION_NAME):
-        await qdrant_client.create_collection(
-            collection_name=MEMORY_COLLECTION_NAME,
-            vectors_config=models.VectorParams(
-                size=EMBEDDING_DIMENSION,
-                distance=models.Distance.COSINE,
-            ),
-        )
-
-    await qdrant_client.create_payload_index(
-        collection_name=MEMORY_COLLECTION_NAME, field_name="user_id", field_schema="keyword"
-    )
-    await qdrant_client.create_payload_index(
-        collection_name=MEMORY_COLLECTION_NAME, field_name="company_id", field_schema="keyword"
-    )
-    await qdrant_client.create_payload_index(
-        collection_name=MEMORY_COLLECTION_NAME, field_name="memory_type", field_schema="keyword"
-    )
+WORKING_MEMORY_PREFIX = "working_memory:"
+WORKING_MEMORY_TTL = settings.WORKING_MEMORY_TTL_SECONDS
 
 
 async def ensure_memory_indexes():
@@ -87,108 +66,40 @@ async def get_recent_episodes(
     return episodes
 
 
-async def log_event(event: EpisodicEvent):
+async def log_event(event):
     await db.episodic_events.insert_one(event.model_dump())
 
 
-async def get_session_events(session_id: str) -> List[EpisodicEvent]:
+async def get_session_events(session_id: str):
     cursor = db.episodic_events.find({"session_id": session_id}).sort("timestamp", -1)
     events = []
     async for doc in cursor:
         doc.pop("_id", None)
-        events.append(EpisodicEvent(**doc))
+        events.append(doc)
     return events
 
 
-async def save_semantic_memory(memory: SemanticMemory) -> str:
-    await ensure_memory_collection()
-
-    gemini_client = _get_gemini_client()
-    response = await gemini_client.aio.models.embed_content(
-        model="gemini-embedding-001",
-        contents=memory.content,
-        config={"task_type": "RETRIEVAL_DOCUMENT"},
-    )
-    embedding = response.embeddings[0].values
-
-    memory_id = memory.id or str(uuid4())
-    memory.id = memory_id
-    memory.embedding = embedding
-    memory.updated_at = datetime.utcnow()
-
-    await qdrant_client.upsert(
-        collection_name=MEMORY_COLLECTION_NAME,
-        points=[
-            models.PointStruct(
-                id=memory_id,
-                vector=embedding,
-                payload=memory.model_dump(exclude={"embedding"}),
-            )
-        ],
-    )
-    return memory_id
-
-
-async def get_user_memories(
-    user_id: str,
-    company_id: str,
-    query: str = "",
-    limit: int = 5,
-) -> List[SemanticMemory]:
-    await ensure_memory_collection()
-
-    if not query:
-        must_conditions = [
-            models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id)),
-            models.FieldCondition(key="company_id", match=models.MatchValue(value=company_id)),
-        ]
-        search_result = await qdrant_client.query_points(
-            collection_name=MEMORY_COLLECTION_NAME,
-            query_filter=models.Filter(must=must_conditions),
-            limit=limit,
-        )
-    else:
-        gemini_client = _get_gemini_client()
-        response = await gemini_client.aio.models.embed_content(
-            model="gemini-embedding-001",
-            contents=query,
-            config={"task_type": "RETRIEVAL_QUERY"},
-        )
-        query_vector = response.embeddings[0].values
-
-        must_conditions = [
-            models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id)),
-            models.FieldCondition(key="company_id", match=models.MatchValue(value=company_id)),
-        ]
-        search_result = await qdrant_client.query_points(
-            collection_name=MEMORY_COLLECTION_NAME,
-            query=query_vector,
-            query_filter=models.Filter(must=must_conditions),
-            limit=limit,
-        )
-
-    memories = []
-    for point in search_result.points:
-        payload = point.payload
-        payload["id"] = point.id
-        memories.append(SemanticMemory(**payload))
-    return memories
-
-
-_working_memory_store: Dict[str, WorkingMemory] = {}
+# Working memory (session-scoped, stored in Redis)
 
 
 async def save_working_memory(memory: WorkingMemory):
     memory.updated_at = datetime.utcnow()
-    _working_memory_store[memory.session_id] = memory
+    key = f"{WORKING_MEMORY_PREFIX}{memory.session_id}"
+    data = memory.model_dump_json()
+    await redis_client.setex(key, WORKING_MEMORY_TTL, data)
 
 
 async def get_working_memory(session_id: str) -> Optional[WorkingMemory]:
-    return _working_memory_store.get(session_id)
+    key = f"{WORKING_MEMORY_PREFIX}{session_id}"
+    data = await redis_client.get(key)
+    if data:
+        return WorkingMemory.model_validate_json(data)
+    return None
 
 
 async def delete_working_memory(session_id: str):
-    _working_memory_store.pop(session_id, None)
+    key = f"{WORKING_MEMORY_PREFIX}{session_id}"
+    await redis_client.delete(key)
 
 
 async def load_memory_context(
@@ -202,70 +113,23 @@ async def load_memory_context(
         working_mem = await get_working_memory(session_id)
         context.working_memory = working_mem
 
-        recent_eps = await get_recent_episodes(company_id, user_id, limit=3)
-        context.episodic_memories = recent_eps
-
-    if user_id and company_id:
-        semantic_mems = await get_user_memories(user_id, company_id, limit=10)
-        context.semantic_memories = semantic_mems
-
     return context
 
 
-async def extract_and_store_facts(
-    user_id: str,
-    company_id: str,
-    messages: List[Dict[str, str]],
-) -> List[str]:
-    if not messages:
-        return []
+def format_memory_context(context: MemoryContext) -> str:
+    parts = []
 
-    conversation_text = "\n".join(
-        f"{m.get('role', 'user')}: {m.get('content', '')}" for m in messages
-    )
+    if context.working_memory:
+        wm = context.working_memory
+        parts.append("Current Session:")
+        if wm.user_name:
+            parts.append(f"- User: {wm.user_name}")
+        if wm.current_issue:
+            parts.append(f"- Current issue: {wm.current_issue}")
+        if wm.issue_resolved:
+            parts.append("- Issue resolved: yes")
 
-    fact_extraction_prompt = f"""Extract key facts from this conversation that should be remembered for future interactions. Focus on:
-- User preferences (tone, language, communication style)
-- Important information about the user (name, email, wallet address, project names)
-- Topics they've asked about or shown interest in
-- Any commitments or follow-ups promised
-
-Return a JSON array of facts, each as a short sentence. If no important facts, return empty array.
-
-Conversation:
-{conversation_text}"""
-
-    try:
-        gemini_client = _get_gemini_client()
-        response = await gemini_client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=fact_extraction_prompt,
-            config={"response_mime_type": "application/json"},
-        )
-
-        import json
-
-        facts = json.loads(response.text)
-        if not isinstance(facts, list):
-            facts = []
-
-        stored_ids = []
-        for fact in facts:
-            if isinstance(fact, str) and len(fact) > 10:
-                memory = SemanticMemory(
-                    user_id=user_id,
-                    company_id=company_id,
-                    memory_type="learned_fact",
-                    content=fact,
-                    importance=0.6,
-                )
-                mem_id = await save_semantic_memory(memory)
-                stored_ids.append(mem_id)
-
-        return stored_ids
-    except Exception as e:
-        logger.error(f"Failed to extract and store facts: {e}")
-        return []
+    return "\n".join(parts) if parts else ""
 
 
 async def generate_session_summary(
@@ -334,27 +198,14 @@ Conversation:
     return episode
 
 
-def format_memory_context(context: MemoryContext) -> str:
-    parts = []
+async def cleanup_old_memories() -> dict:
+    """Remove memories older than retention policy."""
+    from app.core.config import settings
 
-    if context.working_memory:
-        wm = context.working_memory
-        parts.append("Current Session:")
-        if wm.user_name:
-            parts.append(f"- User: {wm.user_name}")
-        if wm.current_issue:
-            parts.append(f"- Current issue: {wm.current_issue}")
-        if wm.issue_resolved:
-            parts.append("- Issue resolved: yes")
+    deleted = {"episodes": 0}
 
-    if context.semantic_memories:
-        parts.append("\nLearned about user:")
-        for mem in context.semantic_memories[:5]:
-            parts.append(f"- {mem.content}")
+    cut_off = datetime.utcnow() - timedelta(days=settings.EPISODIC_RETENTION_DAYS)
+    result = await db.episodic_episodes.delete_many({"created_at": {"$lt": cut_off}})
+    deleted["episodes"] = result.deleted_count
 
-    if context.episodic_memories:
-        parts.append("\nPrevious conversations:")
-        for ep in context.episodic_memories[:3]:
-            parts.append(f"- {ep.summary} ({ep.outcome})")
-
-    return "\n".join(parts) if parts else ""
+    return deleted
