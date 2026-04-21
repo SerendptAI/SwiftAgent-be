@@ -673,9 +673,6 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
 
     await _save_conversation(company_id, session_id, history)
 
-    if user_id:
-        await memory_service.extract_and_store_facts(user_id, company_id, history[-10:])
-
     working_mem.context_window = history[-10:]
     await memory_service.save_working_memory(working_mem)
 
@@ -861,9 +858,6 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
     history.append(assistant_msg)
 
     await _save_conversation(company_id, session_id, history)
-
-    if user_id:
-        await memory_service.extract_and_store_facts(user_id, company_id, history[-10:])
 
     working_mem.context_window = history[-10:]
     await memory_service.save_working_memory(working_mem)
