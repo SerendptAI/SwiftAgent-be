@@ -1,61 +1,49 @@
 import asyncio
 import logging
 import smtplib
+from pathlib import Path
 from email.message import EmailMessage
 
 from app.core.config import settings
+from app.services.email_utils import process_html_for_inline_images, get_image_data
 
 logger = logging.getLogger(__name__)
+
+_TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "email_templates" / "team_member_invite.html"
 
 async def send_invite_email(to_email: str, company_name: str, accept_link: str) -> None:
     """Send an invitation HTML email to `to_email` using Zoho SMTP."""
     
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <title>Dashboard Invitation</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 20px; }}
-            .container {{ max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }}
-            .header {{ background-color: #1a56db; color: #ffffff; padding: 20px; text-align: center; }}
-            .content {{ padding: 30px 20px; color: #374151; line-height: 1.6; text-align: center; }}
-            .button {{ display: inline-block; padding: 12px 24px; margin-top: 20px; background-color: #1a56db; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: bold; }}
-            .footer {{ background-color: #f9fafb; color: #6b7280; padding: 15px; text-align: center; font-size: 14px; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h2>Dashboard Invitation</h2>
-            </div>
-            <div class="content">
-                <p>Hello,</p>
-                <p>You have been invited to manage the dashboard for <strong>{company_name}</strong> on Swift Agent.</p>
-                <p>Click the button below to accept your invitation and access the dashboard:</p>
-                <a href="{accept_link}" class="button">Accept Invitation</a>
-                <p style="margin-top: 30px; font-size: 13px; color: #9ca3af;">This link will expire in 10 days.</p>
-            </div>
-            <div class="footer">
-                <p>&copy; 2026 Swift Agent. All rights reserved.</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
+    try:
+        html = _TEMPLATE_PATH.read_text(encoding="utf-8")
+        html = (
+            html.replace("{{company_name}}", company_name)
+                .replace("{{invite_url}}", accept_link)
+        )
+    except Exception:
+        logger.exception("Failed to load invite template, falling back to simple text.")
+        html = f"<p>You are invited to join {company_name}. Click <a href='{accept_link}'>here</a> to accept.</p>"
 
     subject = f"You are invited to manage {company_name}"
     msg = EmailMessage()
     msg["Subject"] = subject
     
-    # Avoid setting From header if settings don't exist in dev envs
     if settings.ZOHO_EMAIL:
         msg["From"] = settings.ZOHO_EMAIL
     
     msg["To"] = to_email
     msg.set_content(f"You have been invited to manage {company_name}. Please accept here: {accept_link}")
+    
+    # Extract and attach inline CID images securely
+    html, attachments = process_html_for_inline_images(html)
     msg.add_alternative(html, subtype="html")
+
+    for filename, cid in attachments.items():
+        try:
+            data, maintype, subtype = get_image_data(filename)
+            msg.get_payload()[1].add_related(data, maintype=maintype, subtype=subtype, cid=f"<{cid}>")
+        except Exception:
+            logger.warning(f"Could not attach image {filename} to invite email.")
 
     def _send() -> None:
         if not (settings.ZOHO_EMAIL and settings.ZOHO_APP_PASSWORD and settings.ZOHO_SMTP_SERVER):

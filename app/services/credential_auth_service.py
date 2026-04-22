@@ -12,6 +12,7 @@ from typing import Optional
 from uuid import uuid4
 
 from app.core.config import settings
+from app.services.email_utils import process_html_for_inline_images, get_image_data
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,17 @@ async def send_otp_email(to_email: str, otp_code: str, ttl_minutes: int, purpose
     msg["From"] = settings.ZOHO_EMAIL
     msg["To"] = to_email
     msg.set_content(f"Your Swift Agent {purpose_label} code is: {otp_code}. Expires in {ttl_minutes} minutes.")
+
+    # Process and attach inline images
+    html, attachments = process_html_for_inline_images(html)
     msg.add_alternative(html, subtype="html")
+
+    for filename, cid in attachments.items():
+        try:
+            data, maintype, subtype = get_image_data(filename)
+            msg.get_payload()[1].add_related(data, maintype=maintype, subtype=subtype, cid=f"<{cid}>")
+        except Exception:
+            logger.warning(f"Could not attach image {filename} to OTP email.")
 
     def _send() -> bool:
         try:

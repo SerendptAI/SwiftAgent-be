@@ -14,11 +14,19 @@ from sendgrid.helpers.mail import (
     Content,
     Header,
     MimeType,
+    Attachment,
+    FileContent,
+    FileName,
+    FileType,
+    Disposition,
+    ContentId,
 )
+import base64
 
 from app.core.config import settings
 from app.core.database import db
 from app.services import company_service
+from app.services.email_utils import process_html_for_inline_images, get_image_data
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +200,8 @@ async def send_ticket_reply(
 
     html_body = body_html or f"<p>{body_text}</p>"
     full_html = _build_reply_html(html_body, company_name, resolve_url, logo_url)
+    
+    full_html, attachments_map = process_html_for_inline_images(full_html)
 
     subject = f"Re: [Ticket #{ticket_id}] {ticket['subject']}"
 
@@ -210,6 +220,21 @@ async def send_ticket_reply(
     )
     message.add_content(Content(MimeType.text, body_text))
     message.add_content(Content(MimeType.html, full_html))
+
+    for filename, cid in attachments_map.items():
+        try:
+            data, maintype, subtype = get_image_data(filename)
+            encoded = base64.b64encode(data).decode('utf-8')
+            sg_attachment = Attachment(
+                FileContent(encoded),
+                FileName(filename),
+                FileType(f"{maintype}/{subtype}"),
+                Disposition("inline"),
+                ContentId(cid)
+            )
+            message.add_attachment(sg_attachment)
+        except Exception as e:
+            logger.warning(f"Could not attach image {filename} to ticket reply: {e}")
 
     message.add_header(Header("Message-ID", outbound_message_id))
     if last_message_id:

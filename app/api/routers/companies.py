@@ -1,7 +1,10 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse
+import urllib.parse
 from typing import List
 from app.core.auth import get_current_user
+from app.core.config import settings
 from app.models.company_models import (
     CompanyInfoCreate,
     CompanyInfoUpdate,
@@ -277,15 +280,27 @@ async def invite_member(
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/invites/accept", response_model=dict)
-async def accept_invite(
+async def accept_invite_post(
     data: AcceptInviteRequest,
 ):
-    """Accept an invite using a token."""
+    """Accept an invite using a token via frontend POST."""
     try:
         result = await company_service.accept_invite(data.token)
         return {"status": "success", "message": "Invite accepted. You can now log in.", "data": result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/invites/accept")
+async def accept_invite_get(token: str):
+    """Accept an invite via email link click (GET) and redirect to frontend."""
+    frontend_url = getattr(settings, "FRONTEND_URL", "https://swiftagents.org").rstrip("/")
+    try:
+        await company_service.accept_invite(token)
+        query = urllib.parse.urlencode({"invite_status": "success", "message": "Invite accepted. You can now log in."})
+        return RedirectResponse(url=f"{frontend_url}?{query}")
+    except ValueError as e:
+        query = urllib.parse.urlencode({"invite_status": "error", "message": str(e)})
+        return RedirectResponse(url=f"{frontend_url}?{query}")
 
 @router.get("/{company_id}/members", response_model=List[CompanyMemberResponse])
 async def list_members(

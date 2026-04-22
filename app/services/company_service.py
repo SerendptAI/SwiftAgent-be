@@ -243,7 +243,7 @@ async def create_invite(company_id: str, admin_user_id: str, email: str) -> dict
         {"id": company_id},
         {"$set": {"pending_invites": filtered_pending}}
     )
-    
+    # Send the user to a backend GET endpoint that handles acceptance and redirects
     accept_link = f"{settings.API_BASE_URL}/api/v1/companies/invites/accept?token={token}"
     await invite_email_service.send_invite_email(email, company.get("name", "A Company"), accept_link)
     
