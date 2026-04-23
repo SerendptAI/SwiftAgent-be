@@ -6,6 +6,7 @@ AFRICAN_COUNTRIES = [
 TIER_LIMITS = {
     "basic": {
         "price_ngn": 25000,
+        "display_name": "Yellow Pill",
         "agents_limit": 1,
         "documents_limit": 10,
         "languages_limit": 1,
@@ -18,6 +19,7 @@ TIER_LIMITS = {
     },
     "pro": {
         "price_ngn": 45000,
+        "display_name": "Purple Pill",
         "agents_limit": 3,
         "documents_limit": 50,
         "languages_limit": 3,
@@ -30,6 +32,7 @@ TIER_LIMITS = {
     },
     "enterprise": {
         "price_ngn": 80000,
+        "display_name": "Orange Pill",
         "agents_limit": -1, # -1 signifies unlimited
         "documents_limit": -1,
         "languages_limit": -1,
@@ -41,3 +44,22 @@ TIER_LIMITS = {
         "companies_per_user": -1,
     }
 }
+
+# Duration of a subscription cycle in days
+SUBSCRIPTION_DURATION_DAYS = 30
+
+
+def get_tier_limits(tier: str) -> dict:
+    """Get limits for a given tier, defaulting to basic."""
+    return TIER_LIMITS.get(tier, TIER_LIMITS["basic"])
+
+
+def get_display_name(tier: str) -> str:
+    """Get the frontend-facing display name for a tier."""
+    limits = TIER_LIMITS.get(tier, TIER_LIMITS["basic"])
+    return limits["display_name"]
+
+
+def is_unlimited(value: int) -> bool:
+    """Check if a limit value represents unlimited (-1)."""
+    return value == -1

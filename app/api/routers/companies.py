@@ -25,6 +25,7 @@ from app.models.email_models import (
     EmailSlugUpdate,
 )
 from app.services import company_service, cloudinary_service
+from app.core.plan_enforcement import enforce_company_limit, enforce_member_limit
 from fastapi import UploadFile, File, Form
 
 router = APIRouter(tags=["Companies"])
@@ -43,7 +44,10 @@ async def create_company(
         for c in existing_companies:
             if c.get("user_id") != user_id:
                 raise HTTPException(status_code=403, detail="Members are not allowed to create companies")
-                
+
+    # Plan enforcement: check companies_per_user
+    await enforce_company_limit(user_id)
+
     company = await company_service.create_company(user_id, data.model_dump())
     return company
 
@@ -273,6 +277,13 @@ async def invite_member(
 ):
     """Invite a new member to the company (Admin only)."""
     user_id = current_user["user_id"]
+
+    # Plan enforcement: check members_per_company
+    company = await company_service.get_company(company_id, user_id, admin_only=True)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found or unauthorized")
+    await enforce_member_limit(company)
+
     try:
         invite = await company_service.create_invite(company_id, user_id, data.email)
         return {"status": "success", "message": "Invite sent", "invite": invite}

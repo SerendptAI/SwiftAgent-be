@@ -20,9 +20,10 @@ from app.models.knowledge_models import (
     QueryResponse,
     KnowledgeSourceResponse,
 )
-from app.services import knowledge_service, cloudinary_service, text_extraction_service
+from app.services import knowledge_service, cloudinary_service, text_extraction_service, company_service
 from app.core.database import get_database
 from app.core.config import settings
+from app.core.plan_enforcement import enforce_document_limit
 
 router = APIRouter(tags=["Knowledge"])
 
@@ -38,6 +39,14 @@ async def ingest_document(
     user_id = current_user["user_id"]
 
     doc = document.model_dump()
+
+    # Plan enforcement: check document limit if company_id is provided
+    company_id = doc.get("metadata", {}).get("company_id")
+    if company_id:
+        company = await company_service.get_company(company_id, user_id)
+        if company:
+            await enforce_document_limit(company)
+
     doc["user_id"] = user_id
     doc["id"] = str(uuid4())
     doc["created_at"] = datetime.now(tz=timezone.utc)
@@ -135,6 +144,12 @@ async def upload_knowledge_document(
 ):
     """Upload a document to Cloudinary and ingest its content as knowledge."""
     user_id = current_user["user_id"]
+
+    # Plan enforcement: check document limit
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    await enforce_document_limit(company)
 
     filename = file.filename or "unknown_file"
 
