@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     FISH_AUDIO_API_KEY: str = ""
     FISH_AUDIO_VOICE_ID: str = ""
 
+    # billing
+    PAYSTACK_SECRET_KEY: str = ""
+    PAYSTACK_PUBLIC_KEY: str = ""
+    POLAR_ACCESS_TOKEN: str = ""
+    POLAR_WEBHOOK_SECRET: str = ""
+
     # blockchain
     ETHERSCAN_API_KEY: str = ""
 

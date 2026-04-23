@@ -1,13 +1,22 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 
 class SavedCard(BaseModel):
     brand: str
     last4: str
 
-class SubscribeRequest(BaseModel):
-    plan_name: str # "yellow", "purple", "orange"
+class CheckoutSessionRequest(BaseModel):
+    company_id: str
+    tier: str # "basic", "pro", "enterprise"
+
+class CheckoutSessionResponse(BaseModel):
+    checkout_url: str
 
 class BillingDetailsResponse(BaseModel):
-    present_plan: str
-    saved_cards: List[SavedCard]
+    subscription_tier: Optional[str]
+    subscription_status: str
+    billing_provider: Optional[str]
+    saved_cards: List[SavedCard] = []
+
+class WebhookResponse(BaseModel):
+    received: bool

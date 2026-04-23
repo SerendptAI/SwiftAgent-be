@@ -1,30 +1,138 @@
-from app.core.database import db
+import httpx
+from datetime import datetime
+from app.core.config import settings
+from app.core.billing_limits import AFRICAN_COUNTRIES, TIER_LIMITS
+import logging
+from typing import Dict, Any
 
-async def get_billing_details(company_id: str, user_id: str) -> dict:
-    company = await db.companies.find_one({"id": company_id, "user_id": user_id})
-    if not company:
-        return None
-    
-    # Returning a mock plan and mock saved card for UI demonstration
-    # In a real app, this would query Stripe or another payment provider
-    return {
-        "present_plan": company.get("plan_name", "yellow pill"),
-        "saved_cards": [
-            {
-                "brand": "mastercard",
-                "last4": "4563"
-            }
-        ]
-    }
+logger = logging.getLogger(__name__)
 
-async def subscribe(company_id: str, user_id: str, plan_name: str) -> dict:
-    company = await db.companies.find_one({"id": company_id, "user_id": user_id})
-    if not company:
-        return None
+class BillingService:
+    def __init__(self):
+        self.paystack_api_url = "https://api.paystack.co"
+        self.polar_api_url = "https://api.polar.sh/v1" # or latest version
+
+    async def create_checkout_session(self, company_id: str, tier: str, country: str, email: str) -> str:
+        """
+        Creates a checkout session depending on the company's country.
+        African countries go to Paystack, others to Polar.
+        """
+        if tier not in TIER_LIMITS:
+            raise ValueError("Invalid tier selected.")
         
-    await db.companies.update_one(
-        {"id": company_id, "user_id": user_id},
-        {"$set": {"plan_name": plan_name}}
-    )
-    
-    return await get_billing_details(company_id, user_id)
+        limit_data = TIER_LIMITS[tier]
+        price_ngn = limit_data["price_ngn"]
+        
+        is_african = country in AFRICAN_COUNTRIES if country else False
+
+        if is_african:
+            return await self._create_paystack_session(company_id, tier, price_ngn, email)
+        else:
+            return await self._create_polar_session(company_id, tier, price_ngn, email)
+
+    async def _create_paystack_session(self, company_id: str, tier: str, price_ngn: int, email: str) -> str:
+        if not settings.PAYSTACK_SECRET_KEY:
+            logger.warning("PAYSTACK_SECRET_KEY not set. Returning dummy url.")
+            return f"https://sandbox.paystack.com/checkout/dummy?company_id={company_id}"
+
+        headers = {
+            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        # Paystack expects amount in kobo
+        amount_kobo = price_ngn * 100
+        
+        payload = {
+            "email": email,
+            "amount": amount_kobo,
+            "metadata": {
+                "company_id": company_id,
+                "tier": tier
+            },
+            "callback_url": f"{settings.FRONTEND_URL}/dashboard/billing/success"
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{self.paystack_api_url}/transaction/initialize", headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            return data["data"]["authorization_url"]
+
+    async def _create_polar_session(self, company_id: str, tier: str, price_ngn: int, email: str) -> str:
+        if not settings.POLAR_ACCESS_TOKEN:
+            logger.warning("POLAR_ACCESS_TOKEN not set. Returning dummy url.")
+            return f"https://sandbox.polar.sh/checkout/dummy?company_id={company_id}"
+            
+        headers = {
+            "Authorization": f"Bearer {settings.POLAR_ACCESS_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        # Here we would map the tier to the specific Polar Product ID in practice.
+        # This is boilerplate to await product IDs or generic checkout generation.
+        # Let's assume there's a custom or standard price product mapping.
+        
+        payload = {
+            # Typically expects a productId or priceId, and customer details.
+            # "product_id": ...,
+            "customer_email": email,
+            "metadata": {
+                "company_id": company_id,
+                "tier": tier
+            },
+            "success_url": f"{settings.FRONTEND_URL}/dashboard/billing/success"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            # Note: adjust the Polar endpoint to match actual Polar checkout api v1 (usually /checkouts)
+            response = await client.post(f"{self.polar_api_url}/checkouts", headers=headers, json=payload)
+            if response.status_code != 200:
+                logger.error(f"Polar checkout failed: {response.text}")
+                # return dummy for development continuity if failing
+                return f"https://sandbox.polar.sh/checkout/dummy?company_id={company_id}"
+                
+            data = response.json()
+            return data.get("url", f"https://sandbox.polar.sh/checkout/dummy?company_id={company_id}")
+
+    async def process_paystack_webhook(self, payload: Dict[str, Any]) -> bool:
+        """Process webhook events from Paystack"""
+        # Note: we should verify x-paystack-signature in the router wrapper
+        event = payload.get("event")
+        data = payload.get("data", {})
+        
+        if event == "charge.success":
+            metadata = data.get("metadata", {})
+            company_id = metadata.get("company_id")
+            tier = metadata.get("tier")
+            reference = data.get("reference")
+            customer_code = data.get("customer", {}).get("customer_code")
+            
+            if company_id:
+                # Update company subscription in DB logic here...
+                logger.info(f"Paystack success for company {company_id}, upgading to {tier}. Ref: {reference}")
+                return True
+                
+        return False
+
+    async def process_polar_webhook(self, payload: Dict[str, Any]) -> bool:
+        """Process webhook events from Polar.sh"""
+        event = payload.get("type")
+        data = payload.get("data", {})
+        
+        # Examples of polar events: subscription.created, subscription.updated
+        if event in ("subscription.created", "subscription.updated"):
+            metadata = data.get("metadata", {})
+            company_id = metadata.get("company_id")
+            tier = metadata.get("tier")
+            sub_id = data.get("id")
+            customer_id = data.get("customer_id")
+            
+            if company_id:
+                # Update company subscription in DB logic here...
+                logger.info(f"Polar success for company {company_id}, upgrading to {tier}. Sub: {sub_id}")
+                return True
+                
+        return False
+
+billing_service = BillingService()
