@@ -121,44 +121,13 @@
     }
 
     .hero-frame {
-      position: relative;
       width: 100%;
-      height: 354px;
-      overflow: hidden;
-      background-color: #111111;
     }
 
     .hero-image {
       display: block;
       width: 100%;
-      height: 354px;
-      object-fit: cover;
-      object-position: center center;
-    }
-
-    .hero-copy {
-      position: absolute;
-      left: 62px;
-      bottom: 50px;
-      margin: 0;
-      color: #ffffff;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      font-size: 18px;
-      line-height: 1.35;
-      font-weight: 400;
-      letter-spacing: 4px;
-      text-align: left;
-      text-transform: uppercase;
-    }
-
-    .notch-left {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 2;
-      width: 82px;
-      height: 82px;
-      background-color: #f5f5f4;
+      height: auto;
     }
 
     @media only screen and (max-width: 620px) {
@@ -166,10 +135,9 @@
       .logo-cell { padding-top: 82px !important; padding-bottom: 48px !important; }
       .heading-cell { padding: 0 42px 64px !important; }
       .heading-text { font-size: 52px !important; line-height: 1.24 !important; letter-spacing: -1.04px !important; }
-      .details-cell { padding: 0 120px 116px !important; }
+      .details-cell { padding: 0 120px 96px !important; }
       .actions-cell { padding: 0 79px 52px !important; }
-      .image-cell { padding: 0 58px 92px !important; }
-      .hero-frame, .hero-image { height: 354px !important; }
+      .image-cell { padding: 0 58px 94px !important; }
     }
 
     @media only screen and (max-width: 480px) {
@@ -177,28 +145,22 @@
       .logo-mark { width: 50px !important; height: 49px !important; }
       .heading-cell { padding: 0 24px 64px !important; }
       .heading-text { font-size: 38px !important; line-height: 1.24 !important; letter-spacing: -0.76px !important; }
-      .details-cell { padding: 0 58px 116px !important; }
+      .details-cell { padding: 0 58px 88px !important; }
       .body-text { font-size: 16px !important; line-height: 1.95 !important; }
       .actions-cell { padding: 0 40px 52px !important; }
       .date-button, .view-button { font-size: 16px !important; letter-spacing: 2px !important; }
       .date-button { margin: 0 !important; padding: 0 !important; }
       .view-button { margin: 0 !important; height: 38px !important; padding: 0 !important; border-radius: 13px !important; line-height: 38px !important; }
-      .image-cell { padding: 0 34px 70px !important; }
-      .hero-frame, .hero-image { height: 266px !important; }
-      .notch-left { width: 58px !important; height: 58px !important; }
-      .hero-copy { left: 44px !important; bottom: 36px !important; font-size: 16px !important; line-height: 1.35 !important; letter-spacing: 2px !important; }
+      .image-cell { padding: 0 34px 94px !important; }
     }
 
     @media only screen and (max-width: 375px) {
       .heading-cell { padding-left: 16px !important; padding-right: 16px !important; }
       .heading-text { font-size: 33px !important; letter-spacing: -0.66px !important; }
-      .details-cell { padding-left: 34px !important; padding-right: 34px !important; }
+      .details-cell { padding-left: 34px !important; padding-right: 34px !important; padding-bottom: 76px !important; }
       .actions-cell { padding-left: 28px !important; padding-right: 28px !important; }
       .date-button, .view-button { font-size: 16px !important; letter-spacing: 1.5px !important; }
-      .image-cell { padding-left: 24px !important; padding-right: 24px !important; }
-      .hero-frame, .hero-image { height: 238px !important; }
-      .notch-left { width: 50px !important; height: 50px !important; }
-      .hero-copy { left: 34px !important; bottom: 30px !important; font-size: 16px !important; letter-spacing: 1.5px !important; }
+      .image-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 94px !important; }
     }
   </style>
 </head>
@@ -229,7 +191,7 @@
       </tr>
 
       <tr>
-        <td class="details-cell" style="padding: 0 120px 116px;">
+        <td class="details-cell" style="padding: 0 120px 96px;">
           <p class="body-text">Pending Messages: {{pending_messages}}</p>
           <p class="body-text">Follow-up emails: {{follow_up_emails}}</p>
           <p class="body-text">Enquiries: {{enquiries}}</p>
@@ -253,11 +215,9 @@
       </tr>
 
       <tr>
-        <td class="image-cell" style="padding: 0 58px 92px;">
+        <td class="image-cell" style="padding: 0 58px 94px;">
           <div class="hero-frame">
-            <img src="images/receipts.jpg" width="484" height="354" alt="Daily updates" class="hero-image">
-            <div class="notch-left"></div>
-            <p class="hero-copy">I'd advice that you check them</p>
+            <img src="images/daily-updates.png" width="484" height="381" alt="Daily updates" class="hero-image">
           </div>
         </td>
       </tr>

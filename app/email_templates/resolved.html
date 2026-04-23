@@ -46,7 +46,7 @@
     .heading-text {
       margin: 0;
       color: #697454;
-      background-image: url('images/text-bg.jpg');
+      background-image: url('images/text-bg-2.jpg');
       background-position: center center;
       background-size: cover;
       background-repeat: no-repeat;
@@ -74,85 +74,35 @@
     }
 
     .hero-frame {
-      position: relative;
       width: 100%;
-      height: 354px;
-      overflow: hidden;
-      background-color: #d8d3d6;
     }
 
     .hero-image {
       display: block;
       width: 100%;
-      height: 354px;
-      object-fit: cover;
-      object-position: center center;
-    }
-
-    .hero-copy {
-      position: absolute;
-      left: 210px;
-      bottom: 96px;
-      margin: 0;
-      color: #ffffff;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      font-size: 18px;
-      line-height: 1.35;
-      font-weight: 400;
-      letter-spacing: 1px;
-      text-align: left;
-      text-transform: uppercase;
-    }
-
-    .notch-left {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 2;
-      width: 82px;
-      height: 82px;
-      background-color: #f5f5f4;
-    }
-
-    .notch-bottom {
-      position: absolute;
-      left: 190px;
-      bottom: 0;
-      z-index: 2;
-      width: 108px;
-      height: 80px;
-      background-color: #f5f5f4;
+      height: auto;
     }
 
     @media only screen and (max-width: 620px) {
       .email-container { width: 100% !important; max-width: 100% !important; }
-      .logo-cell { padding-top: 82px !important; padding-bottom: 76px !important; }
-      .heading-cell { padding: 0 58px 150px !important; }
+      .logo-cell { padding-top: 82px !important; padding-bottom: 55px !important; }
+      .heading-cell { padding: 0 58px 122px !important; }
       .heading-text { font-size: 52px !important; line-height: 1.24 !important; letter-spacing: -2.08px !important; }
-      .image-cell { padding: 0 58px 168px !important; }
-      .hero-frame, .hero-image { height: 354px !important; }
+      .image-cell { padding: 0 58px 94px !important; }
     }
 
     @media only screen and (max-width: 480px) {
-      .logo-cell { padding-top: 59px !important; padding-bottom: 58px !important; }
+      .logo-cell { padding-top: 59px !important; padding-bottom: 55px !important; }
       .logo-mark { width: 50px !important; height: 49px !important; }
-      .heading-cell { padding: 0 28px 112px !important; }
+      .heading-cell { padding: 0 28px 72px !important; }
       .heading-text { font-size: 38px !important; line-height: 1.24 !important; letter-spacing: -1.52px !important; }
-      .image-cell { padding: 0 34px 126px !important; }
-      .hero-frame, .hero-image { height: 266px !important; }
-      .notch-left { top: 0 !important; width: 58px !important; height: 58px !important; }
-      .notch-bottom { left: 154px !important; width: 82px !important; height: 58px !important; }
-      .hero-copy { left: 156px !important; bottom: 70px !important; font-size: 16px !important; line-height: 1.35 !important; letter-spacing: 0.8px !important; }
+      .image-cell { padding: 0 34px 94px !important; }
     }
 
     @media only screen and (max-width: 375px) {
-      .heading-cell { padding-left: 20px !important; padding-right: 20px !important; }
+      .heading-cell { padding-left: 20px !important; padding-right: 20px !important; padding-bottom: 72px !important; }
       .heading-text { font-size: 33px !important; letter-spacing: -1.32px !important; }
-      .image-cell { padding-left: 24px !important; padding-right: 24px !important; }
-      .hero-frame, .hero-image { height: 238px !important; }
-      .notch-left { top: 0 !important; width: 50px !important; height: 50px !important; }
-      .notch-bottom { left: 128px !important; width: 76px !important; height: 52px !important; }
-      .hero-copy { left: 126px !important; bottom: 62px !important; font-size: 16px !important; letter-spacing: 0.6px !important; }
+      .image-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 94px !important; }
     }
   </style>
 </head>
@@ -160,13 +110,13 @@
   <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4;">
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
-        <td class="logo-cell" style="padding: 82px 0 76px; text-align: center;">
-          <img src="images/logo.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
+        <td class="logo-cell" style="padding: 82px 0 55px; text-align: center;">
+          <img src="images/logo 2.png" width="72" height="71" alt="{{company_name}}" class="logo-mark">
         </td>
       </tr>
 
       <tr>
-        <td class="heading-cell" style="padding: 0 58px 150px; text-align: center;">
+        <td class="heading-cell" style="padding: 0 58px 122px; text-align: center;">
           <h1 class="display-font heading-text">
             Your ticket has been closed
           </h1>
@@ -174,15 +124,9 @@
       </tr>
 
       <tr>
-        <td class="image-cell" style="padding: 0 58px 168px;">
+        <td class="image-cell" style="padding: 0 58px 94px;">
           <div class="hero-frame">
-            <img src="images/ticket-closed.jpg" width="484" height="354" alt="Ticket closed" class="hero-image">
-            <div class="notch-left"></div>
-            <div class="notch-bottom"></div>
-            <p class="hero-copy">
-              Thank you for<br>
-              everything
-            </p>
+            <img src="images/ticket-closed.png" width="484" height="381" alt="Ticket closed" class="hero-image">
           </div>
         </td>
       </tr>

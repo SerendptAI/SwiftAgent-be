@@ -57,7 +57,7 @@
     .heading-text {
       margin: 0;
       color: #697454;
-      background-image: url('images/text-bg.jpg');
+      background-image: url('images/text-bg-2.jpg');
       background-position: center center;
       background-size: cover;
       background-repeat: no-repeat;
@@ -84,9 +84,13 @@
       text-transform: uppercase;
     }
 
+    .copy-break {
+      display: inline;
+    }
+
     .choice-button {
       width: 100%;
-      height: 58px;
+      height: 54px;
       border: 0;
       border-radius: 7px;
       box-shadow: -4px 7px 0 #030303;
@@ -95,8 +99,8 @@
       display: block;
       font-family: 'DM Mono', 'Courier New', Courier, monospace;
       font-size: 18px;
-      line-height: 58px;
-      font-weight: 400;
+      line-height: 54px;
+      font-weight: 500;
       letter-spacing: 0;
       text-align: center;
       text-transform: uppercase;
@@ -111,54 +115,13 @@
     }
 
     .hero-frame {
-      position: relative;
       width: 100%;
-      height: 354px;
-      overflow: hidden;
-      background-color: #d8d3d6;
     }
 
     .hero-image {
       display: block;
       width: 100%;
-      height: 354px;
-      object-fit: cover;
-      object-position: center center;
-    }
-
-    .hero-copy {
-      position: absolute;
-      left: 62px;
-      bottom: 88px;
-      margin: 0;
-      color: #ffffff;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      font-size: 18px;
-      line-height: 1.35;
-      font-weight: 400;
-      letter-spacing: 1px;
-      text-align: left;
-      text-transform: uppercase;
-    }
-
-    .notch-left {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 2;
-      width: 82px;
-      height: 82px;
-      background-color: #f5f5f4;
-    }
-
-    .notch-bottom {
-      position: absolute;
-      left: 190px;
-      bottom: 0;
-      z-index: 2;
-      width: 108px;
-      height: 80px;
-      background-color: #f5f5f4;
+      height: auto;
     }
 
     @media only screen and (max-width: 620px) {
@@ -168,8 +131,7 @@
       .heading-text { font-size: 52px !important; line-height: 1.24 !important; letter-spacing: -2.08px !important; }
       .copy-cell { padding: 0 88px 72px !important; }
       .actions-cell { padding: 0 72px 92px !important; }
-      .image-cell { padding: 0 58px 92px !important; }
-      .hero-frame, .hero-image { height: 354px !important; }
+      .image-cell { padding: 0 58px 94px !important; }
     }
 
     @media only screen and (max-width: 480px) {
@@ -180,12 +142,8 @@
       .copy-cell { padding: 0 34px 58px !important; }
       .body-text { font-size: 16px !important; line-height: 2 !important; }
       .actions-cell { padding: 0 28px 70px !important; }
-      .choice-button { height: 52px !important; font-size: 16px !important; line-height: 52px !important; }
-      .image-cell { padding: 0 34px 70px !important; }
-      .hero-frame, .hero-image { height: 266px !important; }
-      .notch-left { width: 58px !important; height: 58px !important; }
-      .notch-bottom { left: 154px !important; width: 82px !important; height: 58px !important; }
-      .hero-copy { left: 44px !important; bottom: 68px !important; font-size: 16px !important; line-height: 1.35 !important; letter-spacing: 0.8px !important; }
+      .choice-button { height: 54px !important; font-size: 16px !important; line-height: 54px !important; }
+      .image-cell { padding: 0 34px 94px !important; }
     }
 
     @media only screen and (max-width: 375px) {
@@ -193,11 +151,11 @@
       .heading-text { font-size: 33px !important; letter-spacing: -1.32px !important; }
       .copy-cell { padding-left: 24px !important; padding-right: 24px !important; }
       .actions-cell { padding-left: 20px !important; padding-right: 20px !important; }
-      .image-cell { padding-left: 24px !important; padding-right: 24px !important; }
-      .hero-frame, .hero-image { height: 238px !important; }
-      .notch-left { width: 50px !important; height: 50px !important; }
-      .notch-bottom { left: 128px !important; width: 76px !important; height: 52px !important; }
-      .hero-copy { left: 34px !important; bottom: 58px !important; font-size: 16px !important; letter-spacing: 0.6px !important; }
+      .image-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 94px !important; }
+    }
+
+    @media only screen and (max-width: 430px) {
+      .copy-break { display: none !important; }
     }
   </style>
 </head>
@@ -206,7 +164,7 @@
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
         <td class="logo-cell" style="padding: 82px 0 76px; text-align: center;">
-          <img src="images/logo.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
+          <img src="images/logo 2.png" width="72" height="71" alt="{{company_name}}" class="logo-mark">
         </td>
       </tr>
 
@@ -221,8 +179,8 @@
       <tr>
         <td class="copy-cell" style="padding: 0 88px 72px;">
           <p class="body-text">
-            Has your issue been addressed? We<br>
-            will proceed if we do not hear back<br>
+            Has your issue been addressed? We<br class="copy-break">
+            will proceed if we do not hear back<br class="copy-break">
             from you.
           </p>
         </td>
@@ -247,15 +205,9 @@
       </tr>
 
       <tr>
-        <td class="image-cell" style="padding: 0 58px 92px;">
+        <td class="image-cell" style="padding: 0 58px 94px;">
           <div class="hero-frame">
-            <img src="images/building.jpg" width="484" height="354" alt="Issue resolution" class="hero-image">
-            <div class="notch-left"></div>
-            <div class="notch-bottom"></div>
-            <p class="hero-copy">
-              The start of something<br>
-              exciting
-            </p>
+            <img src="images/otp.png" width="484" height="381" alt="Issue resolution" class="hero-image">
           </div>
         </td>
       </tr>
