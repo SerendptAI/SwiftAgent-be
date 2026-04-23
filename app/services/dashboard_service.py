@@ -111,11 +111,12 @@ async def get_visitors(company_id: str, limit: int = 20) -> list:
 
 
 async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
-    pipeline = [
-        {"$match": {"company_id": company_id}},
+    """Return non-escalated chats + resolved tickets merged (Resolved section)."""
+
+    # 1. Non-escalated chats
+    chat_pipeline = [
+        {"$match": {"company_id": company_id, "escalated": {"$ne": True}}},
         {"$sort": {"updated_at": -1}},
-        {"$skip": skip},
-        {"$limit": limit},
         {
             "$project": {
                 "_id": 0,
@@ -126,11 +127,52 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "updated_at": 1,
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "seen": {"$ifNull": ["$seen", False]},
+                "type": {"$literal": "chat"},
             }
         },
     ]
-    cursor = db.widget_conversations.aggregate(pipeline)
-    return await cursor.to_list(length=limit)
+    chats = await db.widget_conversations.aggregate(chat_pipeline).to_list(length=None)
+
+    # 2. Resolved tickets
+    ticket_pipeline = [
+        {"$match": {"company_id": company_id, "status": "resolved"}},
+        {"$sort": {"updated_at": -1}},
+        {
+            "$project": {
+                "_id": 0,
+                "id": 1,
+                "company_id": 1,
+                "customer_email": 1,
+                "customer_name": 1,
+                "subject": 1,
+                "status": 1,
+                "unseen_count": 1,
+                "created_at": 1,
+                "updated_at": 1,
+                "message_count": {"$size": {"$ifNull": ["$messages", []]}},
+                "type": {"$literal": "ticket"},
+            }
+        },
+    ]
+    tickets = await db.email_tickets.aggregate(ticket_pipeline).to_list(length=None)
+
+    # 3. Merge and sort by updated_at descending
+    merged = chats + tickets
+    merged.sort(key=lambda x: x.get("updated_at", datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
+
+    # 4. Apply pagination
+    return merged[skip : skip + limit]
+
+
+async def count_resolved_items(company_id: str) -> int:
+    """Count total resolved items (non-escalated chats + resolved tickets)."""
+    chat_count = await db.widget_conversations.count_documents(
+        {"company_id": company_id, "escalated": {"$ne": True}}
+    )
+    ticket_count = await db.email_tickets.count_documents(
+        {"company_id": company_id, "status": "resolved"}
+    )
+    return chat_count + ticket_count
 
 
 async def get_chat_by_id(company_id: str, chat_id: str) -> dict:

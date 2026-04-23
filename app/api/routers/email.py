@@ -83,19 +83,18 @@ async def confirm_resolve_ticket(token: str):
 @router.get("/{company_id}/tickets")
 async def list_tickets(
     company_id: str,
-    status: str | None = Query(default=None, description="Filter by status"),
     limit: int = Query(default=50, ge=1, le=100),
     skip: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
 ):
-    """List email tickets for a company."""
+    """List unresolved email tickets for a company (Pending section)."""
     user_id = current_user["user_id"]
     company = await company_service.get_company(company_id, user_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    tickets = await company_email_service.list_tickets(company_id, status, limit, skip)
-    total = await company_email_service.count_tickets(company_id, status)
+    tickets = await company_email_service.list_tickets(company_id, limit, skip)
+    total = await company_email_service.count_tickets(company_id)
 
     return {
         "items": tickets,

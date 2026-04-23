@@ -90,6 +90,14 @@ async def create_ticket(
 
     await db.email_tickets.insert_one(doc)
     logger.info("Created ticket %s for company %s", ticket_id, company_id)
+
+    # Mark the originating chat as escalated so it's excluded from the resolved list
+    if chat_session_id:
+        await db.widget_conversations.update_one(
+            {"company_id": company_id, "session_id": chat_session_id},
+            {"$set": {"escalated": True, "ticket_id": ticket_id}},
+        )
+
     return doc
 
 
@@ -101,13 +109,11 @@ async def get_ticket(company_id: str, ticket_id: str) -> dict | None:
 
 async def list_tickets(
     company_id: str,
-    status: str | None = None,
     limit: int = 50,
     skip: int = 0,
 ) -> list:
-    query: dict = {"company_id": company_id}
-    if status:
-        query["status"] = status
+    """List only unresolved tickets (pending section)."""
+    query: dict = {"company_id": company_id, "status": {"$ne": "resolved"}}
 
     pipeline = [
         {"$match": query},
@@ -133,10 +139,9 @@ async def list_tickets(
     return await cursor.to_list(length=limit)
 
 
-async def count_tickets(company_id: str, status: str | None = None) -> int:
-    query: dict = {"company_id": company_id}
-    if status:
-        query["status"] = status
+async def count_tickets(company_id: str) -> int:
+    """Count only unresolved tickets."""
+    query: dict = {"company_id": company_id, "status": {"$ne": "resolved"}}
     return await db.email_tickets.count_documents(query)
 
 

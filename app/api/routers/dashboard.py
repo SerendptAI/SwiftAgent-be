@@ -61,13 +61,13 @@ async def get_chats(
     skip: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get a list of chat sessions (without messages) for a company."""
+    """Get resolved items: non-escalated chats + resolved tickets (Resolved section)."""
     user_id = current_user["user_id"]
     company = await company_service.get_company(company_id, user_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
     chats = await dashboard_service.get_chats(company_id, limit, skip)
-    total = await db.widget_conversations.count_documents({"company_id": company_id})
+    total = await dashboard_service.count_resolved_items(company_id)
     return {
         "items": chats,
         "total": total,
