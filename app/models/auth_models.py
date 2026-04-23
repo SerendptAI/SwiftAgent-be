@@ -41,3 +41,16 @@ class LoginResponse(BaseModel):
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
     token_type: Optional[str] = None
+
+
+# explicit registration flow 
+
+class RegistrationInterestRequest(BaseModel):
+    company_name: str
+    company_email: EmailStr
+    company_description: str
+    customer_size: str
+
+class RegistrationInterestResponse(BaseModel):
+    status: str
+    message: str

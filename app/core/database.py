@@ -85,6 +85,10 @@ async def create_indexes():
     await db.email_tickets.create_index("customer_email")
     await db.email_tickets.create_index("resolve_token", unique=True)
 
+    # registrations
+    await db.pending_registrations.create_index("company_email", unique=True)
+    await db.pending_registrations.create_index("token", unique=True)
+
     # email slug uniqueness
     await db.companies.create_index("email_slug", unique=True, sparse=True)
     
