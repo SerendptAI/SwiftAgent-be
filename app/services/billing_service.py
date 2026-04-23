@@ -1,7 +1,8 @@
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.config import settings
 from app.core.billing_limits import AFRICAN_COUNTRIES, TIER_LIMITS
+from app.core.database import db
 import logging
 from typing import Dict, Any
 
@@ -109,8 +110,27 @@ class BillingService:
             customer_code = data.get("customer", {}).get("customer_code")
             
             if company_id:
-                # Update company subscription in DB logic here...
-                logger.info(f"Paystack success for company {company_id}, upgading to {tier}. Ref: {reference}")
+                now = datetime.now(tz=timezone.utc)
+                await db.companies.update_one(
+                    {"id": company_id},
+                    {"$set": {
+                        "subscription_tier": tier,
+                        "subscription_status": "active",
+                        "subscription_started_at": now,
+                        "billing_provider": "paystack",
+                        "subscription_id": reference,
+                    }}
+                )
+                from app.core.cache import company_cache
+                # Try to invalidate cache by deleting the specific company keys
+                keys_to_delete = []
+                for key in list(company_cache._store.keys()):
+                    if key.startswith(f"company:{company_id}:"):
+                        keys_to_delete.append(key)
+                for key in keys_to_delete:
+                    await company_cache.delete(key)
+
+                logger.info(f"Paystack success for company {company_id}, upgraded to {tier}. Ref: {reference}")
                 return True
                 
         return False
@@ -129,8 +149,27 @@ class BillingService:
             customer_id = data.get("customer_id")
             
             if company_id:
-                # Update company subscription in DB logic here...
-                logger.info(f"Polar success for company {company_id}, upgrading to {tier}. Sub: {sub_id}")
+                now = datetime.now(tz=timezone.utc)
+                await db.companies.update_one(
+                    {"id": company_id},
+                    {"$set": {
+                        "subscription_tier": tier,
+                        "subscription_status": "active",
+                        "subscription_started_at": now,
+                        "billing_provider": "polar",
+                        "subscription_id": sub_id,
+                        "customer_id": customer_id,
+                    }}
+                )
+                from app.core.cache import company_cache
+                keys_to_delete = []
+                for key in list(company_cache._store.keys()):
+                    if key.startswith(f"company:{company_id}:"):
+                        keys_to_delete.append(key)
+                for key in keys_to_delete:
+                    await company_cache.delete(key)
+
+                logger.info(f"Polar success for company {company_id}, upgraded to {tier}. Sub: {sub_id}")
                 return True
                 
         return False

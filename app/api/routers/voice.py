@@ -19,6 +19,7 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.core.database import db
 from app.services import anthropic_agent_service
+from app.core.plan_enforcement import enforce_voice_minutes
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ async def voice_call(websocket: WebSocket, company_id: str):
         return
 
     session_id = None
+    call_start_time = None
 
     try:
         while True:
@@ -49,15 +51,24 @@ async def voice_call(websocket: WebSocket, company_id: str):
             msg_type = msg.get("type")
 
             if msg_type == "start":
+                # Plan enforcement: check voice minutes
+                try:
+                    await enforce_voice_minutes(company)
+                except Exception as e:
+                    await websocket.send_json({"type": "error", "message": getattr(e, "detail", str(e))})
+                    await websocket.close()
+                    return
+
                 # begin a new call session
                 session_id = msg.get("session_id", "")
+                call_start_time = datetime.now(tz=timezone.utc)
 
                 # record the call in database
                 await db.calls.insert_one(
                     {
                         "company_id": company_id,
                         "session_id": session_id,
-                        "timestamp": datetime.now(tz=timezone.utc),
+                        "timestamp": call_start_time,
                     }
                 )
 
@@ -108,7 +119,7 @@ async def voice_call(websocket: WebSocket, company_id: str):
                     await websocket.send_json({"type": "status", "status": "ready"})
                 except Exception:
                     logger.info("Client disconnected before ready status could be sent")
-                    return
+                    break
 
             elif msg_type == "end":
                 # user hung up
@@ -128,3 +139,11 @@ async def voice_call(websocket: WebSocket, company_id: str):
             await websocket.close()
         except Exception:
             pass
+    finally:
+        if session_id and call_start_time:
+            # Calculate duration and update the call record
+            duration_secs = (datetime.now(tz=timezone.utc) - call_start_time).total_seconds()
+            await db.calls.update_one(
+                {"company_id": company_id, "session_id": session_id},
+                {"$set": {"duration_seconds": duration_secs}}
+            )
