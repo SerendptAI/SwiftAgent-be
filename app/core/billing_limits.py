@@ -6,6 +6,7 @@ AFRICAN_COUNTRIES = [
 TIER_LIMITS = {
     "basic": {
         "price_ngn": 25000,
+        "price_usd": 18,
         "display_name": "Basic",
         "agents_limit": 1,
         "documents_limit": 10,
@@ -19,6 +20,7 @@ TIER_LIMITS = {
     },
     "pro": {
         "price_ngn": 45000,
+        "price_usd": 34,
         "display_name": "Pro",
         "agents_limit": 3,
         "documents_limit": 50,
@@ -32,6 +34,7 @@ TIER_LIMITS = {
     },
     "enterprise": {
         "price_ngn": 80000,
+        "price_usd": 60,
         "display_name": "Enterprise",
         "agents_limit": -1, # -1 signifies unlimited
         "documents_limit": -1,

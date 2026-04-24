@@ -32,12 +32,13 @@ class BillingService:
             return await self._create_polar_session(company_id, tier, price_ngn, email)
 
     async def _create_paystack_session(self, company_id: str, tier: str, price_ngn: int, email: str) -> str:
-        if not settings.PAYSTACK_SECRET_KEY:
-            logger.warning("PAYSTACK_SECRET_KEY not set. Returning dummy url.")
+        secret_key = settings.PAYSTACK_SECRET_KEY or settings.PAYSTACK_TEST_SECRET_KEY
+        if not secret_key:
+            logger.warning("PAYSTACK_SECRET_KEY or PAYSTACK_TEST_SECRET_KEY not set. Returning dummy url.")
             return f"https://sandbox.paystack.com/checkout/dummy?company_id={company_id}"
 
         headers = {
-            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+            "Authorization": f"Bearer {secret_key}",
             "Content-Type": "application/json"
         }
         
@@ -70,13 +71,16 @@ class BillingService:
             "Content-Type": "application/json"
         }
         
-        # Here we would map the tier to the specific Polar Product ID in practice.
-        # This is boilerplate to await product IDs or generic checkout generation.
-        # Let's assume there's a custom or standard price product mapping.
+        # Product IDs mapped to each tier
+        product_map = {
+            "basic": "76c6aab0-e9df-4528-b418-e16aa70abba5",
+            "pro": "9e6e7deb-a5e4-40b0-ad8e-1106a3d3a76c",
+            "enterprise": "bb76d48f-e41e-4a16-9a33-1ee1c0f4786f"
+        }
+        product_id = product_map.get(tier, product_map["basic"])
         
         payload = {
-            # Typically expects a productId or priceId, and customer details.
-            # "product_id": ...,
+            "product_id": product_id,
             "customer_email": email,
             "metadata": {
                 "company_id": company_id,

@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     # billing
     PAYSTACK_SECRET_KEY: str = ""
     PAYSTACK_PUBLIC_KEY: str = ""
+    PAYSTACK_TEST_SECRET_KEY: str = ""
+    PAYSTACK_TEST_PUBLIC_KEY: str = ""
     POLAR_ACCESS_TOKEN: str = ""
     POLAR_WEBHOOK_SECRET: str = ""
 
