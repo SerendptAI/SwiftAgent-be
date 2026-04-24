@@ -44,6 +44,10 @@ def _is_subscription_active(company: dict) -> bool:
     if isinstance(started_at, str):
         started_at = datetime.fromisoformat(started_at)
 
+    # Ensure started_at is timezone-aware (assume UTC if naive)
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+
     now = datetime.now(tz=timezone.utc)
     expiry = started_at + timedelta(days=SUBSCRIPTION_DURATION_DAYS)
     return now < expiry
@@ -64,6 +68,11 @@ def get_subscription_expiry(company: dict) -> datetime | None:
         return None
     if isinstance(started_at, str):
         started_at = datetime.fromisoformat(started_at)
+    
+    # Ensure started_at is timezone-aware (assume UTC if naive)
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    
     return started_at + timedelta(days=SUBSCRIPTION_DURATION_DAYS)
 
 
