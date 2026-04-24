@@ -597,7 +597,10 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
                 crawl_queue.append(dest_url)
 
     finally:
-        await context.close()
+        try:
+            await context.close()
+        except Exception as e:
+            logger.warning(f"Error closing browser context: {e}")
 
     return StrollVersion(
         id=f"stroll_{str(uuid4())[:8]}",

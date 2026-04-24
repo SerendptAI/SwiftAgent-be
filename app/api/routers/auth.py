@@ -243,8 +243,8 @@ async def callback(request: Request, db=Depends(get_database)):
     if is_new:
         try:
             asyncio.create_task(send_welcome_email(email, name))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to send welcome email to {email}: {e}")
 
     tokens = _token_pair(user["user_id"])
 

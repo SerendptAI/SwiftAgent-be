@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     PAYSTACK_TEST_PUBLIC_KEY: str = ""
     POLAR_ACCESS_TOKEN: str = ""
     POLAR_WEBHOOK_SECRET: str = ""
+    
+    # Polar product IDs for subscription tiers
+    POLAR_PRODUCT_BASIC: str = "76c6aab0-e9df-4528-b418-e16aa70abba5"
+    POLAR_PRODUCT_PRO: str = "9e6e7deb-a5e4-40b0-ad8e-1106a3d3a76c"
+    POLAR_PRODUCT_ENTERPRISE: str = "bb76d48f-e41e-4a16-9a33-1ee1c0f4786f"
 
     # blockchain
     ETHERSCAN_API_KEY: str = ""
