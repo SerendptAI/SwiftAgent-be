@@ -18,6 +18,7 @@ import anthropic
 
 from app.core.config import settings
 from app.core.database import db
+from app.core.validators import validate_email
 from app.services import (
     knowledge_service,
     chain_service,
@@ -418,41 +419,42 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
         elif name == "create_support_ticket":
             if not company:
                 return {"error": "Company context not available"}
-            customer_email = args.get("customer_email", "")
-            customer_name = args.get("customer_name")
-            subject = args.get("subject", "Support request")
-            summary = args.get("summary", "")
-            company_id = company.get("id", "")
+        customer_email = args.get("customer_email", "")
+        customer_name = args.get("customer_name")
+        subject = args.get("subject", "Support request")
+        summary = args.get("summary", "")
+        company_id = company.get("id", "")
 
-            if not customer_email or "@" not in customer_email:
-                return {"error": "A valid customer email address is required"}
+        email_valid, email_error = validate_email(customer_email)
+        if not email_valid:
+            return {"error": f"Invalid email address: {email_error}"}
 
-            # check if company has email configured
-            if not company.get("email_slug"):
-                return {
-                    "error": "Email ticketing is not configured for this company. "
-                    "Please ask the customer to contact support directly."
-                }
+        # check if company has email configured
+        if not company.get("email_slug"):
+            return {
+                "error": "Email ticketing is not configured for this company. "
+                "Please ask the customer to contact support directly."
+            }
 
-            try:
-                # get session_id from context if available
-                session_id = args.get("_session_id")  # injected by caller
-                ticket = await company_email_service.create_ticket(
-                    company_id=company_id,
-                    customer_email=customer_email,
-                    subject=subject,
-                    chat_summary=summary,
-                    chat_session_id=session_id,
-                    customer_name=customer_name,
-                )
-                return {
-                    "success": True,
-                    "ticket_id": ticket["id"],
-                    "message": f"Ticket #{ticket['id']} created. The support team will follow up at {customer_email}.",
-                }
-            except Exception as e:
-                logger.exception("Failed to create support ticket")
-                return {"error": f"Failed to create ticket: {str(e)}"}
+        try:
+            # get session_id from context if available
+            session_id = args.get("_session_id") # injected by caller
+            ticket = await company_email_service.create_ticket(
+                company_id=company_id,
+                customer_email=customer_email,
+                subject=subject,
+                chat_summary=summary,
+                chat_session_id=session_id,
+                customer_name=customer_name,
+            )
+            return {
+                "success": True,
+                "ticket_id": ticket["id"],
+                "message": f"Ticket #{ticket['id']} created. The support team will follow up at {customer_email}.",
+            }
+        except Exception as e:
+            logger.exception("Failed to create support ticket")
+            return {"error": f"Failed to create ticket: {str(e)}"}
 
         else:
             return {"error": f"Unknown tool: {name}"}

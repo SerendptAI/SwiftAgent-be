@@ -120,17 +120,8 @@ async def get_company_by_slug(slug: str) -> Optional[dict]:
 
 
 async def invalidate_company_cache(company_id: str):
-    keys_to_invalidate = []
-    async for key in _cache_keys_for_company(company_id):
-        keys_to_invalidate.append(key)
-    for key in keys_to_invalidate:
-        await company_cache.delete(key)
-
-
-async def _cache_keys_for_company(company_id: str):
-    for key in list(company_cache._store.keys()):
-        if key.startswith(f"company:{company_id}:"):
-            yield key
+    """Invalidate all cached entries for a company using thread-safe prefix deletion."""
+    await company_cache.delete_by_prefix(f"company:{company_id}:")
 
 
 async def list_companies(user_id: str) -> list:

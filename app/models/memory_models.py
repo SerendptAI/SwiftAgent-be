@@ -1,7 +1,12 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
+
+
+def utc_now() -> datetime:
+    """Return timezone-aware UTC datetime."""
+    return datetime.now(timezone.utc)
 
 
 class MemoryType(StrEnum):
@@ -19,15 +24,15 @@ class EpisodeSummary(BaseModel):
     tools_used: list[str] = []
     outcome: str = "unknown"
     message_count: int = 0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class EpisodicEvent(BaseModel):
     session_id: str
     event_type: str
     event_data: dict = {}
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=utc_now)
 
 
 class SemanticMemory(BaseModel):
@@ -38,8 +43,8 @@ class SemanticMemory(BaseModel):
     content: str
     embedding: list[float] | None = None
     importance: float = 0.5
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class WorkingMemory(BaseModel):
@@ -51,8 +56,8 @@ class WorkingMemory(BaseModel):
     issue_resolved: bool = False
     pending_actions: list[str] = []
     context_window: list[dict[str, str]] = []
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
 
 
 class MemoryContext(BaseModel):

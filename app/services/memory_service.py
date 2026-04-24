@@ -7,7 +7,9 @@ Memory is only for the current session to maintain context during conversation.
 
 from typing import List, Optional, Dict
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+from google import genai
 
 from app.core.config import settings
 from app.core.database import db, redis_client
@@ -16,6 +18,11 @@ from app.models.memory_models import (
     WorkingMemory,
     MemoryContext,
 )
+
+
+def _get_gemini_client() -> genai.Client:
+    """Get Gemini client for memory operations."""
+    return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +41,7 @@ async def ensure_memory_indexes():
 
 
 async def save_episode(episode: EpisodeSummary) -> str:
-    episode.updated_at = datetime.utcnow()
+    episode.updated_at = datetime.now(timezone.utc)
     result = await db.episodic_episodes.update_one(
         {"session_id": episode.session_id},
         {"$set": episode.model_dump()},
@@ -83,7 +90,7 @@ async def get_session_events(session_id: str):
 
 
 async def save_working_memory(memory: WorkingMemory):
-    memory.updated_at = datetime.utcnow()
+    memory.updated_at = datetime.now(timezone.utc)
     key = f"{WORKING_MEMORY_PREFIX}{memory.session_id}"
     data = memory.model_dump_json()
     await redis_client.setex(key, WORKING_MEMORY_TTL, data)
@@ -160,10 +167,11 @@ async def generate_session_summary(
 Conversation:
 {conversation_text}"""
 
+    episode = None
     try:
         gemini_client = _get_gemini_client()
         response = await gemini_client.aio.models.generate_content(
-            model="gemini-2.5-flash",
+            model=settings.GEMINI_MODEL,
             contents=summary_prompt,
             config={"response_mime_type": "application/json"},
         )
@@ -204,7 +212,7 @@ async def cleanup_old_memories() -> dict:
 
     deleted = {"episodes": 0}
 
-    cut_off = datetime.utcnow() - timedelta(days=settings.EPISODIC_RETENTION_DAYS)
+    cut_off = datetime.now(timezone.utc) - timedelta(days=settings.EPISODIC_RETENTION_DAYS)
     result = await db.episodic_episodes.delete_many({"created_at": {"$lt": cut_off}})
     deleted["episodes"] = result.deleted_count
 
