@@ -37,6 +37,8 @@ from app.models.auth_models import (
     ReferralRequest,
     RefreshTokenRequest,
     UserProfileUpdate,
+    RegistrationInterestRequest,
+    RegistrationInterestResponse,
 )
 from app.services.credential_auth_service import (
     build_new_passwordless_user,
@@ -46,7 +48,8 @@ from app.services.credential_auth_service import (
     within_otp_grace_period,
 )
 from app.services.welcome_email_service import send_welcome_email
-
+from app.services import registration_service
+from fastapi.responses import HTMLResponse
 router = APIRouter(tags=["Auth"])
 logger = logging.getLogger(__name__)
 
@@ -90,6 +93,34 @@ def _token_pair(user_id: str) -> dict:
     }
 
 
+async def _assert_email_approved(db, email: str):
+    """
+    Ensure a completely new email is allowed to sign up.
+    Allowed if:
+    1. Exists in pending_registrations with status 'approved'
+    2. Has been invited to a company
+    """
+    # check registrations
+    reg = await db.pending_registrations.find_one({"company_email": email})
+    if reg and reg.get("status") == "approved":
+        return
+
+    # check if invited
+    company_invite = await db.companies.find_one({
+        "$or": [
+            {"pending_invites.email": email},
+            {"members.email": email}
+        ]
+    })
+    if company_invite:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, 
+        detail="Your email has not been approved for registration. Please fill out the registration form first."
+    )
+
+
 async def _upsert_google_user(db, google_id: str, email: str, name: str, picture: Optional[str]) -> dict:
     """Look up by email first to support account linking, then upsert."""
     now = datetime.now(tz=timezone.utc)
@@ -119,16 +150,42 @@ async def _upsert_google_user(db, google_id: str, email: str, name: str, picture
     return new_user
 
 
-# --- referral ---
+# --- registration ---
 
-@router.post("/verify-referral")
-async def verify_referral(request: ReferralRequest):
-    """Verify if the provided referral code is valid."""
-    if not settings.REFERRAL_CODE:
-        return {"status": "success", "message": "Invites are open"}
-    if request.code != settings.REFERRAL_CODE:
-        raise HTTPException(status_code=400, detail="Invalid referral code")
-    return {"status": "success", "message": "Valid referral code"}
+@router.post("/register-interest", response_model=RegistrationInterestResponse)
+async def register_interest(data: RegistrationInterestRequest):
+    """Submit a form to express interest in creating a company."""
+    return await registration_service.submit_registration(data)
+
+@router.get("/registrations/approve/{token}", response_class=HTMLResponse)
+async def confirm_registration_approval(token: str):
+    """Admin endpoint to see the confirmation screen for approving a registration."""
+    return await registration_service.render_approval_confirmation(token)
+
+@router.post("/registrations/approve/{token}", response_class=HTMLResponse)
+async def execute_registration_approval(token: str):
+    """Execute the approval and send a welcome email."""
+    return await registration_service.execute_approval(token)
+
+@router.get("/registration-details")
+async def get_registration_details(
+    current_user: dict = Depends(get_current_user), db=Depends(get_database)
+):
+    """Fetch user's approved registration details to prefill onboarding."""
+    email = current_user.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="User email not found")
+        
+    reg = await db.pending_registrations.find_one({"company_email": email, "status": "approved"})
+    if not reg:
+        return {}
+        
+    return {
+        "company_name": reg.get("company_name", ""),
+        "company_description": reg.get("company_description", ""),
+        "customer_size": reg.get("customer_size", ""),
+    }
+
 
 
 # --- Google OAuth ---
@@ -143,6 +200,7 @@ async def login(redirect_url: Optional[str] = None):
         access_type="offline",
         include_granted_scopes="true",
         state=state,
+        prompt="consent",
     )
     return RedirectResponse(authorization_url)
 
@@ -177,6 +235,9 @@ async def callback(request: Request, db=Depends(get_database)):
         raise HTTPException(status_code=400, detail="Failed to retrieve user info from Google")
 
     is_new = not bool(await db.users.find_one({"email": email}))
+    if is_new:
+        await _assert_email_approved(db, email)
+        
     user = await _upsert_google_user(db, google_id, email, name, user_info.get("picture"))
 
     if is_new:
@@ -263,6 +324,9 @@ async def send_otp(body: OTPSendRequest, db=Depends(get_database)):
     is_new = getattr(body, "is_signup", False)
 
     if not user:
+        # Check if they are allowed to register before proceeding
+        await _assert_email_approved(db, email)
+        
         # brand new user -> unverified document placeholder
         otp_code = generate_otp()
         ttl = settings.OTP_TTL_SIGNUP_MINUTES

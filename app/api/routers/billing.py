@@ -7,6 +7,8 @@ from app.core.billing_limits import TIER_LIMITS
 import hmac
 import hashlib
 from app.core.config import settings
+from app.core.plan_enforcement import get_usage_summary
+from app.services.company_service import get_company
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -15,6 +17,21 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 async def get_billing_plans():
     """Retrieve available billing plans and their limits."""
     return TIER_LIMITS
+
+
+@router.get("/{company_id}/status")
+async def get_billing_status(
+    company_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Retrieve the company's current subscription status and usage."""
+    user_id = current_user["user_id"]
+    company = await get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    summary = await get_usage_summary(company)
+    return summary
 
 
 @router.post("/checkout", response_model=CheckoutSessionResponse)

@@ -19,7 +19,8 @@ from pydantic import BaseModel
 
 from app.core.auth import get_current_user
 from app.core.database import db
-from app.services import stroll_service
+from app.services import stroll_service, company_service
+from app.core.plan_enforcement import enforce_agent_limit
 from app.services.stroll_scheduler import (
     schedule_stroll_job,
     is_stroll_running,
@@ -88,6 +89,16 @@ async def update_config(
     user: dict = Depends(get_current_user),
 ):
     """Create or update the stroll configuration for a company."""
+    user_id = user["user_id"]
+    
+    # Check if creating a new config
+    existing_config = await stroll_service.get_stroll_config(company_id)
+    if not existing_config:
+        company = await company_service.get_company(company_id, user_id)
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+        await enforce_agent_limit(company)
+
     config = await stroll_service.save_stroll_config(company_id, data)
     
     schedule_stroll_job(company_id, data.schedule)

@@ -25,10 +25,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# ────────────────────────────────────────────────────────────────
-# Subscription validity
-# ────────────────────────────────────────────────────────────────
-
 def _is_subscription_active(company: dict) -> bool:
     """
     Check if the company has a currently-valid subscription.
@@ -75,8 +71,8 @@ def _upgrade_message(tier: str, resource: str) -> str:
     """Build a user-friendly upgrade prompt."""
     display = get_display_name(tier)
     next_tiers = {
-        "basic": "Purple Pill or Orange Pill",
-        "pro": "Orange Pill",
+        "basic": "Pro or Enterprise",
+        "pro": "Enterprise",
         "enterprise": "",
     }
     upgrade_hint = next_tiers.get(tier, "a higher plan")
@@ -84,10 +80,6 @@ def _upgrade_message(tier: str, resource: str) -> str:
         return f"Your {display} plan limit for {resource} has been reached. Upgrade to {upgrade_hint} for more."
     return f"Your {display} plan limit for {resource} has been reached."
 
-
-# ────────────────────────────────────────────────────────────────
-# Enforcement helpers
-# ────────────────────────────────────────────────────────────────
 
 async def enforce_company_limit(user_id: str) -> None:
     """
@@ -238,10 +230,6 @@ async def enforce_voice_minutes(company: dict) -> None:
             detail=_upgrade_message(tier, "voice minutes"),
         )
 
-
-# ────────────────────────────────────────────────────────────────
-# Usage summary (for billing status endpoint)
-# ────────────────────────────────────────────────────────────────
 
 async def get_usage_summary(company: dict) -> dict:
     """
