@@ -151,11 +151,20 @@ class StrollCredentials(BaseModel):
     )
 
 
+class OTPHandlingConfig(BaseModel):
+    """Configuration for how the stroll agent handles OTP/2FA challenges."""
+    enabled: bool = False
+    notify_user_id: Optional[str] = None    # who gets the push notification (defaults to company owner)
+    otp_input_selector: Optional[str] = None   # custom CSS selector for OTP input field
+    otp_submit_selector: Optional[str] = None  # custom CSS selector for OTP submit button
+
+
 class StrollConfig(BaseModel):
     company_id: str
     dashboard_url: str
     schedule: str = "0 2 * * *"                 # cron expression (default: 2am daily)
     credentials: Optional[StrollCredentials] = None
+    otp_handling: Optional[OTPHandlingConfig] = None
     sandbox_mode: bool = True
     max_pages: int = 50
     created_at: Optional[datetime] = None
@@ -167,6 +176,7 @@ class StrollConfigCreate(BaseModel):
     dashboard_url: str
     schedule: str = "0 2 * * *"
     credentials: Optional[StrollCredentials] = None
+    otp_handling: Optional[OTPHandlingConfig] = None
     sandbox_mode: bool = True
     max_pages: int = 50
 

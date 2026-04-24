@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # database
     MONGO_URI: str
-    MONGO_DB_NAME: str = "swift_agent"
+    MONGO_DB_NAME: str = "SwiftAgentsDB"
     MONGO_MAX_POOL_SIZE: int = 100
     MONGO_MIN_POOL_SIZE: int = 10
 
@@ -82,6 +82,13 @@ class Settings(BaseSettings):
     # stroll
     STROLL_MAX_PAGES: int = 50
     STROLL_PAGE_TIMEOUT_MS: int = 10000
+
+    # Firebase Cloud Messaging (base64-encoded service account JSON)
+    FCM_SERVICE_ACCOUNT_B64: str = ""
+
+    # OTP challenge (stroll 2FA relay)
+    OTP_CHALLENGE_TIMEOUT_SECONDS: int = 120
+    OTP_CHALLENGE_EXPIRY_SECONDS: int = 300
     STROLL_SCREENSHOT_QUALITY: int = 70
 
     # Zoho SMTP (welcome emails)
