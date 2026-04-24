@@ -95,10 +95,8 @@
       display: block;
       color: #ffffff !important;
       font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      font-size: 18px;
       line-height: 1;
       font-weight: 400;
-      letter-spacing: 4px;
       text-decoration: none;
       text-transform: uppercase;
       white-space: nowrap;
@@ -107,6 +105,8 @@
     .receipt-button {
       margin: 0;
       padding: 0;
+      font-size: 18px;
+      letter-spacing: 4px;
       text-align: left;
     }
 
@@ -116,49 +116,20 @@
       padding: 0;
       background-color: #096ddf;
       border-radius: 13px;
+      font-size: 16px;
+      letter-spacing: 2px;
       line-height: 38px;
       text-align: center;
     }
 
     .hero-frame {
-      position: relative;
       width: 100%;
-      height: 354px;
-      overflow: hidden;
-      background-color: #d8d3d6;
     }
 
     .hero-image {
       display: block;
       width: 100%;
-      height: 354px;
-      object-fit: cover;
-      object-position: center center;
-    }
-
-    .hero-copy {
-      position: absolute;
-      left: 62px;
-      bottom: 50px;
-      margin: 0;
-      color: #ffffff;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      font-size: 18px;
-      line-height: 1.35;
-      font-weight: 400;
-      letter-spacing: 4px;
-      text-align: left;
-      text-transform: uppercase;
-    }
-
-    .notch-left {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 2;
-      width: 82px;
-      height: 82px;
-      background-color: #f5f5f4;
+      height: auto;
     }
 
     @media only screen and (max-width: 620px) {
@@ -168,37 +139,34 @@
       .heading-text { font-size: 52px !important; line-height: 1.24 !important; letter-spacing: -1.04px !important; }
       .details-cell { padding: 0 120px 116px !important; }
       .actions-cell { padding: 0 79px 52px !important; }
-      .image-cell { padding: 0 58px 92px !important; }
-      .hero-frame, .hero-image { height: 354px !important; }
+      .receipt-label-cell { padding-right: 30px !important; }
+      .image-cell { padding: 0 58px 94px !important; }
     }
 
     @media only screen and (max-width: 480px) {
-      .logo-cell { padding-top: 59px !important; padding-bottom: 48px !important; }
+      .logo-cell { padding-top: 52px !important; padding-bottom: 48px !important; }
       .logo-mark { width: 50px !important; height: 49px !important; }
-      .heading-cell { padding: 0 24px 64px !important; }
-      .heading-text { font-size: 38px !important; line-height: 1.24 !important; letter-spacing: -0.76px !important; }
-      .details-cell { padding: 0 58px 116px !important; }
+      .heading-cell { padding: 0 20px 40px !important; }
+      .heading-text { font-size: 36px !important; line-height: 1.2 !important; letter-spacing: -0.72px !important; }
+      .details-cell { padding: 0 58px 84px !important; }
       .body-text { font-size: 16px !important; line-height: 1.95 !important; }
-      .actions-cell { padding: 0 40px 52px !important; }
-      .receipt-button, .download-button { font-size: 16px !important; letter-spacing: 2px !important; }
-      .receipt-button { margin: 0 !important; padding: 0 !important; }
-      .download-button { margin: 0 !important; height: 38px !important; padding: 0 !important; border-radius: 13px !important; line-height: 38px !important; }
-      .image-cell { padding: 0 34px 70px !important; }
-      .hero-frame, .hero-image { height: 266px !important; }
-      .notch-left { top: 0 !important; width: 58px !important; height: 58px !important; }
-      .hero-copy { left: 44px !important; bottom: 36px !important; font-size: 16px !important; line-height: 1.35 !important; letter-spacing: 2px !important; }
+      .actions-cell { padding: 0 40px 38px !important; }
+      .receipt-label-cell { padding-right: 20px !important; }
+      .receipt-button { margin: 0 !important; padding: 0 !important; font-size: 15px !important; letter-spacing: 1.6px !important; }
+      .download-button { margin: 0 !important; height: 38px !important; padding: 0 !important; border-radius: 13px !important; font-size: 14px !important; letter-spacing: 1.5px !important; line-height: 38px !important; }
+      .image-cell { padding: 0 34px 94px !important; }
     }
 
     @media only screen and (max-width: 375px) {
-      .heading-cell { padding-left: 16px !important; padding-right: 16px !important; }
-      .heading-text { font-size: 33px !important; letter-spacing: -0.66px !important; }
-      .details-cell { padding-left: 34px !important; padding-right: 34px !important; }
-      .actions-cell { padding-left: 28px !important; padding-right: 28px !important; }
-      .receipt-button, .download-button { font-size: 16px !important; letter-spacing: 1.5px !important; }
-      .image-cell { padding-left: 24px !important; padding-right: 24px !important; }
-      .hero-frame, .hero-image { height: 238px !important; }
-      .notch-left { top: 0 !important; width: 50px !important; height: 50px !important; }
-      .hero-copy { left: 34px !important; bottom: 30px !important; font-size: 16px !important; letter-spacing: 1.5px !important; }
+      .logo-cell { padding-top: 44px !important; padding-bottom: 48px !important; }
+      .heading-cell { padding-left: 14px !important; padding-right: 14px !important; padding-bottom: 34px !important; }
+      .heading-text { font-size: 31px !important; line-height: 1.18 !important; letter-spacing: -0.62px !important; }
+      .details-cell { padding-left: 34px !important; padding-right: 34px !important; padding-bottom: 68px !important; }
+      .actions-cell { padding-left: 28px !important; padding-right: 28px !important; padding-bottom: 28px !important; }
+      .receipt-label-cell { padding-right: 14px !important; }
+      .receipt-button { font-size: 14px !important; letter-spacing: 1.2px !important; }
+      .download-button { font-size: 14px !important; letter-spacing: 1px !important; }
+      .image-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 94px !important; }
     }
   </style>
 </head>
@@ -241,10 +209,10 @@
         <td class="actions-cell" style="padding: 0 79px 52px;">
           <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" height="58" class="button-shell">
             <tr>
-              <td width="60%" align="left" style="padding: 10px 0 10px 25px; text-align: left; vertical-align: middle;">
+              <td width="54%" align="left" class="receipt-label-cell" style="padding: 10px 30px 10px 25px; text-align: left; vertical-align: middle;">
                 <a href="{{receiptUrl}}" target="_blank" class="receipt-button">Download receipt</a>
               </td>
-              <td width="40%" align="right" style="padding: 10px 10px 10px 0; text-align: right; vertical-align: middle;">
+              <td width="46%" align="right" style="padding: 10px 10px 10px 0; text-align: right; vertical-align: middle;">
                 <a href="{{downloadUrl}}" target="_blank" class="download-button">Download</a>
               </td>
             </tr>
@@ -253,14 +221,9 @@
       </tr>
 
       <tr>
-        <td class="image-cell" style="padding: 0 58px 92px;">
+        <td class="image-cell" style="padding: 0 58px 94px;">
           <div class="hero-frame">
-            <img src="images/billing-success.jpg" width="484" height="354" alt="Billing successful" class="hero-image">
-            <div class="notch-left"></div>
-            <p class="hero-copy">
-              The start of something<br>
-              exciting
-            </p>
+            <img src="images/billing-success.png" width="484" height="381" alt="Billing successful" class="hero-image">
           </div>
         </td>
       </tr>

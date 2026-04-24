@@ -70,7 +70,7 @@
     .heading-text {
       margin: 0;
       color: #48543f;
-      background-image: url('images/text-bg.jpg');
+      background-image: url('images/text-bg-2.jpg');
       background-position: center center;
       background-size: cover;
       background-repeat: no-repeat;
@@ -101,15 +101,15 @@
     .invite-button {
       display: block;
       width: 100%;
-      height: 58px;
-      border-radius: 10px;
+      height: 54px;
+      border-radius: 8px;
       background-color: #f24d33;
       box-shadow: -4px 8px 0 #000000;
       color: #ffffff !important;
       font-family: 'DM Mono', 'Courier New', Courier, monospace;
       font-size: 18px;
-      line-height: 58px;
-      font-weight: 400;
+      line-height: 54px;
+      font-weight: 500;
       letter-spacing: 0;
       text-align: center;
       text-decoration: none;
@@ -117,67 +117,23 @@
     }
 
     .hero-frame {
-      position: relative;
       width: 100%;
-      height: 360px;
-      overflow: hidden;
-      background-color: #0d1f28;
     }
 
     .hero-image {
       display: block;
       width: 100%;
-      height: 360px;
-      object-fit: cover;
-      object-position: center center;
-    }
-
-    .hero-copy {
-      position: absolute;
-      left: 154px;
-      top: 174px;
-      z-index: 3;
-      max-width: 310px;
-      margin: 0;
-      color: #ffffff;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      font-size: 18px;
-      line-height: 1.35;
-      font-weight: 400;
-      letter-spacing: 1px;
-      text-align: left;
-      text-transform: uppercase;
-    }
-
-    .notch-left {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 2;
-      width: 82px;
-      height: 82px;
-      background-color: #f5f5f4;
-    }
-
-    .notch-bottom {
-      position: absolute;
-      left: 190px;
-      bottom: 0;
-      z-index: 2;
-      width: 108px;
-      height: 80px;
-      background-color: #f5f5f4;
+      height: auto;
     }
 
     @media only screen and (max-width: 620px) {
       .email-container { width: 100% !important; max-width: 100% !important; }
-      .logo-cell { padding-top: 72px !important; padding-bottom: 74px !important; }
+      .logo-cell { padding-top: 72px !important; padding-bottom: 55px !important; }
       .heading-cell { padding: 0 70px 20px !important; }
       .heading-text { font-size: 52px !important; line-height: 1.24 !important; letter-spacing: -2.08px !important; }
-      .copy-cell { padding: 0 58px 103px !important; }
-      .button-cell { padding: 0 42px 110px !important; }
-      .image-cell { padding: 0 58px 92px !important; }
-      .hero-frame, .hero-image { height: 360px !important; }
+      .copy-cell { padding: 0 58px 114px !important; }
+      .button-cell { padding: 0 42px 114px !important; }
+      .image-cell { padding: 0 58px 94px !important; }
     }
 
     @media only screen and (max-width: 480px) {
@@ -187,15 +143,11 @@
       .brand-x { padding: 0 16px !important; font-size: 36px !important; }
       .heading-cell { padding: 0 34px 20px !important; }
       .heading-text { font-size: 38px !important; line-height: 1.24 !important; letter-spacing: -1.52px !important; }
-      .copy-cell { padding: 0 38px 78px !important; }
+      .copy-cell { padding: 0 38px 80px !important; }
       .body-text { font-size: 16px !important; line-height: 2 !important; }
-      .button-cell { padding: 0 28px 92px !important; }
-      .invite-button { height: 58px !important; font-size: 16px !important; line-height: 58px !important; }
-      .image-cell { padding: 0 34px 76px !important; }
-      .hero-frame, .hero-image { height: 266px !important; }
-      .notch-left { top: 0 !important; width: 58px !important; height: 58px !important; }
-      .notch-bottom { left: 154px !important; width: 82px !important; height: 58px !important; }
-      .hero-copy { left: 122px !important; top: 96px !important; max-width: 250px !important; font-size: 16px !important; line-height: 1.35 !important; letter-spacing: 0.8px !important; }
+      .button-cell { padding: 0 28px 80px !important; }
+      .invite-button { height: 54px !important; border-radius: 8px !important; font-size: 16px !important; line-height: 54px !important; font-weight: 500 !important; }
+      .image-cell { padding: 0 34px 94px !important; }
     }
 
     @media only screen and (max-width: 375px) {
@@ -205,13 +157,9 @@
       .brand-x { padding: 0 16px !important; font-size: 32px !important; }
       .heading-cell { padding-left: 20px !important; padding-right: 20px !important; }
       .heading-text { font-size: 33px !important; letter-spacing: -1.32px !important; }
-      .copy-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 64px !important; }
-      .button-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 82px !important; }
-      .image-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 64px !important; }
-      .hero-frame, .hero-image { height: 238px !important; }
-      .notch-left { top: 0 !important; width: 50px !important; height: 50px !important; }
-      .notch-bottom { left: 128px !important; width: 76px !important; height: 52px !important; }
-      .hero-copy { left: 100px !important; top: 86px !important; max-width: 220px !important; font-size: 16px !important; letter-spacing: 0.6px !important; }
+      .copy-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 80px !important; }
+      .button-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 80px !important; }
+      .image-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 94px !important; }
     }
   </style>
 </head>
@@ -219,7 +167,7 @@
   <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4;">
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
-        <td class="logo-cell" style="padding: 72px 0 74px; text-align: center;">
+        <td class="logo-cell" style="padding: 72px 0 55px; text-align: center;">
           <span class="brand-row">
             <img src="images/logo.png" width="72" height="70" alt="SwiftAgent" class="brand-logo">
             <span class="brand-x">x</span>
@@ -235,24 +183,21 @@
       </tr>
 
       <tr>
-        <td class="copy-cell" style="padding: 0 58px 103px;">
+        <td class="copy-cell" style="padding: 0 58px 114px;">
           <p class="body-text">You've been invited to join the {{company_name}} team, click the link below to join</p>
         </td>
       </tr>
 
       <tr>
-        <td class="button-cell" style="padding: 0 42px 110px;">
+        <td class="button-cell" style="padding: 0 42px 114px;">
           <a href="{{invite_url}}" class="invite-button">Join the crew</a>
         </td>
       </tr>
 
       <tr>
-        <td class="image-cell" style="padding: 0 58px 92px;">
+        <td class="image-cell" style="padding: 0 58px 94px;">
           <div class="hero-frame">
-            <img src="images/invite-teammate.jpg" width="484" height="360" alt="Team member invite" class="hero-image">
-            <div class="notch-left"></div>
-            <div class="notch-bottom"></div>
-            <p class="hero-copy">The start of something exciting</p>
+            <img src="images/ticket-closed.png" width="484" height="381" alt="Team member invite" class="hero-image">
           </div>
         </td>
       </tr>

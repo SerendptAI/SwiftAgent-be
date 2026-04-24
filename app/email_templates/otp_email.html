@@ -57,7 +57,7 @@
     .heading-text {
       margin: 0;
       color: #697454;
-      background-image: url('images/text-bg.jpg');
+      background-image: url('images/text-bg-2.jpg');
       background-position: center center;
       background-size: cover;
       background-repeat: no-repeat;
@@ -82,6 +82,10 @@
       letter-spacing: 0;
       text-align: center;
       text-transform: uppercase;
+    }
+
+    .copy-break {
+      display: inline;
     }
 
     .code-box {
@@ -109,96 +113,56 @@
     }
 
     .hero-frame {
-      position: relative;
       width: 100%;
-      height: 354px;
-      overflow: hidden;
-      background-color: #d8d3d6;
     }
 
     .hero-image {
       display: block;
       width: 100%;
-      height: 354px;
-      object-fit: cover;
-      object-position: center center;
-    }
-
-    .hero-copy {
-      position: absolute;
-      left: 62px;
-      bottom: 88px;
-      margin: 0;
-      color: #ffffff;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      font-size: 18px;
-      line-height: 1.35;
-      font-weight: 400;
-      letter-spacing: 2px;
-      text-align: left;
-      text-transform: uppercase;
-    }
-
-    .notch-left {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 2;
-      width: 82px;
-      height: 82px;
-      background-color: #f5f5f4;
-    }
-
-    .notch-bottom {
-      position: absolute;
-      left: 190px;
-      bottom: 0;
-      z-index: 2;
-      width: 108px;
-      height: 80px;
-      background-color: #f5f5f4;
+      height: auto;
     }
 
     @media only screen and (max-width: 620px) {
       .email-container { width: 100% !important; max-width: 100% !important; }
-      .logo-cell { padding-top: 82px !important; padding-bottom: 102px !important; }
-      .heading-cell { padding: 0 58px 72px !important; }
+      .logo-cell { padding-top: 82px !important; padding-bottom: 80px !important; }
+      .heading-cell { padding: 0 58px 32px !important; }
       .heading-text { font-size: 52px !important; line-height: 1.24 !important; letter-spacing: -1.04px !important; }
-      .copy-cell { padding: 0 90px 76px !important; }
+      .copy-cell { padding: 0 90px 62px !important; }
       .code-cell { padding: 0 49px 88px !important; }
-      .image-cell { padding: 0 58px 92px !important; }
-      .hero-frame, .hero-image { height: 354px !important; }
+      .image-cell { padding: 0 58px 94px !important; }
     }
 
     @media only screen and (max-width: 480px) {
       .logo-cell { padding-top: 59px !important; padding-bottom: 78px !important; }
       .logo-mark { width: 50px !important; height: 49px !important; }
-      .heading-cell { padding: 0 34px 56px !important; }
+      .heading-cell { padding: 0 34px 32px !important; }
       .heading-text { font-size: 38px !important; line-height: 1.24 !important; letter-spacing: -0.76px !important; }
-      .copy-cell { padding: 0 34px 58px !important; }
+      .copy-cell { padding: 0 34px 62px !important; }
       .body-text { font-size: 16px !important; line-height: 2 !important; }
-      .code-cell { padding: 0 22px 70px !important; }
+      .code-cell { padding: 0 22px 88px !important; }
       .code-box { width: 15% !important; height: 58px !important; font-size: 32px !important; line-height: 58px !important; letter-spacing: -0.64px !important; }
       .code-gap { width: 2% !important; }
-      .image-cell { padding: 0 34px 70px !important; }
-      .hero-frame, .hero-image { height: 266px !important; }
-      .notch-left { top: 0 !important; width: 58px !important; height: 58px !important; }
-      .notch-bottom { display: block !important; left: 154px !important; width: 82px !important; height: 58px !important; }
-      .hero-copy { left: 44px !important; bottom: 68px !important; font-size: 16px !important; line-height: 1.35 !important; letter-spacing: 1.5px !important; }
+      .image-cell { padding: 0 34px 94px !important; }
     }
 
     @media only screen and (max-width: 375px) {
       .heading-cell { padding-left: 24px !important; padding-right: 24px !important; }
       .heading-text { font-size: 33px !important; letter-spacing: -0.66px !important; }
-      .copy-cell { padding-left: 24px !important; padding-right: 24px !important; }
-      .code-cell { padding-left: 12px !important; padding-right: 12px !important; }
+      .copy-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 62px !important; }
+      .code-cell { padding-left: 12px !important; padding-right: 12px !important; padding-bottom: 88px !important; }
       .code-box { width: 15% !important; height: 52px !important; font-size: 30px !important; line-height: 52px !important; }
       .code-gap { width: 2% !important; }
-      .image-cell { padding-left: 24px !important; padding-right: 24px !important; }
-      .hero-frame, .hero-image { height: 238px !important; }
-      .notch-left { top: 0 !important; width: 50px !important; height: 50px !important; }
-      .notch-bottom { display: block !important; left: 128px !important; width: 76px !important; height: 52px !important; }
-      .hero-copy { left: 34px !important; bottom: 58px !important; font-size: 16px !important; letter-spacing: 1.2px !important; }
+      .image-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 94px !important; }
+    }
+
+    @media only screen and (max-width: 430px) {
+      .heading-cell { padding-bottom: 32px !important; }
+      .copy-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 62px !important; }
+      .body-text { font-size: 14px !important; line-height: 1.85 !important; }
+      .copy-break { display: none !important; }
+      .code-cell { padding-left: 16px !important; padding-right: 16px !important; padding-bottom: 88px !important; }
+      .code-box { width: 15% !important; height: 50px !important; font-size: 26px !important; line-height: 50px !important; letter-spacing: -0.52px !important; }
+      .code-gap { width: 2% !important; }
     }
   </style>
 </head>
@@ -217,22 +181,22 @@
 
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
-        <td class="logo-cell" style="padding: 82px 0 102px; text-align: center;">
+        <td class="logo-cell" style="padding: 82px 0 80px; text-align: center;">
           <img src="images/logo.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
         </td>
       </tr>
 
       <tr>
-        <td class="heading-cell" style="padding: 0 58px 72px; text-align: center;">
+        <td class="heading-cell" style="padding: 0 58px 32px; text-align: center;">
           <h1 class="display-font heading-text">Here's your OTP</h1>
         </td>
       </tr>
 
       <tr>
-        <td class="copy-cell" style="padding: 0 90px 76px;">
+        <td class="copy-cell" style="padding: 0 90px 62px;">
           <p class="body-text">
-            Here is your one-time password<br>
-            (OTP). If you did not request this,<br>
+            Here is your one-time password<br class="copy-break">
+            (OTP). If you did not request this,<br class="copy-break">
             please disregard this message.
           </p>
         </td>
@@ -259,15 +223,9 @@
       </tr>
 
       <tr>
-        <td class="image-cell" style="padding: 0 58px 92px;">
+        <td class="image-cell" style="padding: 0 58px 94px;">
           <div class="hero-frame">
-            <img src="images/building.jpg" width="484" height="354" alt="OTP verification" class="hero-image">
-            <div class="notch-left"></div>
-            <div class="notch-bottom"></div>
-            <p class="hero-copy">
-              The start of something<br>
-              exciting
-            </p>
+            <img src="images/otp.png" width="484" height="381" alt="OTP verification" class="hero-image">
           </div>
         </td>
       </tr>
