@@ -83,8 +83,8 @@ class Settings(BaseSettings):
     STROLL_MAX_PAGES: int = 50
     STROLL_PAGE_TIMEOUT_MS: int = 10000
 
-    # Firebase Cloud Messaging (base64-encoded service account JSON)
-    FCM_SERVICE_ACCOUNT_B64: str = ""
+    # Expo Push Notifications (optional — push works without it but recommended)
+    EXPO_ACCESS_TOKEN: str = ""
 
     # OTP challenge (stroll 2FA relay)
     OTP_CHALLENGE_TIMEOUT_SECONDS: int = 120

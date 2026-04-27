@@ -2,7 +2,7 @@
 Mobile Router — API endpoints for the mobile companion app.
 
 Endpoints:
-- POST   /devices/register               — register FCM push token
+- POST   /devices/register               — register Expo push token
 - DELETE /devices/{device_token}          — unregister a device
 - GET    /challenges                      — list pending OTP challenges
 - GET    /challenges/{challenge_id}       — get challenge details
@@ -35,7 +35,7 @@ async def register_push_device(
     body: RegisterDeviceRequest,
     user: dict = Depends(get_current_user),
 ):
-    """Register an FCM device token for push notifications."""
+    """Register an Expo push token for push notifications."""
     user_id = user["user_id"]
     doc = await register_device(
         user_id=user_id,
@@ -51,7 +51,7 @@ async def unregister_push_device(
     device_token: str,
     user: dict = Depends(get_current_user),
 ):
-    """Unregister an FCM device token."""
+    """Unregister an Expo push token."""
     removed = await unregister_device(user["user_id"], device_token)
     if not removed:
         raise HTTPException(status_code=404, detail="Device token not found")

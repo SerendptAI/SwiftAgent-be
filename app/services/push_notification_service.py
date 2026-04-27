@@ -1,60 +1,28 @@
 """
-Push Notification Service — Firebase Cloud Messaging integration.
+Push Notification Service — Expo Push Notifications integration.
 
 Sends push notifications to the mobile app when the stroll agent
 encounters an OTP/2FA challenge during automated login.
 
-Gracefully degrades to a no-op when FCM is not configured (the mobile
-app can still poll the challenges endpoint as a fallback).
+Uses Expo's push notification HTTP API:
+https://docs.expo.dev/push-notifications/sending-notifications/
+
+Gracefully degrades to a no-op when the device has no Expo push token
+(the mobile app can still poll the challenges endpoint as a fallback).
 """
 
-import base64
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-import firebase_admin
-from firebase_admin import credentials, messaging
+import httpx
 
 from app.core.config import settings
 from app.core.database import db
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded Firebase state
-_fcm_initialized = False
-
-
-def _ensure_fcm() -> bool:
-    """Initialize the Firebase Admin SDK on first use (lazy singleton)."""
-    global _fcm_initialized
-    if _fcm_initialized:
-        return True
-
-    b64_creds = settings.FCM_SERVICE_ACCOUNT_B64
-    if not b64_creds:
-        logger.warning(
-            "FCM_SERVICE_ACCOUNT_B64 not set — push notifications disabled"
-        )
-        return False
-
-    try:
-        # Decode base64 → JSON dict → Firebase credential
-        raw_json = base64.b64decode(b64_creds)
-        service_info = json.loads(raw_json)
-
-        # Only initialize if no default app exists yet
-        if not firebase_admin._apps:
-            cred = credentials.Certificate(service_info)
-            firebase_admin.initialize_app(cred)
-
-        _fcm_initialized = True
-        logger.info("Firebase Admin SDK initialized for push notifications")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
-        return False
+EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 
 
 async def register_device(
@@ -63,7 +31,7 @@ async def register_device(
     device_name: str = "",
     platform: str = "android",
 ) -> dict:
-    """Register or update an FCM device token for a user."""
+    """Register or update an Expo push token for a user."""
     now = datetime.now(tz=timezone.utc)
     doc = {
         "user_id": user_id,
@@ -83,7 +51,7 @@ async def register_device(
 
 
 async def unregister_device(user_id: str, device_token: str) -> bool:
-    """Remove an FCM device token."""
+    """Remove an Expo push token."""
     result = await db.device_tokens.delete_one(
         {"user_id": user_id, "device_token": device_token}
     )
@@ -94,7 +62,7 @@ async def unregister_device(user_id: str, device_token: str) -> bool:
 
 
 async def _get_user_device_tokens(user_id: str) -> list[str]:
-    """Get all FCM tokens for a user."""
+    """Get all Expo push tokens for a user."""
     cursor = db.device_tokens.find(
         {"user_id": user_id},
         {"device_token": 1, "_id": 0},
@@ -113,77 +81,90 @@ async def send_otp_challenge_push(
 ) -> bool:
     """
     Send a high-priority push notification to the user's mobile device(s)
-    for an OTP challenge.
+    for an OTP challenge via Expo Push Service.
 
     Returns True if at least one notification was sent successfully.
     """
-    if not _ensure_fcm():
-        logger.info("FCM not configured — skipping push, mobile app will poll")
-        return False
-
     tokens = await _get_user_device_tokens(user_id)
     if not tokens:
-        logger.warning(f"No device tokens found for user {user_id} — cannot push OTP challenge")
+        logger.warning(
+            f"No device tokens found for user {user_id} — cannot push OTP challenge"
+        )
         return False
 
-    # Build the notification
-    notification = messaging.Notification(
-        title="🔐 OTP Required",
-        body="Your agent needs an OTP to log into a dashboard. Tap to enter the code.",
-    )
-
-    # Data payload for the mobile app
-    data = {
+    # Build Expo push messages (one per token)
+    data_payload = {
         "type": "otp_challenge",
         "challenge_id": challenge_id,
         "login_url": login_url,
     }
     if screenshot_url:
-        data["screenshot_url"] = screenshot_url
+        data_payload["screenshot_url"] = screenshot_url
 
-    # Android high-priority config
-    android_config = messaging.AndroidConfig(
-        priority="high",
-        notification=messaging.AndroidNotification(
-            channel_id="otp_challenge",
-            priority="max",
-            default_sound=True,
-        ),
-    )
+    messages = []
+    for token in tokens:
+        messages.append(
+            {
+                "to": token,
+                "title": "🔐 OTP Required",
+                "body": "Your agent needs an OTP to log into a dashboard. Tap to enter the code.",
+                "data": data_payload,
+                "sound": "default",
+                "priority": "high",
+                "channelId": "otp_challenge",
+            }
+        )
 
-    # iOS critical alert config
-    apns_config = messaging.APNSConfig(
-        payload=messaging.APNSPayload(
-            aps=messaging.Aps(
-                alert=messaging.ApsAlert(
-                    title="🔐 OTP Required",
-                    body="Your agent needs an OTP. Tap to enter the code.",
-                ),
-                sound="default",
-                badge=1,
-                content_available=True,
-            ),
-        ),
-    )
+    # Build request headers
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    access_token = settings.EXPO_ACCESS_TOKEN
+    if access_token:
+        headers["Authorization"] = f"Bearer {access_token}"
 
+    # Send to Expo Push API
     success_count = 0
     stale_tokens = []
 
-    for token in tokens:
-        try:
-            message = messaging.Message(
-                notification=notification,
-                data=data,
-                token=token,
-                android=android_config,
-                apns=apns_config,
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                EXPO_PUSH_URL,
+                json=messages,
+                headers=headers,
             )
-            messaging.send(message)
-            success_count += 1
-        except messaging.UnregisteredError:
-            stale_tokens.append(token)
-        except Exception as e:
-            logger.warning(f"Failed to send push to token {token[:20]}...: {e}")
+            response.raise_for_status()
+            result = response.json()
+
+            # Expo returns {"data": [{ "status": "ok"|"error", ... }, ...]}
+            ticket_data = result.get("data", [])
+
+            for i, ticket in enumerate(ticket_data):
+                token = tokens[i] if i < len(tokens) else "unknown"
+
+                if ticket.get("status") == "ok":
+                    success_count += 1
+                elif ticket.get("status") == "error":
+                    error_detail = ticket.get("details", {})
+                    error_type = error_detail.get("error", "")
+
+                    if error_type == "DeviceNotRegistered":
+                        stale_tokens.append(token)
+                        logger.info(
+                            f"Expo push token {token[:30]}... is no longer registered"
+                        )
+                    else:
+                        logger.warning(
+                            f"Expo push error for token {token[:30]}...: "
+                            f"{ticket.get('message', 'unknown error')}"
+                        )
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Expo Push API returned HTTP {e.response.status_code}: {e}")
+    except Exception as e:
+        logger.error(f"Failed to send Expo push notification: {e}")
 
     # Clean up stale tokens
     if stale_tokens:
@@ -191,9 +172,12 @@ async def send_otp_challenge_push(
             await db.device_tokens.delete_one(
                 {"user_id": user_id, "device_token": stale}
             )
-        logger.info(f"Removed {len(stale_tokens)} stale device token(s) for user {user_id}")
+        logger.info(
+            f"Removed {len(stale_tokens)} stale Expo push token(s) for user {user_id}"
+        )
 
     logger.info(
-        f"OTP challenge push sent to {success_count}/{len(tokens)} device(s) for user {user_id}"
+        f"OTP challenge push sent to {success_count}/{len(tokens)} device(s) "
+        f"for user {user_id}"
     )
     return success_count > 0

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 
 class DeviceToken(BaseModel):
-    """FCM push token registered from the mobile app."""
+    """Expo push token registered from the mobile app."""
     user_id: str
     device_token: str
     device_name: str = ""
