@@ -26,6 +26,7 @@ from app.api.routers import (
     stroll,
     stroll_public,
     email,
+    mobile,
 )
 from app.core.config import settings
 from app.core.database import create_indexes
@@ -212,6 +213,7 @@ app.include_router(chat.router, prefix="/api/v1/chat")
 app.include_router(stroll.router, prefix="/api/v1/stroll")
 app.include_router(stroll_public.router, prefix="/api/v1/public/stroll")
 app.include_router(email.router, prefix="/api/v1/email")
+app.include_router(mobile.router, prefix="/api/v1/mobile")
 
 
 # global exception handler

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     # database
     MONGO_URI: str
-    MONGO_DB_NAME: str = "swift_agent"
+    MONGO_DB_NAME: str = "SwiftAgentsDB"
     MONGO_MAX_POOL_SIZE: int = 100
     MONGO_MIN_POOL_SIZE: int = 10
 
@@ -62,8 +62,15 @@ class Settings(BaseSettings):
     # billing
     PAYSTACK_SECRET_KEY: str = ""
     PAYSTACK_PUBLIC_KEY: str = ""
+    PAYSTACK_TEST_SECRET_KEY: str = ""
+    PAYSTACK_TEST_PUBLIC_KEY: str = ""
     POLAR_ACCESS_TOKEN: str = ""
     POLAR_WEBHOOK_SECRET: str = ""
+    
+    # Polar product IDs for subscription tiers
+    POLAR_PRODUCT_BASIC: str = "76c6aab0-e9df-4528-b418-e16aa70abba5"
+    POLAR_PRODUCT_PRO: str = "9e6e7deb-a5e4-40b0-ad8e-1106a3d3a76c"
+    POLAR_PRODUCT_ENTERPRISE: str = "bb76d48f-e41e-4a16-9a33-1ee1c0f4786f"
 
     # blockchain
     ETHERSCAN_API_KEY: str = ""
@@ -75,6 +82,13 @@ class Settings(BaseSettings):
     # stroll
     STROLL_MAX_PAGES: int = 50
     STROLL_PAGE_TIMEOUT_MS: int = 10000
+
+    # Expo Push Notifications (optional — push works without it but recommended)
+    EXPO_ACCESS_TOKEN: str = ""
+
+    # OTP challenge (stroll 2FA relay)
+    OTP_CHALLENGE_TIMEOUT_SECONDS: int = 120
+    OTP_CHALLENGE_EXPIRY_SECONDS: int = 300
     STROLL_SCREENSHOT_QUALITY: int = 70
 
     # Zoho SMTP (welcome emails)

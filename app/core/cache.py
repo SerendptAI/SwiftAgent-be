@@ -33,6 +33,17 @@ class TTLCache:
         async with self._lock:
             self._store.pop(key, None)
 
+    async def delete_by_prefix(self, prefix: str) -> int:
+        """Delete all keys matching a prefix. Returns count deleted."""
+        async with self._lock:
+            keys_to_delete = [
+                key for key in self._store.keys()
+                if key.startswith(prefix)
+            ]
+            for key in keys_to_delete:
+                self._store.pop(key, None)
+            return len(keys_to_delete)
+
     async def clear(self):
         async with self._lock:
             self._store.clear()

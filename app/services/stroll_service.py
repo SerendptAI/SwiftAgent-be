@@ -39,6 +39,7 @@ from app.models.stroll_models import (
     StrollVersion,
 )
 from app.services.cloudinary_service import upload_document
+from app.services import otp_challenge_service
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +265,43 @@ _SUBMIT_SELECTORS = [
 ]
 
 
+# --- Heuristic selectors for detecting OTP / 2FA pages ---
+_OTP_INPUT_SELECTORS = [
+    'input[autocomplete="one-time-code"]',
+    'input[name*="otp"]',
+    'input[name*="code"]',
+    'input[name*="verification"]',
+    'input[name*="token"]',
+    'input[type="tel"][maxlength="6"]',
+    'input[type="number"][maxlength="6"]',
+    'input[type="text"][maxlength="6"]',
+]
+
+_OTP_DIGIT_BOX_SELECTOR = 'input[maxlength="1"]'
+
+_OTP_KEYWORDS = [
+    "verification code",
+    "enter the code",
+    "enter code",
+    "one-time",
+    "otp",
+    "two-factor",
+    "2fa",
+    "authentication code",
+    "security code",
+    "confirm your identity",
+]
+
+_OTP_SUBMIT_SELECTORS = [
+    'button[type="submit"]',
+    'button:has-text("Verify")',
+    'button:has-text("Confirm")',
+    'button:has-text("Submit")',
+    'button:has-text("Continue")',
+    'input[type="submit"]',
+]
+
+
 async def _find_element(page: Page, custom_selector: Optional[str], fallback_selectors: list[str]):
     """
     Try a custom selector first (from widget), then fall through heuristic selectors.
@@ -378,6 +416,28 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> bo
             )
             return False
 
+        # --- detect OTP / 2FA challenge page ---
+        otp_detected = await _detect_otp_page(page)
+        if otp_detected:
+            otp_cfg = config.otp_handling
+            if otp_cfg and otp_cfg.enabled:
+                logger.info(f"OTP page detected for company {company_id}, initiating challenge relay")
+                otp_value = await _handle_otp_challenge(page, config, company_id)
+                if otp_value:
+                    filled = await _fill_and_submit_otp(page, otp_value, config)
+                    if not filled:
+                        logger.error(f"Failed to fill OTP for company {company_id}")
+                        return False
+                else:
+                    logger.error(f"OTP challenge timed out or failed for company {company_id}")
+                    return False
+            else:
+                logger.warning(
+                    f"OTP page detected for company {company_id} but OTP handling is "
+                    f"not enabled in config — login will likely fail"
+                )
+                return False
+
         logger.info(f"Login succeeded for company {company_id}, now at {page.url}")
 
         # navigate to dashboard URL if we're not already there
@@ -413,6 +473,204 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> bo
     # no credentials usable
     logger.warning(f"Credentials provided but insufficient for company {company_id}")
     return True  # proceed unauthenticated
+
+
+async def _detect_otp_page(page: Page) -> bool:
+    """
+    Heuristic detection of OTP / 2FA challenge pages.
+
+    Checks for:
+    1. Known OTP input field selectors (autocomplete, name patterns, maxlength)
+    2. Multiple single-digit input boxes (common OTP pattern)
+    3. Page text containing OTP-related keywords
+    """
+    # Check for single OTP input fields
+    for selector in _OTP_INPUT_SELECTORS:
+        try:
+            el = page.locator(selector).first
+            if await el.is_visible(timeout=1000):
+                logger.info(f"OTP page detected via selector: {selector}")
+                return True
+        except Exception:
+            continue
+
+    # Check for multiple single-digit boxes (e.g., 4-6 separate inputs)
+    try:
+        digit_boxes = page.locator(_OTP_DIGIT_BOX_SELECTOR)
+        count = await digit_boxes.count()
+        visible_count = 0
+        for i in range(min(count, 10)):
+            try:
+                if await digit_boxes.nth(i).is_visible(timeout=500):
+                    visible_count += 1
+            except Exception:
+                continue
+        if visible_count >= 4:
+            logger.info(f"OTP page detected via {visible_count} single-digit input boxes")
+            return True
+    except Exception:
+        pass
+
+    # Check page text for OTP keywords
+    try:
+        body_text = await page.inner_text("body", timeout=2000)
+        body_lower = body_text.lower()
+        for keyword in _OTP_KEYWORDS:
+            if keyword in body_lower:
+                logger.info(f"OTP page detected via keyword: '{keyword}'")
+                return True
+    except Exception:
+        pass
+
+    return False
+
+
+async def _handle_otp_challenge(
+    page: Page, config: StrollConfig, company_id: str,
+) -> Optional[str]:
+    """
+    Create an OTP challenge, push-notify the admin, and wait for a response.
+
+    Takes a screenshot of the OTP page for context, looks up the company
+    admin, creates the challenge, then blocks (async) until the admin
+    responds or the timeout expires.
+
+    Returns the OTP value string, or None on timeout/failure.
+    """
+    otp_cfg = config.otp_handling
+
+    # Determine who to notify
+    notify_user_id = otp_cfg.notify_user_id if otp_cfg else None
+    if not notify_user_id:
+        # Default to company owner
+        company_doc = await db.companies.find_one(
+            {"id": company_id}, {"user_id": 1, "_id": 0}
+        )
+        if not company_doc:
+            logger.error(f"Company {company_id} not found — cannot create OTP challenge")
+            return None
+        notify_user_id = company_doc["user_id"]
+
+    # Screenshot the OTP page for context in the mobile app
+    screenshot_url = None
+    try:
+        screenshot_bytes = await _capture_screenshot(page)
+        screenshot_url = await _upload_screenshot(screenshot_bytes, company_id, "otp_page")
+    except Exception as e:
+        logger.warning(f"Failed to capture OTP page screenshot: {e}")
+
+    login_url = config.credentials.login_url if config.credentials else config.dashboard_url
+
+    # Create and push the challenge
+    challenge = await otp_challenge_service.create_challenge(
+        company_id=company_id,
+        user_id=notify_user_id,
+        login_url=login_url,
+        screenshot_url=screenshot_url,
+    )
+
+    # Block until the admin responds (or timeout)
+    otp_value = await otp_challenge_service.wait_for_challenge_response(challenge.id)
+    return otp_value
+
+
+async def _fill_and_submit_otp(
+    page: Page, otp_value: str, config: StrollConfig,
+) -> bool:
+    """
+    Fill the OTP value into the detected input field(s) and submit.
+
+    Handles two patterns:
+    1. Single input field — type the full OTP
+    2. Multiple single-digit boxes — distribute one digit per box
+
+    Returns True if the OTP was filled and submitted successfully.
+    """
+    otp_cfg = config.otp_handling
+    custom_input = otp_cfg.otp_input_selector if otp_cfg else None
+    custom_submit = otp_cfg.otp_submit_selector if otp_cfg else None
+
+    filled = False
+
+    # Try custom selector first
+    if custom_input:
+        try:
+            el = page.locator(custom_input).first
+            if await el.is_visible(timeout=2000):
+                await el.fill(otp_value)
+                filled = True
+        except Exception as e:
+            logger.warning(f"Custom OTP selector '{custom_input}' failed: {e}")
+
+    # Try single input field selectors
+    if not filled:
+        for selector in _OTP_INPUT_SELECTORS:
+            try:
+                el = page.locator(selector).first
+                if await el.is_visible(timeout=1000):
+                    await el.fill(otp_value)
+                    filled = True
+                    logger.info(f"OTP filled via selector: {selector}")
+                    break
+            except Exception:
+                continue
+
+    # Try multiple digit boxes
+    if not filled:
+        try:
+            digit_boxes = page.locator(_OTP_DIGIT_BOX_SELECTOR)
+            count = await digit_boxes.count()
+            visible_boxes = []
+            for i in range(min(count, 10)):
+                try:
+                    box = digit_boxes.nth(i)
+                    if await box.is_visible(timeout=500):
+                        visible_boxes.append(box)
+                except Exception:
+                    continue
+
+            if len(visible_boxes) >= len(otp_value):
+                for i, digit in enumerate(otp_value):
+                    await visible_boxes[i].fill(digit)
+                filled = True
+                logger.info(f"OTP filled across {len(otp_value)} digit boxes")
+        except Exception as e:
+            logger.warning(f"Digit box OTP fill failed: {e}")
+
+    if not filled:
+        logger.error("Could not find any OTP input field to fill")
+        return False
+
+    # Submit the OTP
+    submit_el = await _find_element(page, custom_submit, _OTP_SUBMIT_SELECTORS)
+
+    if submit_el:
+        try:
+            async with page.expect_navigation(
+                timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                wait_until="networkidle",
+            ):
+                await submit_el.click()
+        except Exception:
+            # Some pages auto-submit or use AJAX
+            try:
+                await page.wait_for_load_state(
+                    "networkidle", timeout=settings.STROLL_PAGE_TIMEOUT_MS
+                )
+            except Exception as e:
+                logger.warning(f"Post-OTP submit wait timed out: {e}")
+    else:
+        # No submit button found — some OTP forms auto-submit on last digit
+        logger.info("No OTP submit button found — waiting for auto-submit")
+        try:
+            await page.wait_for_load_state(
+                "networkidle", timeout=settings.STROLL_PAGE_TIMEOUT_MS
+            )
+        except Exception as e:
+            logger.warning(f"Post-OTP auto-submit wait timed out: {e}")
+
+    logger.info("OTP submitted successfully")
+    return True
 
 
 async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
@@ -597,7 +855,10 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
                 crawl_queue.append(dest_url)
 
     finally:
-        await context.close()
+        try:
+            await context.close()
+        except Exception as e:
+            logger.warning(f"Error closing browser context: {e}")
 
     return StrollVersion(
         id=f"stroll_{str(uuid4())[:8]}",

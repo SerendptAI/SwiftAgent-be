@@ -105,3 +105,12 @@ async def create_indexes():
 
     await db.episodic_events.create_index("session_id")
     await db.episodic_events.create_index([("session_id", 1), ("timestamp", -1)])
+
+    # OTP challenge relay (stroll 2FA)
+    await db.device_tokens.create_index("user_id")
+    await db.device_tokens.create_index([("user_id", 1), ("device_token", 1)], unique=True)
+
+    await db.otp_challenges.create_index("company_id")
+    await db.otp_challenges.create_index([("user_id", 1), ("status", 1)])
+    await db.otp_challenges.create_index("expires_at", expireAfterSeconds=0)
+

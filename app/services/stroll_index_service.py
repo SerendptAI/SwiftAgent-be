@@ -116,6 +116,79 @@ async def generate_navigation_report(company_id: str) -> Optional[dict]:
     }
 
 
+async def get_all_navigation_steps(company_id: str) -> Optional[FindFeatureResult]:
+    """
+    Traverse the latest NavGraph and extract a flattened sequence of navigation steps 
+    for the entire dashboard using BFS.
+    """
+    version = await get_latest_version(company_id)
+    if not version or not version.graph.nodes:
+        return None
+
+    graph = version.graph
+    root_id = graph.get_root_id()
+    if not root_id:
+        return None
+
+    # We need a page_lookup just like generate_navigation_report does
+    # to reconstruct the full guide easily. We can just build it here.
+    page_lookup: dict[str, dict] = {}
+    for node_id, node in graph.nodes.items():
+        page_lookup[node_id] = {
+            "title": node.title,
+            "url": node.url,
+            "screenshot_url": version.screenshot_urls.get(node_id, ""),
+            "elements": [
+                {
+                    "selector": elem.selector,
+                    "label": elem.label,
+                    "human_description": elem.human_description,
+                    "bbox": elem.bbox.model_dump() if elem.bbox else None,
+                }
+                for elem in node.elements
+            ],
+            "page_summary": node.page_summary,
+        }
+
+    # BFS traversal to order the pages logically
+    from collections import deque
+    queue = deque([root_id])
+    visited = {root_id}
+
+    navigation_steps_json = []
+
+    # First step: Dashboard root
+    navigation_steps_json.append({
+        "page_id": root_id,
+        "instruction": "Start at the " + graph.nodes[root_id].title + ". " + graph.nodes[root_id].page_summary,
+    })
+
+    while queue:
+        current_id = queue.popleft()
+        
+        # Find all outward edges from current node
+        outward_edges = [e for e in graph.edges if e.from_page == current_id]
+        for edge in outward_edges:
+            dest_id = edge.to_page
+            if dest_id not in visited and dest_id in graph.nodes:
+                visited.add(dest_id)
+                queue.append(dest_id)
+                
+                # Add step to navigate to this child
+                navigation_steps_json.append({
+                    "page_id": current_id,
+                    "instruction": edge.instruction,
+                    "element_selector": edge.via.selector,
+                })
+                # Add step describing the child page
+                navigation_steps_json.append({
+                    "page_id": dest_id,
+                    "instruction": f"You are now on the {graph.nodes[dest_id].title}. {graph.nodes[dest_id].page_summary}",
+                })
+
+    return reconstruct_navigation_guide(navigation_steps_json, page_lookup)
+
+
 def reconstruct_navigation_guide(
     navigation_steps_json: list[dict],
     page_lookup: dict[str, dict],

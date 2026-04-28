@@ -42,11 +42,14 @@ async def send_otp_email(to_email: str, otp_code: str, ttl_minutes: int, purpose
         html = _TEMPLATE_PATH.read_text(encoding="utf-8")
         html = (
             html
-            .replace("{{otp_code}}", otp_code)
             .replace("{{ttl_minutes}}", str(ttl_minutes))
             .replace("{{purpose_label}}", purpose_label)
             .replace("{{app_name}}", "Swift Agent")
+            .replace("{{otp_code}}", otp_code)
         )
+        # Populate individual digit placeholders for the premium template layout
+        for i, digit in enumerate(otp_code):
+            html = html.replace(f"{{{{d{i}}}}}", digit)
     except Exception:
         logger.exception("Failed to read OTP email template — using inline fallback")
         html = (

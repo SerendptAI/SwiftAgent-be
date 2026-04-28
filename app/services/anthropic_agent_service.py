@@ -18,6 +18,7 @@ import anthropic
 
 from app.core.config import settings
 from app.core.database import db
+from app.core.validators import validate_email
 from app.services import (
     knowledge_service,
     chain_service,
@@ -197,6 +198,40 @@ TOOLS = [
             "required": ["customer_email", "subject", "summary"],
         },
     },
+    {
+        "name": "get_full_dashboard_documentation",
+        "description": (
+            "Retrieve the complete documentation for the entire dashboard. Use this tool "
+            "when the customer asks for 'all documentation', 'the full manual', 'everything about the dashboard', "
+            "or wants a complete overview of all features. "
+            "After calling this tool, you MUST respond with the returned navigation_steps JSON block exactly as provided, "
+            "which the frontend will use to render the complete visual guide."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "scrape_documentation_link",
+        "description": (
+            "Scrape an external documentation link and ingest it into the company's knowledge base. "
+            "Use this tool when a user provides a URL to documentation (like Notion, Gitbook, etc.) "
+            "and asks you to 'read', 'learn', 'scrape', or 'ingest' it. "
+            "After it succeeds, you can use search_knowledge_base to answer questions about it."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "The URL of the documentation to scrape",
+                },
+            },
+            "required": ["url"],
+        },
+    },
 ]
 
 
@@ -207,6 +242,8 @@ TOOL_STAGE_LABELS = {
     "lookup_wallet": "Looking up wallet…",
     "diagnose_problem": "Diagnosing transaction issue…",
     "get_dashboard_navigation": "Searching dashboard navigation…",
+    "get_full_dashboard_documentation": "Generating complete dashboard documentation…",
+    "scrape_documentation_link": "Scraping documentation link…",
     "create_support_ticket": "Creating support ticket…",
 }
 
@@ -255,6 +292,8 @@ FAQs, how-to guides, or anything that might be in the company documentation.
 "where is X?", "how do I find X?", "show me X", "show me the screenshot", or any question \
 involving steps or navigation in the dashboard. You must NEVER claim you cannot show screenshots; \
 instead, use this tool and output the visual guide.
+- Use get_full_dashboard_documentation when the customer asks for the full manual or all documentation for the dashboard.
+- Use scrape_documentation_link when the customer gives you a URL and asks you to learn or scrape the documentation.
 - When you see a string that looks like a transaction hash (0x... followed by 64 hex chars, \
 or 64 hex chars without 0x for Bitcoin), use lookup_transaction.
 - When you see a wallet address (0x... followed by 40 hex chars, or a Bitcoin address), \
@@ -274,9 +313,13 @@ correct sequence of pages the user needs to visit. Then respond with:
    - Only include pages that are part of the path, in order
 2. After the JSON block, write a brief conversational summary of the steps.
 
+If you used the get_full_dashboard_documentation tool, the tool will return a pre-formatted \
+`navigation_steps` JSON block. You MUST output this EXACT JSON block inside a ```navigation_steps \
+fenced block without modifying it.
+
 CRITICAL VISUALIZATION RULE:
 By outputting the ```navigation_steps JSON block, the frontend will automatically render an interactive visual guide with screenshots and highlighted elements for the user. Therefore:
-1. If a user asks to "see", "show screenshots", wants visual directions, or asks ANY "how to" or step-by-step question, you MUST use the get_dashboard_navigation tool and output the navigation_steps block. This is COMPULSORY.
+1. If a user asks to "see", "show screenshots", wants visual directions, or asks ANY "how to" or step-by-step question, you MUST use the get_dashboard_navigation tool (or get_full_dashboard_documentation) and output the navigation_steps block. This is COMPULSORY.
 2. DO NOT claim you cannot show images.
 3. NEVER provide text-only step-by-step navigation directions. Always provide the visual guide.
 
@@ -415,6 +458,43 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
                 "message": "No dashboard navigation data available. A stroll has not been run yet.",
             }
 
+        elif name == "get_full_dashboard_documentation":
+            if not company:
+                return {"error": "Company context not available"}
+            company_id = company.get("id", "")
+            full_docs = await stroll_index_service.get_all_navigation_steps(company_id)
+            if full_docs and full_docs.steps:
+                return {
+                    "found": True,
+                    "message": "Please output the following navigation_steps JSON block to the user so the frontend can render it.",
+                    "navigation_steps": [
+                        {
+                            "page_id": step.page_title, # Note: get_all_navigation_steps returns FindFeatureResult. 
+                            "instruction": step.instruction,
+                            "element_selector": step.highlight.selector if step.highlight else None
+                        }
+                        for step in full_docs.steps
+                    ]
+                }
+            return {
+                "found": False,
+                "message": "No dashboard documentation available. A stroll has not been run yet.",
+            }
+
+        elif name == "scrape_documentation_link":
+            url = args.get("url", "")
+            if not company:
+                return {"error": "Company context not available"}
+            company_id = company.get("id", "")
+            user_id = company.get("user_id", "")
+            
+            # Lazy import to avoid circular dependency
+            from app.services.documentation_scraper_service import scrape_and_ingest_docs
+            success = await scrape_and_ingest_docs(url, company_id, user_id)
+            if success:
+                return {"success": True, "message": f"Successfully scraped and ingested documentation from {url}."}
+            return {"error": f"Failed to scrape documentation from {url}."}
+
         elif name == "create_support_ticket":
             if not company:
                 return {"error": "Company context not available"}
@@ -424,8 +504,9 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
             summary = args.get("summary", "")
             company_id = company.get("id", "")
 
-            if not customer_email or "@" not in customer_email:
-                return {"error": "A valid customer email address is required"}
+            email_valid, email_error = validate_email(customer_email)
+            if not email_valid:
+                return {"error": f"Invalid email address: {email_error}"}
 
             # check if company has email configured
             if not company.get("email_slug"):
@@ -436,7 +517,7 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
 
             try:
                 # get session_id from context if available
-                session_id = args.get("_session_id")  # injected by caller
+                session_id = args.get("_session_id") # injected by caller
                 ticket = await company_email_service.create_ticket(
                     company_id=company_id,
                     customer_email=customer_email,

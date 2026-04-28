@@ -44,6 +44,10 @@ def _is_subscription_active(company: dict) -> bool:
     if isinstance(started_at, str):
         started_at = datetime.fromisoformat(started_at)
 
+    # Ensure started_at is timezone-aware (assume UTC if naive)
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+
     now = datetime.now(tz=timezone.utc)
     expiry = started_at + timedelta(days=SUBSCRIPTION_DURATION_DAYS)
     return now < expiry
@@ -64,6 +68,11 @@ def get_subscription_expiry(company: dict) -> datetime | None:
         return None
     if isinstance(started_at, str):
         started_at = datetime.fromisoformat(started_at)
+    
+    # Ensure started_at is timezone-aware (assume UTC if naive)
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    
     return started_at + timedelta(days=SUBSCRIPTION_DURATION_DAYS)
 
 
@@ -107,7 +116,7 @@ async def enforce_company_limit(user_id: str) -> None:
 
     if len(owned) >= max_companies:
         raise HTTPException(
-            status_code=403,
+            status_code=400,
             detail=_upgrade_message(best_tier, "companies"),
         )
 
@@ -129,7 +138,7 @@ async def enforce_agent_limit(company: dict) -> None:
 
     if current_count >= max_agents:
         raise HTTPException(
-            status_code=403,
+            status_code=400,
             detail=_upgrade_message(tier, "deployed agents"),
         )
 
@@ -151,7 +160,7 @@ async def enforce_document_limit(company: dict) -> None:
 
     if current_count >= max_docs:
         raise HTTPException(
-            status_code=403,
+            status_code=400,
             detail=_upgrade_message(tier, "document uploads"),
         )
 
@@ -181,7 +190,7 @@ async def enforce_member_limit(company: dict) -> None:
 
     if total >= max_members:
         raise HTTPException(
-            status_code=403,
+            status_code=400,
             detail=_upgrade_message(tier, "team members"),
         )
 
@@ -226,7 +235,7 @@ async def enforce_voice_minutes(company: dict) -> None:
 
     if total_minutes >= max_minutes:
         raise HTTPException(
-            status_code=403,
+            status_code=400,
             detail=_upgrade_message(tier, "voice minutes"),
         )
 

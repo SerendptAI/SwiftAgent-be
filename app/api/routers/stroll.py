@@ -188,4 +188,17 @@ async def get_status(company_id: str, user: dict = Depends(get_current_user)):
         "last_version_id": version.id,
     }
 
-
+@router.get("/{company_id}/documentation")
+async def get_documentation(
+    company_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """Get the full dashboard documentation derived from the latest stroll graph."""
+    from app.services.stroll_index_service import get_all_navigation_steps
+    docs = await get_all_navigation_steps(company_id)
+    if not docs:
+        raise HTTPException(
+            status_code=404, 
+            detail="Documentation not available. A successful stroll must be run first."
+        )
+    return docs.model_dump()
