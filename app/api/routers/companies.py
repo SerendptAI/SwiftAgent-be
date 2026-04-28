@@ -11,8 +11,6 @@ from app.models.company_models import (
     CompanySecurityUpdate,
     CompanyIdentityUpdate,
     CompanyTypeUpdate,
-    AnswerBoundariesUpdate,
-    VoiceSettingsUpdate,
     CompanyResponse,
     CompanySummary,
     MemberInviteCreate,
@@ -158,7 +156,7 @@ async def update_company_type(
     data: CompanyTypeUpdate,
     current_user: dict = Depends(get_current_user),
 ):
-    """Set company type — saas_finance or crypto (onboarding step 3)."""
+    """Set company type — saas_finance or crypto (onboarding step 3 - final)."""
     user_id = current_user["user_id"]
     company = await company_service.get_company(company_id, user_id, admin_only=True)
     if not company:
@@ -168,34 +166,7 @@ async def update_company_type(
     )
 
 
-@router.patch("/{company_id}/boundaries", response_model=CompanyResponse)
-async def update_boundaries(
-    company_id: str,
-    data: AnswerBoundariesUpdate,
-    current_user: dict = Depends(get_current_user),
-):
-    """Update answer boundaries (onboarding step 4)."""
-    user_id = current_user["user_id"]
-    company = await company_service.get_company(company_id, user_id, admin_only=False)
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
-    return await company_service.update_boundaries(
-        company_id, user_id, data.model_dump()
-    )
 
-
-@router.patch("/{company_id}/voice", response_model=CompanyResponse)
-async def update_voice(
-    company_id: str,
-    data: VoiceSettingsUpdate,
-    current_user: dict = Depends(get_current_user),
-):
-    """Update voice settings and finalize setup (onboarding step 5)."""
-    user_id = current_user["user_id"]
-    company = await company_service.get_company(company_id, user_id)
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
-    return await company_service.update_voice(company_id, user_id, data.model_dump())
 
 
 @router.patch("/{company_id}/logo", response_model=CompanyResponse)

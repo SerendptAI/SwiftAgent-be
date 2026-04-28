@@ -165,7 +165,7 @@ async def update_company_type(company_id: str, user_id: str, company_type: str) 
     return await _update_and_return(
         company_id,
         user_id,
-        {"company_type": company_type, "onboarding_step": 3},
+        {"company_type": company_type, "onboarding_step": 3, "setup_complete": True},
         admin_only=True
     )
 
@@ -180,14 +180,7 @@ async def update_security(company_id: str, user_id: str, data: dict) -> dict:
     return await _update_and_return(company_id, user_id, update, admin_only=True)
 
 
-async def update_boundaries(company_id: str, user_id: str, data: dict) -> dict:
-    update = {**data, "onboarding_step": 4}
-    return await _update_and_return(company_id, user_id, update)
 
-
-async def update_voice(company_id: str, user_id: str, data: dict) -> dict:
-    update = {**data, "onboarding_step": 5, "setup_complete": True}
-    return await _update_and_return(company_id, user_id, update)
 
 
 async def update_logo(company_id: str, user_id: str, logo_url: str) -> dict:
