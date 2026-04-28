@@ -1,18 +1,422 @@
-<!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <title>New Registration Request</title>
-    </head>
-    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #2c3e50;">New Registration Request</h2>
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-            <p><b>Company Name:</b> {{company_name}}</p>
-            <p><b>Email:</b> <a href="mailto:{{company_email}}">{{company_email}}</a></p>
-            <p><b>Customer Size:</b> {{customer_size}}</p>
-            <p><b>Description:</b><br>{{company_description}}</p>
-        </div>
-        <a href="{{approval_url}}" style="display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Review & Approve</a>
-        <p style="margin-top: 20px; font-size: 12px; color: #7f8c8d;">You will be asked to confirm this approval.</p>
-    </body>
+<!doctype html>
+<html
+  lang="en"
+  xmlns="http://www.w3.org/1999/xhtml"
+  xmlns:v="urn:schemas-microsoft-com:vml"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta
+      name="format-detection"
+      content="telephone=no,address=no,email=no,date=no,url=no"
+    />
+    <title>New Registration Request</title>
+    <!--[if mso]>
+      <noscript>
+        <xml>
+          <o:OfficeDocumentSettings>
+            <o:AllowPNG />
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+          </o:OfficeDocumentSettings>
+        </xml>
+      </noscript>
+    <![endif]-->
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap");
+
+      body,
+      table,
+      td,
+      a {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+      }
+      table,
+      td {
+        mso-table-lspace: 0pt;
+        mso-table-rspace: 0pt;
+      }
+      img {
+        -ms-interpolation-mode: bicubic;
+        border: 0;
+        height: auto;
+        line-height: 100%;
+        outline: none;
+        text-decoration: none;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100% !important;
+        height: 100% !important;
+      }
+      table {
+        border-collapse: collapse !important;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      a[x-apple-data-detectors] {
+        color: inherit !important;
+        text-decoration: none !important;
+        font-size: inherit !important;
+        font-family: inherit !important;
+        font-weight: inherit !important;
+        line-height: inherit !important;
+      }
+
+      body {
+        background-color: #f5f5f4;
+        color: #111111;
+        font-family: "DM Mono", "Courier New", Courier, monospace;
+        overflow-x: hidden;
+      }
+
+      .email-container {
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #f5f5f4;
+      }
+
+      .display-font {
+        font-family: "Greed Narrow-TRIAL", "Arial Narrow", Impact, sans-serif;
+        font-stretch: condensed;
+      }
+
+      .logo-mark {
+        display: block;
+        width: 72px;
+        height: 70px;
+        margin: 0 auto;
+      }
+
+      .heading-text {
+        margin: 0;
+        color: #697454;
+        background-image: url("images/text-bg.jpg");
+        background-position: center center;
+        background-size: cover;
+        background-repeat: no-repeat;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: rgba(0, 0, 0, 0);
+        font-size: 58px;
+        line-height: 1.24;
+        font-weight: 600;
+        letter-spacing: -1.16px;
+        text-align: center;
+        vertical-align: middle;
+      }
+
+      .body-text {
+        margin: 0;
+        color: #111111;
+        font-family: "DM Mono", "Courier New", Courier, monospace;
+        font-size: 18px;
+        line-height: 2;
+        font-weight: 400;
+        letter-spacing: 0;
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      .details-table {
+        width: 100%;
+        border-top: 1px solid #111111;
+        border-bottom: 1px solid #111111;
+      }
+
+      .detail-label {
+        width: 38%;
+        padding: 18px 20px 18px 0;
+        color: #697454;
+        font-family: "DM Mono", "Courier New", Courier, monospace;
+        font-size: 14px;
+        line-height: 1.6;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-align: left;
+        text-transform: uppercase;
+        vertical-align: top;
+      }
+
+      .detail-value {
+        padding: 18px 0;
+        color: #111111;
+        font-family: "DM Mono", "Courier New", Courier, monospace;
+        font-size: 16px;
+        line-height: 1.7;
+        font-weight: 400;
+        letter-spacing: 0;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .detail-value a {
+        color: #111111 !important;
+        text-decoration: underline;
+      }
+
+      .detail-row + .detail-row td {
+        border-top: 1px solid #d7d4cd;
+      }
+
+      .cta-button {
+        display: block;
+        width: 100%;
+        height: 54px;
+        border-radius: 8px;
+        background-color: #f24d33;
+        box-shadow: -4px 8px 0 #000000;
+        color: #ffffff !important;
+        font-family: "DM Mono", "Courier New", Courier, monospace;
+        font-size: 18px;
+        line-height: 54px;
+        font-weight: 500;
+        letter-spacing: 0;
+        text-align: center;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+
+      .note-text {
+        margin: 0;
+        color: #6b6b65;
+        font-family: "DM Mono", "Courier New", Courier, monospace;
+        font-size: 13px;
+        line-height: 1.7;
+        font-weight: 400;
+        letter-spacing: 0;
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      @media only screen and (max-width: 620px) {
+        .email-container {
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+        .logo-cell {
+          padding-top: 72px !important;
+          padding-bottom: 55px !important;
+        }
+        .heading-cell {
+          padding: 0 58px 28px !important;
+        }
+        .heading-text {
+          font-size: 52px !important;
+          line-height: 1.24 !important;
+          letter-spacing: -1.04px !important;
+        }
+        .copy-cell {
+          padding: 0 58px 54px !important;
+        }
+        .details-cell {
+          padding: 0 42px 54px !important;
+        }
+        .button-cell {
+          padding: 0 42px 28px !important;
+        }
+        .note-cell {
+          padding: 0 58px 94px !important;
+        }
+      }
+
+      @media only screen and (max-width: 480px) {
+        .logo-cell {
+          padding-top: 52px !important;
+          padding-bottom: 42px !important;
+        }
+        .logo-mark {
+          width: 50px !important;
+          height: 49px !important;
+        }
+        .heading-cell {
+          padding: 0 22px 24px !important;
+        }
+        .heading-text {
+          font-size: 35px !important;
+          line-height: 1.18 !important;
+          letter-spacing: -0.7px !important;
+        }
+        .copy-cell {
+          padding: 0 28px 42px !important;
+        }
+        .body-text {
+          font-size: 16px !important;
+          line-height: 1.9 !important;
+        }
+        .details-cell {
+          padding: 0 28px 42px !important;
+        }
+        .detail-label,
+        .detail-value {
+          display: block !important;
+          width: 100% !important;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+        }
+        .detail-label {
+          padding-bottom: 4px !important;
+        }
+        .detail-value {
+          padding-top: 0 !important;
+          font-size: 15px !important;
+        }
+        .button-cell {
+          padding: 0 28px 28px !important;
+        }
+        .cta-button {
+          font-size: 16px !important;
+          line-height: 54px !important;
+          box-shadow: -3px 6px 0 #000000 !important;
+        }
+        .note-cell {
+          padding: 0 28px 94px !important;
+        }
+      }
+
+      @media only screen and (max-width: 375px) {
+        .heading-cell {
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+        }
+        .heading-text {
+          font-size: 30px !important;
+          line-height: 1.16 !important;
+          letter-spacing: -0.6px !important;
+        }
+        .copy-cell,
+        .details-cell,
+        .button-cell,
+        .note-cell {
+          padding-left: 24px !important;
+          padding-right: 24px !important;
+        }
+      }
+    </style>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #f5f5f4">
+    <div style="display: none; max-height: 0; overflow: hidden">
+      New SwiftAgent registration request from {{company_name}}.
+      &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
+    </div>
+
+    <center
+      role="article"
+      aria-roledescription="email"
+      lang="en"
+      style="width: 100%; overflow-x: hidden; background-color: #f5f5f4"
+    >
+      <!--[if mso | IE]>
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" align="center" style="width:600px;">
+    <tr>
+    <td>
+    <![endif]-->
+
+      <table
+        role="presentation"
+        cellspacing="0"
+        cellpadding="0"
+        border="0"
+        align="center"
+        width="100%"
+        style="max-width: 600px; margin: 0 auto"
+        class="email-container"
+      >
+        <tr>
+          <td
+            class="logo-cell"
+            style="padding: 72px 0 55px; text-align: center"
+          >
+            <img
+              src="images/logo.png"
+              width="72"
+              height="70"
+              alt="SwiftAgent"
+              class="logo-mark"
+            />
+          </td>
+        </tr>
+
+        <tr>
+          <td
+            class="heading-cell"
+            style="padding: 0 58px 28px; text-align: center"
+          >
+            <h1 class="display-font heading-text">New registration request</h1>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="copy-cell" style="padding: 0 58px 54px">
+            <p class="body-text">
+              Review the company details below before approving access.
+            </p>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="details-cell" style="padding: 0 42px 54px">
+            <table
+              role="presentation"
+              cellspacing="0"
+              cellpadding="0"
+              border="0"
+              width="100%"
+              class="details-table"
+            >
+              <tr class="detail-row">
+                <td class="detail-label">Company</td>
+                <td class="detail-value">{{company_name}}</td>
+              </tr>
+              <tr class="detail-row">
+                <td class="detail-label">Email</td>
+                <td class="detail-value">
+                  <a href="mailto:{{company_email}}">{{company_email}}</a>
+                </td>
+              </tr>
+              <tr class="detail-row">
+                <td class="detail-label">Customer size</td>
+                <td class="detail-value">{{customer_size}}</td>
+              </tr>
+              <tr class="detail-row">
+                <td class="detail-label">Description</td>
+                <td class="detail-value">{{company_description}}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="button-cell" style="padding: 0 42px 28px">
+            <a href="{{approval_url}}" target="_blank" class="cta-button">
+              Review and approve
+            </a>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="note-cell" style="padding: 0 58px 94px">
+            <p class="note-text">
+              You will be asked to confirm this approval.
+            </p>
+          </td>
+        </tr>
+      </table>
+
+      <!--[if mso | IE]>
+    </td>
+    </tr>
+    </table>
+    <![endif]-->
+    </center>
+  </body>
 </html>

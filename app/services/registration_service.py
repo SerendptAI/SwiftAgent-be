@@ -80,7 +80,8 @@ async def _send_notification_email(doc: dict, token: str):
         html = html.replace("{{company_name}}", doc.get("company_name", ""))
         html = html.replace("{{company_email}}", doc.get("company_email", ""))
         html = html.replace("{{customer_size}}", doc.get("customer_size", ""))
-        html = html.replace("{{company_description}}", doc.get("company_description", "")).replace("\n", "<br>")
+        company_description = doc.get("company_description", "").replace("\n", "<br>")
+        html = html.replace("{{company_description}}", company_description)
         html = html.replace("{{approval_url}}", approval_url)
         
         admin_email = _get_admin_email()
