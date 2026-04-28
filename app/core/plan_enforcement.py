@@ -116,7 +116,7 @@ async def enforce_company_limit(user_id: str) -> None:
 
     if len(owned) >= max_companies:
         raise HTTPException(
-            status_code=403,
+            status_code=400,
             detail=_upgrade_message(best_tier, "companies"),
         )
 
@@ -138,7 +138,7 @@ async def enforce_agent_limit(company: dict) -> None:
 
     if current_count >= max_agents:
         raise HTTPException(
-            status_code=403,
+            status_code=400,
             detail=_upgrade_message(tier, "deployed agents"),
         )
 
@@ -160,7 +160,7 @@ async def enforce_document_limit(company: dict) -> None:
 
     if current_count >= max_docs:
         raise HTTPException(
-            status_code=403,
+            status_code=400,
             detail=_upgrade_message(tier, "document uploads"),
         )
 
@@ -190,7 +190,7 @@ async def enforce_member_limit(company: dict) -> None:
 
     if total >= max_members:
         raise HTTPException(
-            status_code=403,
+            status_code=400,
             detail=_upgrade_message(tier, "team members"),
         )
 
@@ -235,7 +235,7 @@ async def enforce_voice_minutes(company: dict) -> None:
 
     if total_minutes >= max_minutes:
         raise HTTPException(
-            status_code=403,
+            status_code=400,
             detail=_upgrade_message(tier, "voice minutes"),
         )
 

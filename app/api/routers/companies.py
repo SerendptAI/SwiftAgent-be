@@ -43,7 +43,7 @@ async def create_company(
     if existing_companies:
         for c in existing_companies:
             if c.get("user_id") != user_id:
-                raise HTTPException(status_code=403, detail="Members are not allowed to create companies")
+                raise HTTPException(status_code=400, detail="Members are not allowed to create companies")
 
     # Plan enforcement: check companies_per_user
     await enforce_company_limit(user_id)
