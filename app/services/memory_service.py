@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from google import genai
 
 from app.core.config import settings
-from app.core.database import db, redis_client
+from app.core.database import db
 from app.models.memory_models import (
     EpisodeSummary,
     WorkingMemory,
@@ -86,19 +86,21 @@ async def get_session_events(session_id: str):
     return events
 
 
-# Working memory (session-scoped, stored in Redis)
+# Working memory (session-scoped, stored in in-memory dict instead of Redis for now)
+
+_working_memory_cache: Dict[str, str] = {}
 
 
 async def save_working_memory(memory: WorkingMemory):
     memory.updated_at = datetime.now(timezone.utc)
     key = f"{WORKING_MEMORY_PREFIX}{memory.session_id}"
     data = memory.model_dump_json()
-    await redis_client.setex(key, WORKING_MEMORY_TTL, data)
+    _working_memory_cache[key] = data
 
 
 async def get_working_memory(session_id: str) -> Optional[WorkingMemory]:
     key = f"{WORKING_MEMORY_PREFIX}{session_id}"
-    data = await redis_client.get(key)
+    data = _working_memory_cache.get(key)
     if data:
         return WorkingMemory.model_validate_json(data)
     return None
@@ -106,7 +108,7 @@ async def get_working_memory(session_id: str) -> Optional[WorkingMemory]:
 
 async def delete_working_memory(session_id: str):
     key = f"{WORKING_MEMORY_PREFIX}{session_id}"
-    await redis_client.delete(key)
+    _working_memory_cache.pop(key, None)
 
 
 async def load_memory_context(
