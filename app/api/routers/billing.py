@@ -65,27 +65,28 @@ async def create_checkout_session(
 @router.post("/webhooks/paystack", response_model=WebhookResponse)
 async def paystack_webhook(request: Request, background_tasks: BackgroundTasks):
     """Handle Paystack webhooks."""
-    # Verify signature
     signature = request.headers.get("x-paystack-signature")
     secret_key = settings.PAYSTACK_SECRET_KEY or settings.PAYSTACK_TEST_SECRET_KEY
-    if not signature and secret_key:
+
+    if not secret_key:
+        raise HTTPException(status_code=500, detail="Webhook secret not configured")
+
+    if not signature:
         raise HTTPException(status_code=400, detail="Missing signature")
-        
+
     payload_body = await request.body()
-    
-    if secret_key:
-        hash_digest = hmac.new(
-            secret_key.encode("utf-8"),
-            payload_body,
-            hashlib.sha512
-        ).hexdigest()
-        
-        if hash_digest != signature:
-            raise HTTPException(status_code=400, detail="Invalid signature")
+    hash_digest = hmac.new(
+        secret_key.encode("utf-8"),
+        payload_body,
+        hashlib.sha512
+    ).hexdigest()
+
+    if hash_digest != signature:
+        raise HTTPException(status_code=400, detail="Invalid signature")
 
     payload = await request.json()
     background_tasks.add_task(billing_service.process_paystack_webhook, payload)
-    
+
     return WebhookResponse(received=True)
 
 
@@ -93,22 +94,25 @@ async def paystack_webhook(request: Request, background_tasks: BackgroundTasks):
 async def polar_webhook(request: Request, background_tasks: BackgroundTasks):
     """Handle Polar webhooks."""
     signature = request.headers.get("webhook-signature")
-    
-    if settings.POLAR_WEBHOOK_SECRET:
-        if not signature:
-            raise HTTPException(status_code=400, detail="Missing signature")
-            
-        payload_body = await request.body()
-        hash_digest = hmac.new(
-            settings.POLAR_WEBHOOK_SECRET.encode("utf-8"),
-            payload_body,
-            hashlib.sha256
-        ).hexdigest()
-        
-        if hash_digest != signature:
-            raise HTTPException(status_code=400, detail="Invalid signature")
-            
+    webhook_secret = settings.POLAR_WEBHOOK_SECRET
+
+    if not webhook_secret:
+        raise HTTPException(status_code=500, detail="Webhook secret not configured")
+
+    if not signature:
+        raise HTTPException(status_code=400, detail="Missing signature")
+
+    payload_body = await request.body()
+    hash_digest = hmac.new(
+        webhook_secret.encode("utf-8"),
+        payload_body,
+        hashlib.sha256
+    ).hexdigest()
+
+    if hash_digest != signature:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
     payload = await request.json()
     background_tasks.add_task(billing_service.process_polar_webhook, payload)
-    
+
     return WebhookResponse(received=True)

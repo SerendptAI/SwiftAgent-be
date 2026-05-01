@@ -8,6 +8,7 @@ Uses a sliding window approach to avoid burst issues.
 import asyncio
 import time
 from collections import defaultdict
+from fastapi import Request
 
 
 class RateLimiter:
@@ -78,3 +79,16 @@ def get_auth_limiter() -> RateLimiter:
     if auth_limiter is None:
         auth_limiter = _make_auth_limiter()
     return auth_limiter
+
+
+async def rate_limit_auth(request: Request):
+    """Rate limiting dependency for auth endpoints."""
+    limiter = get_auth_limiter()
+    client_ip = request.client.host if request.client else "unknown"
+    allowed = await limiter.acquire(client_ip)
+    if not allowed:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please try again later."
+        )
