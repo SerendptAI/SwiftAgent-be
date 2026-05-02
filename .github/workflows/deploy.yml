@@ -1,4 +1,4 @@
-name: Deploy Backend
+name: Deploy Services
 
 on:
   push:
@@ -6,11 +6,41 @@ on:
       - master
 
 jobs:
+  changes:
+    name: Check Changed Files
+    runs-on: ubuntu-latest
+    outputs:
+      raiseapp: ${{ steps.filter.outputs.raiseapp }}
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            raiseapp:
+              - 'raise-app/**'
+              - 'Dockerfile.raise'
+            backend:
+              - '!raise-app/**'
+              - '!Dockerfile.raise'
+
   deploy-backend:
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' || github.event_name != 'push' }}
     name: Deploy Backend
     runs-on: self-hosted
-
     steps:
       - name: Deploy Backend
         run: ./deploy.sh backend
+        working-directory: /home/ghrunner/swift-agents-prod
+
+  deploy-raiseapp:
+    needs: changes
+    if: ${{ needs.changes.outputs.raiseapp == 'true' }}
+    name: Deploy Raise App
+    runs-on: self-hosted
+    steps:
+      - name: Deploy Raise App
+        run: ./deploy.sh raiseapp
         working-directory: /home/ghrunner/swift-agents-prod
