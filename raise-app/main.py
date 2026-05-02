@@ -90,20 +90,11 @@ async def dashboard(request: Request):
         return RedirectResponse(url="/login", status_code=303)
 
     loader = VCLoader()
-    sheets = loader.get_sheet_names()
-    total_contacts = 0
-    contacts_with_email = 0
-    sheet_stats = []
-
-    for sheet in sheets:
-        contacts = loader.get_contacts(sheet)
-        total = len(contacts)
-        with_email = sum(1 for c in contacts if c.get("Email"))
-        total_contacts += total
-        contacts_with_email += with_email
-        sheet_stats.append(
-            {"name": sheet, "total": total, "with_email": with_email}
-        )
+    summary = loader.get_summary()
+    sheets = [s["name"] for s in summary["sheets"]]
+    total_contacts = summary["total_contacts"]
+    contacts_with_email = summary["total_with_email"]
+    sheet_stats = summary["sheets"]
 
     # Get email stats from DB
     stats = await Database.get_email_stats()

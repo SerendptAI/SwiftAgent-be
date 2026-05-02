@@ -9,7 +9,7 @@
     {% if error %}
     <div class="login-error">{{ error }}</div>
     {% endif %}
-    <form method="POST" action="/login">
+    <form method="POST" action="/login" onsubmit="document.getElementById('login-btn').innerHTML = '<span class=\'spinner\'></span> Signing In...'; document.getElementById('login-btn').style.opacity = '0.8';">
       <div class="form-group">
         <input type="password" name="password" class="form-control" placeholder="Enter access password" required autofocus id="password-input">
       </div>
