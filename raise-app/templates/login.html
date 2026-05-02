@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block body %}
+<div class="login-wrapper">
+  <div class="login-card">
+    <div class="logo-big">R</div>
+    <h2>Welcome to Raise</h2>
+    <p>VC Email Outreach Dashboard</p>
+    {% if error %}
+    <div class="login-error">{{ error }}</div>
+    {% endif %}
+    <form method="POST" action="/login">
+      <div class="form-group">
+        <input type="password" name="password" class="form-control" placeholder="Enter access password" required autofocus id="password-input">
+      </div>
+      <button type="submit" class="btn btn-primary" id="login-btn">Sign In</button>
+    </form>
+    <p style="margin-top: 24px; font-size: 12px; color: var(--text-muted);">raise@swiftagents.org</p>
+  </div>
+</div>
+{% endblock %}
