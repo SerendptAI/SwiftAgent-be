@@ -62,7 +62,9 @@ def get_current_user(request: Request):
 # AUTH ROUTES 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+    return templates.TemplateResponse(
+        request=request, name="login.html", context={"error": None}
+    )
 
 
 @app.post("/login", response_class=HTMLResponse)
@@ -71,7 +73,7 @@ async def login_submit(request: Request, password: str = Form(...)):
         request.session["authenticated"] = True
         return RedirectResponse(url="/", status_code=303)
     return templates.TemplateResponse(
-        "login.html", {"request": request, "error": "Invalid password"}
+        request=request, name="login.html", context={"error": "Invalid password"}
     )
 
 
@@ -107,9 +109,9 @@ async def dashboard(request: Request):
     stats = await Database.get_email_stats()
 
     return templates.TemplateResponse(
-        "dashboard.html",
-        {
-            "request": request,
+        request=request,
+        name="dashboard.html",
+        context={
             "active": "dashboard",
             "total_contacts": total_contacts,
             "contacts_with_email": contacts_with_email,
@@ -147,9 +149,9 @@ async def contacts_page(request: Request, sheet: str = None, page: int = 1, per_
     page_contacts = enriched[start : start + per_page]
 
     return templates.TemplateResponse(
-        "contacts.html",
-        {
-            "request": request,
+        request=request,
+        name="contacts.html",
+        context={
             "active": "contacts",
             "sheets": sheets,
             "current_sheet": sheet,
@@ -177,9 +179,9 @@ async def compose_page(request: Request, sheet: str = None):
         recipients = [c for c in contacts if c.get("Email")]
 
     return templates.TemplateResponse(
-        "compose.html",
-        {
-            "request": request,
+        request=request,
+        name="compose.html",
+        context={
             "active": "compose",
             "sheets": sheets,
             "current_sheet": sheet,
