@@ -56,7 +56,7 @@
         <!-- Subject -->
         <div class="form-group">
           <label>Subject</label>
-          <input type="text" class="form-control" id="email-subject" placeholder="e.g. Partnership Opportunity — {{company}}">
+          <input type="text" class="form-control" id="email-subject" placeholder="e.g. Partnership Opportunity — {{company}}" oninput="Raise.previewEmail()">
         </div>
 
         <!-- Placeholders helper -->
@@ -93,7 +93,7 @@
 I hope this email finds you well. I'm reaching out regarding...
 
 Best regards,
-Your Name"></textarea>
+Your Name" oninput="Raise.previewEmail()"></textarea>
         </div>
 
         <!-- Attachments -->
@@ -114,7 +114,6 @@ Your Name"></textarea>
     <!-- Action Buttons -->
     <div class="card" style="margin-bottom:24px;">
       <div class="card-body" style="display:flex;gap:12px;flex-wrap:wrap;">
-        <button class="btn btn-secondary" onclick="Raise.previewEmail()" id="btn-preview">👁 Preview</button>
         <button class="btn btn-secondary" onclick="Raise.sendTestEmail()" id="btn-test">🧪 Send Test</button>
         <button class="btn btn-primary" onclick="Raise.sendEmails()" id="btn-send" style="flex:1;">🚀 Send Campaign</button>
       </div>
@@ -129,7 +128,7 @@ Your Name"></textarea>
         <div class="preview-panel" id="preview-panel">
           <div style="text-align:center;padding:48px 24px;color:#aaa;">
             <div style="font-size:48px;margin-bottom:16px;">✉️</div>
-            <p>Click "Preview" to see how your email will look</p>
+            <p>Start typing to see your live preview</p>
             <p style="font-size:12px;margin-top:8px;">Uses the first selected recipient for personalisation</p>
           </div>
         </div>
@@ -143,6 +142,7 @@ Your Name"></textarea>
 <script>
   // Auto-load recipients if sheet is pre-selected
   document.addEventListener('DOMContentLoaded', () => {
+    Raise.previewEmail();
     const select = document.getElementById('sheet-select');
     if (select && select.value) {
       // Already loaded via server-side

@@ -8,27 +8,27 @@
 
 <!-- Stats Grid -->
 <div class="stats-grid">
-  <div class="stat-card">
+  <div class="stat-card" title="The total number of contacts loaded from the VC spreadsheet across all sheets">
     <div class="stat-icon purple">👥</div>
     <div class="stat-value">{{ total_contacts }}</div>
     <div class="stat-label">Total Contacts</div>
   </div>
-  <div class="stat-card">
+  <div class="stat-card" title="The total number of contacts that have a valid email address listed">
     <div class="stat-icon green">📧</div>
     <div class="stat-value">{{ contacts_with_email }}</div>
     <div class="stat-label">With Email</div>
   </div>
-  <div class="stat-card">
+  <div class="stat-card" title="The total number of city sheets parsed from your VC spreadsheet">
     <div class="stat-icon blue">📑</div>
     <div class="stat-value">{{ total_sheets }}</div>
     <div class="stat-label">City Sheets</div>
   </div>
-  <div class="stat-card">
+  <div class="stat-card" title="The total number of successful emails sent via Raise">
     <div class="stat-icon orange">✅</div>
     <div class="stat-value">{{ emails_sent }}</div>
     <div class="stat-label">Emails Sent</div>
   </div>
-  <div class="stat-card">
+  <div class="stat-card" title="The total number of emails that failed to send">
     <div class="stat-icon red">❌</div>
     <div class="stat-value">{{ emails_failed }}</div>
     <div class="stat-label">Failed</div>

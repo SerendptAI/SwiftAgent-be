@@ -32,36 +32,42 @@ const Raise = {
   },
 
   /* ─── Preview email ─── */
+  _previewTimeout: null,
   async previewEmail() {
     const subject = document.getElementById('email-subject')?.value || '';
     const body = document.getElementById('email-body')?.value || '';
-    const sheet = document.getElementById('sheet-select')?.value || '';
+    
+    if (!subject && !body) return;
 
-    // Pick first recipient for preview
-    const chips = document.querySelectorAll('.recipient-chip.selected');
-    let recipient = {};
-    if (chips.length > 0) {
-      recipient = JSON.parse(chips[0].dataset.contact || '{}');
-    }
-
-    try {
-      const resp = await fetch('/api/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, body, recipient }),
-      });
-      const data = await resp.json();
-      const panel = document.getElementById('preview-panel');
-      if (panel) {
-        panel.innerHTML = `
-          <div class="preview-from">From: ${document.getElementById('from-email')?.textContent || 'raise@swiftagents.org'}</div>
-          <div class="preview-subject">${this.escapeHtml(data.subject)}</div>
-          <div class="preview-body">${data.body.replace(/\n/g, '<br>')}</div>
-        `;
+    if (this._previewTimeout) clearTimeout(this._previewTimeout);
+    
+    this._previewTimeout = setTimeout(async () => {
+      // Pick first recipient for preview
+      const chips = document.querySelectorAll('.recipient-chip.selected');
+      let recipient = {};
+      if (chips.length > 0) {
+        recipient = JSON.parse(chips[0].dataset.contact || '{}');
       }
-    } catch (e) {
-      this.toast('Preview failed: ' + e.message, 'error');
-    }
+
+      try {
+        const resp = await fetch('/api/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject, body, recipient }),
+        });
+        const data = await resp.json();
+        const panel = document.getElementById('preview-panel');
+        if (panel) {
+          panel.innerHTML = `
+            <div class="preview-from">From: ${document.getElementById('from-email')?.textContent || 'raise@swiftagents.org'}</div>
+            <div class="preview-subject">${this.escapeHtml(data.subject)}</div>
+            <div class="preview-body">${data.body.replace(/\n/g, '<br>')}</div>
+          `;
+        }
+      } catch (e) {
+        console.error('Preview failed:', e);
+      }
+    }, 400); // 400ms debounce
   },
 
   /* ─── Send emails ─── */
@@ -180,6 +186,7 @@ const Raise = {
       });
       html += '</div>';
       container.innerHTML = html;
+      this.previewEmail();
     } catch (e) {
       container.innerHTML = '<p style="color:var(--danger)">Failed to load recipients</p>';
     }
@@ -190,6 +197,7 @@ const Raise = {
       if (checked) chip.classList.add('selected');
       else chip.classList.remove('selected');
     });
+    this.previewEmail();
   },
 
   /* ─── File upload handling ─── */
@@ -250,6 +258,7 @@ const Raise = {
     textarea.focus();
     textarea.selectionStart = start + fmt.prefix.length;
     textarea.selectionEnd = start + fmt.prefix.length + selected.length;
+    this.previewEmail();
   },
 
   insertPlaceholder(placeholder) {
@@ -259,6 +268,7 @@ const Raise = {
     textarea.value = textarea.value.substring(0, pos) + placeholder + textarea.value.substring(pos);
     textarea.focus();
     textarea.selectionStart = textarea.selectionEnd = pos + placeholder.length;
+    this.previewEmail();
   },
 
   escapeHtml(str) {

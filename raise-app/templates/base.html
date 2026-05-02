@@ -18,13 +18,13 @@
         <h1>Raise</h1>
       </div>
       <nav class="sidebar-nav">
-        <a href="/" class="{% if active == 'dashboard' %}active{% endif %}" id="nav-dashboard">
+        <a href="/" class="{% if active == 'dashboard' %}active{% endif %}" id="nav-dashboard" title="View overall campaign statistics and outreach progress">
           <span class="icon">📊</span> Dashboard
         </a>
-        <a href="/contacts" class="{% if active == 'contacts' %}active{% endif %}" id="nav-contacts">
+        <a href="/contacts" class="{% if active == 'contacts' %}active{% endif %}" id="nav-contacts" title="Browse and filter your VC contacts by city">
           <span class="icon">👥</span> Contacts
         </a>
-        <a href="/compose" class="{% if active == 'compose' %}active{% endif %}" id="nav-compose">
+        <a href="/compose" class="{% if active == 'compose' %}active{% endif %}" id="nav-compose" title="Draft and send personalized bulk emails to your VC contacts">
           <span class="icon">✉️</span> Compose
         </a>
       </nav>
