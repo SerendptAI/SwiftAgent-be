@@ -30,6 +30,7 @@ from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_database
 from app.core.security import create_access_token, create_refresh_token, decode_refresh_token
+from app.core.rate_limiter import rate_limit_auth
 from app.models.auth_models import (
     LoginResponse,
     OTPSendRequest,
@@ -310,12 +311,13 @@ async def update_me(
 # --- unified passwordless flow ---
 
 @router.post("/otp/send", response_model=LoginResponse)
-async def send_otp(body: OTPSendRequest, db=Depends(get_database)):
+async def send_otp(body: OTPSendRequest, db=Depends(get_database), request: Request):
     """
     Unified entrypoint for passwordless login and signup.
     If the user exists and is within the grace period, returns tokens immediately.
     Otherwise sends an OTP. If the email is completely new, creates an unverified user record.
     """
+    await rate_limit_auth(request)
     _smtp_guard()
 
     email = body.email.lower()
@@ -374,8 +376,9 @@ async def send_otp(body: OTPSendRequest, db=Depends(get_database)):
 
 
 @router.post("/otp/verify", response_model=LoginResponse)
-async def verify_otp(body: OTPVerifyRequest, db=Depends(get_database)):
+async def verify_otp(body: OTPVerifyRequest, db=Depends(get_database), request: Request):
     """Confirm the OTP and return a JWT token pair."""
+    await rate_limit_auth(request)
     email = body.email.lower()
     user = await db.users.find_one({"email": email})
 

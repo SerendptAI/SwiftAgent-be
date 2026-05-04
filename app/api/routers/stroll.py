@@ -34,6 +34,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Stroll"])
 
 
+async def _verify_company_access(user_id: str, company_id: str):
+    """Verify user has access to the company."""
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found or unauthorized")
+    return company
+
 
 async def _run_stroll_background(company_id: str):
     """Run a full stroll cycle in the background: crawl → diff → commit → index."""
@@ -76,6 +83,7 @@ async def _run_stroll_background(company_id: str):
 @router.get("/{company_id}/config")
 async def get_config(company_id: str, user: dict = Depends(get_current_user)):
     """Get the stroll configuration for a company."""
+    await _verify_company_access(user["user_id"], company_id)
     config = await stroll_service.get_stroll_config(company_id)
     if not config:
         raise HTTPException(status_code=404, detail="Stroll configuration not found")
@@ -113,6 +121,7 @@ async def trigger_stroll(
     user: dict = Depends(get_current_user),
 ):
     """Trigger a manual stroll (runs in the background)."""
+    await _verify_company_access(user["user_id"], company_id)
     config = await stroll_service.get_stroll_config(company_id)
     if not config:
         raise HTTPException(
@@ -137,6 +146,7 @@ async def list_versions(
     user: dict = Depends(get_current_user),
 ):
     """List stroll versions for a company."""
+    await _verify_company_access(user["user_id"], company_id)
     versions = await stroll_service.list_versions(company_id, limit=limit)
     return {"versions": versions}
 
@@ -147,6 +157,7 @@ async def get_latest_stroll_version(
     user: dict = Depends(get_current_user),
 ):
     """Get the latest successful stroll version with full graph data."""
+    await _verify_company_access(user["user_id"], company_id)
     version = await stroll_service.get_latest_version(company_id)
     if not version:
         raise HTTPException(status_code=404, detail="No successful stroll version found.")
@@ -160,6 +171,7 @@ async def get_version(
     user: dict = Depends(get_current_user),
 ):
     """Get a specific stroll version with full graph data."""
+    await _verify_company_access(user["user_id"], company_id)
     doc = await db.stroll_versions.find_one({
         "company_id": company_id,
         "id": version_id,
@@ -173,6 +185,7 @@ async def get_version(
 @router.get("/{company_id}/status")
 async def get_status(company_id: str, user: dict = Depends(get_current_user)):
     """Get the latest stroll status for a company."""
+    await _verify_company_access(user["user_id"], company_id)
     version = await stroll_service.get_latest_version(company_id)
     if not version:
         return {
@@ -194,11 +207,12 @@ async def get_documentation(
     user: dict = Depends(get_current_user),
 ):
     """Get the full dashboard documentation derived from the latest stroll graph."""
+    await _verify_company_access(user["user_id"], company_id)
     from app.services.stroll_index_service import get_all_navigation_steps
     docs = await get_all_navigation_steps(company_id)
     if not docs:
         raise HTTPException(
-            status_code=404, 
+            status_code=404,
             detail="Documentation not available. A successful stroll must be run first."
         )
     return docs.model_dump()
