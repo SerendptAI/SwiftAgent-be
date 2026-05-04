@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Compose Email{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2>Compose Email</h2>
+  <p>Create and send personalised emails to VC contacts</p>
+</div>
+
+<div class="compose-grid">
+  <!-- LEFT: Compose Form -->
+  <div>
+    <div class="card" style="margin-bottom:24px;">
+      <div class="card-header">
+        <h3>📝 Email Details</h3>
+      </div>
+      <div class="card-body">
+        <!-- From -->
+        <div class="form-group">
+          <label>From</label>
+          <div class="form-control" style="background:var(--bg-glass);cursor:default;" id="from-email">{{ from_email }}</div>
+        </div>
+
+        <!-- Sheet selector -->
+        <div class="form-group">
+          <label>Select Sheet (City)</label>
+          <select class="form-control" id="sheet-select" onchange="Raise.loadRecipients(this.value)">
+            <option value="">— Choose a sheet —</option>
+            {% for s in sheets %}
+            <option value="{{ s }}" {% if s == current_sheet %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Recipients -->
+        <div class="form-group">
+          <label>Recipients</label>
+          <div id="recipients-container">
+            {% if recipients %}
+            <div class="checkbox-wrap" style="margin-bottom:8px">
+              <input type="checkbox" id="select-all" checked onchange="Raise.toggleSelectAll(this.checked)">
+              <label for="select-all" style="font-size:13px;color:var(--text-secondary)">Select all ({{ recipients|length }})</label>
+            </div>
+            <div class="recipients-preview">
+              {% for r in recipients %}
+              <span class="recipient-chip selected" data-contact='{{ r | tojson }}' onclick="this.classList.toggle('selected')">
+                {{ r['Full Name'] or r.Email }} · {{ r.Email }}
+              </span>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div style="color:var(--text-muted);font-size:13px;padding:12px;">Select a sheet above to load recipients</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Subject -->
+        <div class="form-group">
+          <label>Subject</label>
+          <input type="text" class="form-control" id="email-subject" placeholder="e.g. Partnership Opportunity — {{company}}" oninput="Raise.previewEmail()">
+        </div>
+
+        <!-- Placeholders helper -->
+        <div style="margin-bottom:16px;">
+          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px;">INSERT PLACEHOLDER</label>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;">
+            <button class="btn btn-ghost btn-sm" onclick="Raise.insertPlaceholder('{{first_name}}')">First Name</button>
+            <button class="btn btn-ghost btn-sm" onclick="Raise.insertPlaceholder('{{last_name}}')">Last Name</button>
+            <button class="btn btn-ghost btn-sm" onclick="Raise.insertPlaceholder('{{full_name}}')">Full Name</button>
+            <button class="btn btn-ghost btn-sm" onclick="Raise.insertPlaceholder('{{company}}')">Company</button>
+            <button class="btn btn-ghost btn-sm" onclick="Raise.insertPlaceholder('{{city}}')">City</button>
+          </div>
+        </div>
+
+        <!-- Formatting toolbar -->
+        <div class="toolbar">
+          <button onclick="Raise.insertFormat('bold')" title="Bold"><b>B</b></button>
+          <button onclick="Raise.insertFormat('italic')" title="Italic"><i>I</i></button>
+          <button onclick="Raise.insertFormat('underline')" title="Underline"><u>U</u></button>
+          <span class="separator"></span>
+          <button onclick="Raise.insertFormat('h1')" title="Heading 1">H1</button>
+          <button onclick="Raise.insertFormat('h2')" title="Heading 2">H2</button>
+          <span class="separator"></span>
+          <button onclick="Raise.insertFormat('link')" title="Link">🔗</button>
+          <button onclick="Raise.insertFormat('ul')" title="List">📝</button>
+          <button onclick="Raise.insertFormat('br')" title="Line Break">↵</button>
+        </div>
+
+        <!-- Body -->
+        <div class="form-group">
+          <label>Email Body (HTML supported)</label>
+          <textarea class="form-control" id="email-body" rows="12" placeholder="Dear {{first_name}},
+
+I hope this email finds you well. I'm reaching out regarding...
+
+Best regards,
+Your Name" oninput="Raise.previewEmail()"></textarea>
+        </div>
+
+        <!-- Attachments -->
+        <div class="form-group">
+          <label>Attachments</label>
+          <div class="file-upload-area" id="file-upload-area">
+            📎 Click or drag files here to attach
+          </div>
+          <input type="file" id="attachment-input" multiple style="display:none">
+          <div id="file-list" class="file-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Preview & Actions -->
+  <div>
+    <!-- Action Buttons -->
+    <div class="card" style="margin-bottom:24px;">
+      <div class="card-body" style="display:flex;gap:12px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="Raise.sendTestEmail()" id="btn-test">🧪 Send Test</button>
+        <button class="btn btn-primary" onclick="Raise.sendEmails()" id="btn-send" style="flex:1;">🚀 Send Campaign</button>
+      </div>
+    </div>
+
+    <!-- Preview Panel -->
+    <div class="card">
+      <div class="card-header">
+        <h3>👁 Email Preview</h3>
+      </div>
+      <div class="card-body" style="padding:0;">
+        <div class="preview-panel" id="preview-panel">
+          <div style="text-align:center;padding:48px 24px;color:#aaa;">
+            <div style="font-size:48px;margin-bottom:16px;">✉️</div>
+            <p>Start typing to see your live preview</p>
+            <p style="font-size:12px;margin-top:8px;">Uses the first selected recipient for personalisation</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Auto-load recipients if sheet is pre-selected
+  document.addEventListener('DOMContentLoaded', () => {
+    Raise.previewEmail();
+    const select = document.getElementById('sheet-select');
+    if (select && select.value) {
+      // Already loaded via server-side
+    }
+  });
+</script>
+{% endblock %}

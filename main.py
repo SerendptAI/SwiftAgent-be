@@ -127,7 +127,7 @@ class WidgetCorsBypassMiddleware:
         "/api/v1/email/inbound",
         "/api/v1/email/resolve",
     )
-    BYPASS_SUFFIXES = ("/visitors/log",)
+    BYPASS_SUFFIXES = ("/visitors/log", "/public")
 
     def __init__(self, app):
         self.app = app

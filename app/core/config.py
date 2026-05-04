@@ -114,9 +114,7 @@ class Settings(BaseSettings):
     # context window
     MAX_CONTEXT_MESSAGES: int = 10
 
-    # redis (working memory cache)
-    REDIS_URL: str = "redis://localhost:6379"
-    REDIS_MAX_CONNECTIONS: int = 10
+    # working memory cache
     WORKING_MEMORY_TTL_SECONDS: int = 3600  # 1 hour
 
     # memory retention

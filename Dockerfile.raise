@@ -1,0 +1,17 @@
+# Dockerfile.raise — Raise App (VC Email Dashboard)
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+WORKDIR /app
+
+# Install dependencies using uv
+COPY raise-app/requirements.txt .
+RUN uv pip install --system --no-cache -r requirements.txt
+
+# Copy application code
+COPY raise-app/ .
+
+# Expose port
+EXPOSE 8500
+
+# Run the application
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8500"]

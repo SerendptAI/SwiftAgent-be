@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from motor.motor_asyncio import AsyncIOMotorClient
 from qdrant_client import AsyncQdrantClient
 
-from app.core.database import db, qdrant_client, redis_client
+from app.core.database import db, qdrant_client
 
 router = APIRouter(tags=["Health"])
 
@@ -23,7 +23,6 @@ async def readiness_check():
     checks = {
         "mongodb": {"status": "unhealthy"},
         "qdrant": {"status": "unhealthy"},
-        "redis": {"status": "unhealthy"},
     }
 
     # Check MongoDB
@@ -40,12 +39,7 @@ async def readiness_check():
     except Exception as e:
         checks["qdrant"] = {"status": "unhealthy", "error": str(e)}
 
-    # Check Redis
-    try:
-        await redis_client.ping()
-        checks["redis"] = {"status": "healthy"}
-    except Exception as e:
-        checks["redis"] = {"status": "unhealthy", "error": str(e)}
+
 
     all_healthy = all(c["status"] == "healthy" for c in checks.values())
 

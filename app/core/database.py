@@ -1,6 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from qdrant_client import AsyncQdrantClient
-import redis.asyncio as redis
 
 from app.core.config import settings
 
@@ -17,11 +16,6 @@ qdrant_client = AsyncQdrantClient(
     api_key=settings.QDRANT_API_KEY,
 )
 
-redis_client = redis.from_url(
-    settings.REDIS_URL,
-    max_connections=settings.REDIS_MAX_CONNECTIONS,
-    decode_responses=True,
-)
 
 
 async def get_database():

@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h2>Dashboard</h2>
+  <p>Overview of your VC outreach campaigns</p>
+</div>
+
+<!-- Stats Grid -->
+<div class="stats-grid">
+  <div class="stat-card" title="The total number of contacts loaded from the VC spreadsheet across all sheets">
+    <div class="stat-icon purple">👥</div>
+    <div class="stat-value">{{ total_contacts }}</div>
+    <div class="stat-label">Total Contacts</div>
+  </div>
+  <div class="stat-card" title="The total number of contacts that have a valid email address listed">
+    <div class="stat-icon green">📧</div>
+    <div class="stat-value">{{ contacts_with_email }}</div>
+    <div class="stat-label">With Email</div>
+  </div>
+  <div class="stat-card" title="The total number of city sheets parsed from your VC spreadsheet">
+    <div class="stat-icon blue">📑</div>
+    <div class="stat-value">{{ total_sheets }}</div>
+    <div class="stat-label">City Sheets</div>
+  </div>
+  <div class="stat-card" title="The total number of successful emails sent via Raise">
+    <div class="stat-icon orange">✅</div>
+    <div class="stat-value">{{ emails_sent }}</div>
+    <div class="stat-label">Emails Sent</div>
+  </div>
+  <div class="stat-card" title="The total number of emails that failed to send">
+    <div class="stat-icon red">❌</div>
+    <div class="stat-value">{{ emails_failed }}</div>
+    <div class="stat-label">Failed</div>
+  </div>
+</div>
+
+<!-- Sheets Breakdown -->
+<div class="card" style="margin-bottom: 24px;">
+  <div class="card-header">
+    <h3>📍 Contacts by City</h3>
+    <a href="/compose" class="btn btn-primary btn-sm">✉️ Compose Email</a>
+  </div>
+  <div class="card-body">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>City / Sheet</th>
+            <th>Total Contacts</th>
+            <th>With Email</th>
+            <th>Coverage</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in sheet_stats %}
+          <tr>
+            <td style="font-weight: 600; color: var(--text-primary);">{{ s.name }}</td>
+            <td>{{ s.total }}</td>
+            <td>{{ s.with_email }}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="flex:1;height:6px;background:var(--bg-glass);border-radius:3px;max-width:120px;">
+                  <div style="height:100%;border-radius:3px;background:var(--accent);width:{{ (s.with_email / s.total * 100) if s.total > 0 else 0 }}%;"></div>
+                </div>
+                <span style="font-size:12px;color:var(--text-muted);">{{ ((s.with_email / s.total * 100) | round(0) | int) if s.total > 0 else 0 }}%</span>
+              </div>
+            </td>
+            <td>
+              <a href="/contacts?sheet={{ s.name | urlencode }}" class="btn btn-ghost btn-sm">View</a>
+              <a href="/compose?sheet={{ s.name | urlencode }}" class="btn btn-ghost btn-sm">Email</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="card">
+  <div class="card-header">
+    <h3>🕐 Recent Sends</h3>
+  </div>
+  <div class="card-body">
+    {% if recent_sends %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Recipient</th><th>Company</th><th>Subject</th><th>Sent At</th></tr>
+        </thead>
+        <tbody>
+          {% for r in recent_sends %}
+          <tr>
+            <td>
+              <div style="font-weight:500;color:var(--text-primary);">{{ r.recipient_name or r.to_email }}</div>
+              <div style="font-size:12px;color:var(--text-muted);">{{ r.to_email }}</div>
+            </td>
+            <td>{{ r.recipient_company }}</td>
+            <td>{{ r.subject[:50] }}{% if r.subject|length > 50 %}...{% endif %}</td>
+            <td style="font-size:13px;color:var(--text-muted);">{{ r.sent_at[:16] if r.sent_at else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <div class="icon">📭</div>
+      <h3>No emails sent yet</h3>
+      <p>Start your first campaign from the Compose page</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

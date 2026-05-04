@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Raise{% endblock %} — Swift Agents</title>
+  <meta name="description" content="Raise — VC Email Outreach Dashboard">
+  <link rel="icon" type="image/png" href="/static/img/favicon.png">
+  <link rel="stylesheet" href="/static/css/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {% block body %}
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="logo">R</div>
+        <h1>Raise</h1>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/" class="{% if active == 'dashboard' %}active{% endif %}" id="nav-dashboard" title="View overall campaign statistics and outreach progress">
+          <span class="icon">📊</span> Dashboard
+        </a>
+        <a href="/contacts" class="{% if active == 'contacts' %}active{% endif %}" id="nav-contacts" title="Browse and filter your VC contacts by city">
+          <span class="icon">👥</span> Contacts
+        </a>
+        <a href="/compose" class="{% if active == 'compose' %}active{% endif %}" id="nav-compose" title="Draft and send personalized bulk emails to your VC contacts">
+          <span class="icon">✉️</span> Compose
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="/logout" id="nav-logout"><span class="icon">🚪</span> Sign Out</a>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% endblock %}
+
+  <div id="toast-container" class="toast-container"></div>
+  <script src="/static/js/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
