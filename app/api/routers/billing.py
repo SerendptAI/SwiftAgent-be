@@ -1,11 +1,14 @@
+import json
+import base64
+import hmac
+import hashlib
+
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from app.core.auth import get_current_user
 from app.core.database import db
 from app.models.billing_models import CheckoutSessionRequest, CheckoutSessionResponse, WebhookResponse
 from app.services.billing_service import billing_service
 from app.core.billing_limits import TIER_LIMITS
-import hmac
-import hashlib
 from app.core.config import settings
 from app.core.plan_enforcement import get_usage_summary
 from app.services.company_service import get_company
@@ -39,7 +42,7 @@ async def create_checkout_session(
     request: CheckoutSessionRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Generate a checkout session (Paystack or Polar) for a company paying for a tier."""
+    """Generate a checkout session (PalmPay or Polar) for a company paying for a tier."""
     company = await db.companies.find_one({"id": request.company_id, "user_id": current_user["user_id"]})
     
     if not company:
@@ -62,30 +65,34 @@ async def create_checkout_session(
         raise HTTPException(status_code=500, detail="Failed to initialize checkout session")
 
 
-@router.post("/webhooks/paystack", response_model=WebhookResponse)
-async def paystack_webhook(request: Request, background_tasks: BackgroundTasks):
-    """Handle Paystack webhooks."""
-    signature = request.headers.get("x-paystack-signature")
-    secret_key = settings.PAYSTACK_SECRET_KEY or settings.PAYSTACK_TEST_SECRET_KEY
-
-    if not secret_key:
-        raise HTTPException(status_code=500, detail="Webhook secret not configured")
-
-    if not signature:
-        raise HTTPException(status_code=400, detail="Missing signature")
-
+@router.post("/webhooks/palmpay", response_model=WebhookResponse)
+async def palmpay_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Handle PalmPay webhooks — verified via RSA-SHA256."""
     payload_body = await request.body()
-    hash_digest = hmac.new(
-        secret_key.encode("utf-8"),
-        payload_body,
-        hashlib.sha512
-    ).hexdigest()
+    signature_b64 = request.headers.get("Signature", "")
 
-    if hash_digest != signature:
-        raise HTTPException(status_code=400, detail="Invalid signature")
+    palmpay_pub_key_pem = settings.PALMPAY_PALMPAY_PUBLIC_KEY
+    if palmpay_pub_key_pem and signature_b64:
+        try:
+            from cryptography.hazmat.primitives import hashes, serialization
+            from cryptography.hazmat.primitives.asymmetric import padding
 
-    payload = await request.json()
-    background_tasks.add_task(billing_service.process_paystack_webhook, payload)
+            palmpay_pub_key = serialization.load_pem_public_key(
+                palmpay_pub_key_pem.encode()
+            )
+            palmpay_pub_key.verify(
+                base64.b64decode(signature_b64),
+                payload_body,
+                padding.PKCS1v15(),
+                hashes.SHA256(),
+            )
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid PalmPay signature")
+    elif not palmpay_pub_key_pem:
+        raise HTTPException(status_code=500, detail="PalmPay public key not configured")
+
+    payload = json.loads(payload_body)
+    background_tasks.add_task(billing_service.process_palmpay_webhook, payload)
 
     return WebhookResponse(received=True)
 

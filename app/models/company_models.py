@@ -100,7 +100,7 @@ class CompanyResponse(BaseModel):
     # billing and subscription
     subscription_tier: Optional[str] = None # basic, pro, enterprise
     subscription_status: str = "inactive" # active, past_due, canceled, unpaid
-    billing_provider: Optional[str] = None # paystack or polar
+    billing_provider: Optional[str] = None # palmpay or polar
     subscription_id: Optional[str] = None
     customer_id: Optional[str] = None
     # members
