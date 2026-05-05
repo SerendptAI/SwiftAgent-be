@@ -311,7 +311,7 @@ async def update_me(
 # --- unified passwordless flow ---
 
 @router.post("/otp/send", response_model=LoginResponse)
-async def send_otp(body: OTPSendRequest, db=Depends(get_database), request: Request):
+async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_database)):
     """
     Unified entrypoint for passwordless login and signup.
     If the user exists and is within the grace period, returns tokens immediately.
@@ -376,7 +376,7 @@ async def send_otp(body: OTPSendRequest, db=Depends(get_database), request: Requ
 
 
 @router.post("/otp/verify", response_model=LoginResponse)
-async def verify_otp(body: OTPVerifyRequest, db=Depends(get_database), request: Request):
+async def verify_otp(request: Request, body: OTPVerifyRequest, db=Depends(get_database)):
     """Confirm the OTP and return a JWT token pair."""
     await rate_limit_auth(request)
     email = body.email.lower()
