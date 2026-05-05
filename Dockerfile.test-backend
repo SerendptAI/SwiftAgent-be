@@ -35,5 +35,7 @@ ENTRYPOINT []
 
 EXPOSE 8000
 
-# Run the mobile-only entrypoint
-CMD ["uvicorn", "main_mobile:app", "--host", "0.0.0.0", "--port", "8000"]
+ENV MONGO_DB_NAME="SwiftAgentsMobileTestDB"
+
+# Seed the test database then start the mobile API
+CMD python scripts/seed_mobile_test_db.py && uvicorn main_mobile:app --host 0.0.0.0 --port 8000

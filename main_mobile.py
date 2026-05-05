@@ -30,7 +30,6 @@ from app.api.routers import (
     mobile,
     email,
     dashboard,
-    companies,
 )
 from app.core.config import settings
 from app.core.database import create_indexes
