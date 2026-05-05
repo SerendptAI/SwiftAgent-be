@@ -2,26 +2,15 @@ import asyncio
 import logging
 import smtplib
 from email.message import EmailMessage
-from email.utils import make_msgid
-import mimetypes
 from pathlib import Path
 from typing import Optional
 
 from app.core.config import settings
+from app.services.email_utils import get_image_data, process_html_for_inline_images
 
 logger = logging.getLogger(__name__)
 
-# locate welcome.html at repository root
-TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "welcome.html"
-IMAGES_DIR = Path(__file__).resolve().parents[1] / "email_templates" / "images"
-
-def _get_image_data(filename: str) -> tuple[bytes, str, str]:
-    path = IMAGES_DIR / filename
-    with path.open("rb") as f:
-        data = f.read()
-    ctype, _ = mimetypes.guess_type(str(path))
-    maintype, subtype = (ctype or "image/jpeg").split("/")
-    return data, maintype, subtype
+TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "email_templates" / "welcome.html"
 
 
 async def send_welcome_email(to_email: str, name: Optional[str] = None) -> None:
@@ -48,34 +37,22 @@ async def send_welcome_email(to_email: str, name: Optional[str] = None) -> None:
 
     html = html.replace("{{dashboardUrl}}", dashboard_url or "#")
 
-    # generate CIDs for images
-    logo_cid = make_msgid(domain="swiftagent.com")
-    hero_cid = make_msgid(domain="swiftagent.com")
-
-    # logo and hero image fallbacks (use CID instead of transparency or base64)
-    html = html.replace("{{logoUrl}}", f"cid:{logo_cid[1:-1]}")
-    html = html.replace("{{heroImageUrl}}", f"cid:{hero_cid[1:-1]}")
-
     subject = "Welcome to Swift Agent"
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = settings.ZOHO_EMAIL
     msg["To"] = to_email
     msg.set_content("Welcome to Swift Agent! Please view this email in an HTML-capable client.")
+
+    html, attachments = process_html_for_inline_images(html)
     msg.add_alternative(html, subtype="html")
 
-    # Attach inline images to the HTML payload
-    try:
-        logo_data, logo_main, logo_sub = _get_image_data("logo.png")
-        msg.get_payload()[1].add_related(logo_data, maintype=logo_main, subtype=logo_sub, cid=logo_cid)
-    except Exception as e:
-        logger.warning("Could not attach logo.png: %s", e)
-
-    try:
-        hero_data, hero_main, hero_sub = _get_image_data("welcome.jpg")
-        msg.get_payload()[1].add_related(hero_data, maintype=hero_main, subtype=hero_sub, cid=hero_cid)
-    except Exception as e:
-        logger.warning("Could not attach welcome.jpg: %s", e)
+    for filename, cid in attachments.items():
+        try:
+            data, maintype, subtype = get_image_data(filename)
+            msg.get_payload()[1].add_related(data, maintype=maintype, subtype=subtype, cid=f"<{cid}>")
+        except Exception:
+            logger.warning("Could not attach image %s to welcome email.", filename)
 
     def _send() -> None:
         try:
