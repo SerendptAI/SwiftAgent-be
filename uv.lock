@@ -2630,7 +2630,7 @@ wheels = [
 ]
 
 [[package]]
-name = "swift-agent-be"
+name = "swiftagent-be"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
