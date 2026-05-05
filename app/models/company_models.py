@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime
 
 class CompanyInfoCreate(BaseModel):
@@ -56,6 +56,28 @@ class CompanyIdentityUpdate(BaseModel):
     customer_value: Optional[str] = None
     brand_tone: Optional[str] = None
     primary_language: str = "English"
+    support_emails: Optional[List[EmailStr]] = None
+
+    @field_validator("support_emails")
+    @classmethod
+    def normalize_support_emails(cls, v: Optional[List[EmailStr]]) -> Optional[List[EmailStr]]:
+        if v is None:
+            return None
+        normalized: List[str] = []
+        seen = set()
+        for e in v:
+            s = str(e).strip().lower()
+            if not s:
+                continue
+            if s in seen:
+                continue
+            seen.add(s)
+            normalized.append(s)
+        if len(normalized) == 0:
+            return []
+        if len(normalized) > 20:
+            raise ValueError("support_emails cannot contain more than 20 emails")
+        return normalized
 
 class CompanyTypeUpdate(BaseModel):
     company_type: str
@@ -85,6 +107,7 @@ class CompanyResponse(BaseModel):
     timezone: Optional[str] = None
     contact_email: Optional[str] = None
     support_email: Optional[str] = None
+    support_emails: Optional[List[EmailStr]] = None
     phone_number: Optional[str] = None
     # step 2
     description: Optional[str] = None

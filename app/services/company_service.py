@@ -66,6 +66,11 @@ async def create_company(user_id: str, data: dict) -> dict:
         "timezone": data.get("timezone"),
         "contact_email": data["contact_email"],
         "support_email": data.get("support_email"),
+        "support_emails": (
+            [data["support_email"].strip().lower()]
+            if data.get("support_email") and str(data.get("support_email")).strip()
+            else []
+        ),
         "phone_number": data.get("phone_number"),
         "logo_url": None,
         "company_type": None,

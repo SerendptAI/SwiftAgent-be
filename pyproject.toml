@@ -1,5 +1,5 @@
 [project]
-name = "swift-agent-be"
+name = "SwiftAgent-be"
 version = "0.1.0"
 description = "Voice-first AI support platform backend"
 readme = "README.md"
