@@ -12,6 +12,7 @@ from pymongo.errors import DuplicateKeyError
 from app.core.config import settings
 from app.core.database import get_database
 from app.models.auth_models import RegistrationInterestRequest
+from app.services.email_utils import add_html_with_inline_images
 from app.services.welcome_email_service import send_welcome_email
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,7 @@ async def _send_notification_email(doc: dict, token: str):
         msg["From"] = settings.ZOHO_EMAIL
         msg["To"] = admin_email
         msg.set_content(f"New registration request from {doc.get('company_name')}. View in HTML client.")
-        msg.add_alternative(html, subtype="html")
+        add_html_with_inline_images(msg, html)
 
         def _send() -> None:
             with smtplib.SMTP_SSL(settings.ZOHO_SMTP_SERVER, settings.ZOHO_SMTP_PORT) as smtp:

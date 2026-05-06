@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.core.config import settings
-from app.services.email_utils import get_image_data, process_html_for_inline_images
+from app.services.email_utils import add_html_with_inline_images
 
 logger = logging.getLogger(__name__)
 
@@ -44,15 +44,7 @@ async def send_welcome_email(to_email: str, name: Optional[str] = None) -> None:
     msg["To"] = to_email
     msg.set_content("Welcome to Swift Agent! Please view this email in an HTML-capable client.")
 
-    html, attachments = process_html_for_inline_images(html)
-    msg.add_alternative(html, subtype="html")
-
-    for filename, cid in attachments.items():
-        try:
-            data, maintype, subtype = get_image_data(filename)
-            msg.get_payload()[1].add_related(data, maintype=maintype, subtype=subtype, cid=f"<{cid}>")
-        except Exception:
-            logger.warning("Could not attach image %s to welcome email.", filename)
+    add_html_with_inline_images(msg, html)
 
     def _send() -> None:
         try:
