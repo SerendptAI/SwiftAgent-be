@@ -337,19 +337,7 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
         is_new = True
         user = new_user
     else:
-        # existing user
-        # skip OTP if user recently completed OTP verification
-        if within_otp_grace_period(user):
-            tokens = _token_pair(user["user_id"])
-            return LoginResponse(
-                message="Welcome back!",
-                email=email,
-                otp_required=False,
-                is_new_user=False,
-                **tokens,
-            )
-
-        # refresh OTP logic
+        # existing user - always require OTP (grace period disabled for testing)
         otp_code = "123456" if email == "test@swiftagents.org" else generate_otp()
         ttl = settings.OTP_TTL_LOGIN_MINUTES
         await db.users.update_one(
