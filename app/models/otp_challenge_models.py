@@ -45,3 +45,9 @@ class RegisterDeviceRequest(BaseModel):
 class ChallengeResponseRequest(BaseModel):
     """Mobile app request to respond to an OTP challenge."""
     otp_value: str = Field(..., min_length=1, max_length=20)
+
+
+class TestPushNotificationRequest(BaseModel):
+    """Request to send a test push notification."""
+    title: str = Field(default="🔐 OTP Required", max_length=100)
+    body: str = Field(default="Test: Your agent needs an OTP to log into a dashboard. Tap to enter the code.", max_length=200)

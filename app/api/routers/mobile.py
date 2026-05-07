@@ -19,9 +19,10 @@ from app.core.database import db
 from app.models.otp_challenge_models import (
     ChallengeResponseRequest,
     RegisterDeviceRequest,
+    TestPushNotificationRequest,
 )
 from app.services import otp_challenge_service
-from app.services.push_notification_service import register_device, unregister_device
+from app.services.push_notification_service import register_device, unregister_device, send_test_push
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,27 @@ async def unregister_push_device(
     if not removed:
         raise HTTPException(status_code=404, detail="Device token not found")
     return {"status": "unregistered"}
+
+
+@router.post("/test-notification")
+async def send_test_notification(
+    body: TestPushNotificationRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Send a test push notification to all registered devices of the authenticated user."""
+    result = await send_test_push(
+        user_id=user["user_id"],
+        title=body.title,
+        body=body.body,
+    )
+    
+    if result["total_devices"] == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="No registered devices found for this user. Register a device first."
+        )
+    
+    return result
 
 
 # OTP Challenges 
