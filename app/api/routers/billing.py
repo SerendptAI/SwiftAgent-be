@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.plan_enforcement import get_usage_summary
 from app.services.company_service import get_company
 
-router = APIRouter(prefix="/billing", tags=["billing"])
+router = APIRouter(tags=["billing"])
 
 
 @router.get("/plans")
