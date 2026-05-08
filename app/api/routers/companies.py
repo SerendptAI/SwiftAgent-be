@@ -169,6 +169,10 @@ async def update_company_type(
 
 
 
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+
 @router.patch("/{company_id}/logo", response_model=CompanyResponse)
 async def update_logo(
     company_id: str,
@@ -180,6 +184,21 @@ async def update_logo(
     company = await company_service.get_company(company_id, user_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+
+    # Validate file type
+    content_type = file.content_type
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Allowed: JPEG, PNG, WebP, GIF"
+        )
+
+    # Validate file size
+    file.file.seek(0, 2)  # Seek to end
+    file_size = file.file.tell()
+    file.file.seek(0)  # Reset to start
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Max 5MB")
 
     try:
         logo_url = await cloudinary_service.upload_image(
