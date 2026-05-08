@@ -94,11 +94,34 @@ async def add_security_headers(request, call_next):
     """Add security headers to all responses."""
     response = await call_next(request)
     if request.scope["type"] == "http":
+        path = request.url.path
+        
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data: https:; script-src 'self'"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        
+        # Exempt /docs and /redoc from strict CSP since they need inline scripts/styles
+        if path in ("/docs", "/redoc", "/openapi.json"):
+            # Relaxed CSP for documentation endpoints
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self' https:; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
+                "style-src 'self' 'unsafe-inline' https:; "
+                "img-src 'self' data: https:; "
+                "font-src 'self' https:; "
+                "connect-src 'self' https:"
+            )
+        else:
+            # Strict CSP for API endpoints
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "script-src 'self'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data: https:;"
+            )
     return response
 
 
