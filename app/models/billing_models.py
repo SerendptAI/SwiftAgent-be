@@ -17,6 +17,7 @@ class BillingDetailsResponse(BaseModel):
     subscription_status: str
     billing_provider: Optional[str]
     saved_cards: List[SavedCard] = []
+    subscription_started_at: Optional[str] = None
 
 class WebhookResponse(BaseModel):
     received: bool

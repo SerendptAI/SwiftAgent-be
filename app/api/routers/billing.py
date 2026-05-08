@@ -6,7 +6,7 @@ import hashlib
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from app.core.auth import get_current_user
 from app.core.database import db
-from app.models.billing_models import CheckoutSessionRequest, CheckoutSessionResponse, WebhookResponse
+from app.models.billing_models import CheckoutSessionRequest, CheckoutSessionResponse, WebhookResponse, BillingDetailsResponse, SavedCard
 from app.services.billing_service import billing_service
 from app.core.billing_limits import TIER_LIMITS
 from app.core.config import settings
@@ -35,6 +35,30 @@ async def get_billing_status(
 
     summary = await get_usage_summary(company)
     return summary
+
+
+@router.get("/{company_id}/details", response_model=BillingDetailsResponse)
+async def get_billing_details(
+    company_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Return current subscription info and saved payment cards for a company."""
+    company = await get_company(company_id, current_user["user_id"])
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    raw_cards = await billing_service.get_saved_cards(company)
+    saved_cards = [SavedCard(**c) for c in raw_cards]
+
+    started_at = company.get("subscription_started_at")
+
+    return BillingDetailsResponse(
+        subscription_tier=company.get("subscription_tier"),
+        subscription_status=company.get("subscription_status", "inactive"),
+        billing_provider=company.get("billing_provider"),
+        saved_cards=saved_cards,
+        subscription_started_at=started_at.isoformat() if started_at else None,
+    )
 
 
 @router.post("/checkout", response_model=CheckoutSessionResponse)

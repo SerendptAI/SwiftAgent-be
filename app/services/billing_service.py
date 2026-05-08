@@ -129,6 +129,40 @@ class BillingService:
             data = response.json()
             return data.get("url", f"https://sandbox.polar.sh/checkout/dummy?company_id={company_id}")
 
+    async def get_saved_cards(self, company: Dict[str, Any]) -> list:
+        """Fetch saved payment methods from Polar for a company."""
+        provider = company.get("billing_provider")
+        customer_id = company.get("customer_id")
+
+        if provider != "polar" or not customer_id:
+            return []
+
+        if not settings.POLAR_ACCESS_TOKEN:
+            return []
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.polar_api_url}/customers/{customer_id}/payment-methods",
+                    headers={"Authorization": f"Bearer {settings.POLAR_ACCESS_TOKEN}"},
+                )
+                if response.status_code != 200:
+                    return []
+
+                data = response.json()
+                cards = []
+                for item in data.get("items", []):
+                    card = item.get("card", {})
+                    if card:
+                        cards.append({
+                            "brand": card.get("brand", "unknown"),
+                            "last4": card.get("last4", "****"),
+                        })
+                return cards
+        except Exception:
+            logger.exception("Failed to fetch saved cards from Polar")
+            return []
+
     async def process_palmpay_webhook(self, payload: Dict[str, Any]) -> bool:
         """Process webhook events from PalmPay."""
         event = payload.get("notifyType")
