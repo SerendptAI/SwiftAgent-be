@@ -256,7 +256,12 @@ async def accept_invite(token: str) -> dict:
         raise ValueError("Invite not found")
         
     now = datetime.now(tz=timezone.utc)
-    if (now - invite.get("invited_at")).days >= 10:
+    invited_at = invite.get("invited_at")
+    if invited_at is None:
+        raise ValueError("Invite has expired")
+    if invited_at.tzinfo is None:
+        invited_at = invited_at.replace(tzinfo=timezone.utc)
+    if (now - invited_at).days >= 10:
         raise ValueError("Invite has expired")
         
     email = invite.get("email")
