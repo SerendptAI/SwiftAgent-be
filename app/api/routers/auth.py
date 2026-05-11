@@ -101,9 +101,6 @@ async def _assert_email_approved(db, email: str):
     1. Exists in pending_registrations with status 'approved'
     2. Has been invited to a company
     """
-    if email == "test@swiftagents.org":
-        return
-
     # check registrations
     reg = await db.pending_registrations.find_one({"company_email": email})
     if reg and reg.get("status") == "approved":
@@ -333,7 +330,7 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
         await _assert_email_approved(db, email)
         
         # brand new user -> unverified document placeholder
-        otp_code = "123456" if email == "test@swiftagents.org" else generate_otp()
+        otp_code = generate_otp()
         ttl = settings.OTP_TTL_SIGNUP_MINUTES
         new_user = build_new_passwordless_user(body.full_name, email, otp_code, ttl)
         await db.users.insert_one(new_user)
@@ -341,7 +338,7 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
         user = new_user
     else:
         # existing user - always require OTP (grace period disabled for testing)
-        otp_code = "123456" if email == "test@swiftagents.org" else generate_otp()
+        otp_code = generate_otp()
         ttl = settings.OTP_TTL_LOGIN_MINUTES
         await db.users.update_one(
             {"email": email},
@@ -350,10 +347,7 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
 
     # Dispatch email
     purpose = "email verification" if is_new else "login verification"
-    if email != "test@swiftagents.org":
-        sent = await send_otp_email(email, otp_code, ttl, purpose_label=purpose)
-    else:
-        sent = True  # bypass email for test account
+    sent = await send_otp_email(email, otp_code, ttl, purpose_label=purpose)
 
     if not sent:
         # Rollback partial signups to not pollute the db with unverified garbage
