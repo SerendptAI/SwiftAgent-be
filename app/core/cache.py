@@ -56,7 +56,7 @@ class TTLCache:
                 del self._store[k]
 
 
-company_cache = TTLCache(default_ttl=300)
+company_cache = TTLCache(default_ttl=90)
 
 
 async def get_cached_company(company_id: str) -> Optional[dict]:

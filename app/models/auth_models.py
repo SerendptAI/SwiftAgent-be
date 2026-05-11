@@ -11,6 +11,10 @@ class UserProfileUpdate(BaseModel):
     personal_email: Optional[EmailStr] = None
     personal_phone: Optional[str] = None
 
+class UserSecurityUpdate(BaseModel):
+    backup_email: Optional[EmailStr] = None
+    access_code: Optional[str] = None
+
 class ReferralRequest(BaseModel):
     code: str
 

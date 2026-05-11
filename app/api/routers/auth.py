@@ -38,6 +38,7 @@ from app.models.auth_models import (
     ReferralRequest,
     RefreshTokenRequest,
     UserProfileUpdate,
+    UserSecurityUpdate,
     RegistrationInterestRequest,
     RegistrationInterestResponse,
 )
@@ -308,6 +309,30 @@ async def update_me(
     return {"status": "success"}
 
 
+@router.patch("/me/security")
+async def update_user_security(
+    data: UserSecurityUpdate,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_database),
+):
+    """Update user-level backup email and access code (admin only)."""
+    user_id = current_user["user_id"]
+    company = await db.companies.find_one(
+        {"user_id": user_id, "setup_complete": True},
+        {"_id": 0, "id": 1, "user_id": 1}
+    )
+    if not company:
+        raise HTTPException(status_code=403, detail="Only company admins can set backup security credentials")
+        
+    update_data = data.model_dump(exclude_none=True)
+    if not update_data:
+        return {"status": "success"}
+    
+    update_data["updated_at"] = datetime.now(tz=timezone.utc)
+    await db.users.update_one({"user_id": user_id}, {"$set": update_data})
+    return {"status": "success"}
+
+
 # --- unified passwordless flow ---
 
 @router.post("/otp/send", response_model=LoginResponse)
@@ -322,7 +347,7 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
 
     email = body.email.lower()
     now = datetime.now(tz=timezone.utc)
-    user = await db.users.find_one({"email": email})
+    user = await db.users.find_one({"$or": [{"email": email}, {"backup_email": email}]})
     is_new = getattr(body, "is_signup", False)
 
     if not user:
@@ -341,7 +366,7 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
         otp_code = generate_otp()
         ttl = settings.OTP_TTL_LOGIN_MINUTES
         await db.users.update_one(
-            {"email": email},
+            {"user_id": user["user_id"]},
             {"$set": {"otp_code": otp_code, "otp_expires": now + timedelta(minutes=ttl), "updated_at": now}},
         )
 
@@ -368,7 +393,7 @@ async def verify_otp(request: Request, body: OTPVerifyRequest, db=Depends(get_da
     """Confirm the OTP and return a JWT token pair."""
     await rate_limit_auth(request)
     email = body.email.lower()
-    user = await db.users.find_one({"email": email})
+    user = await db.users.find_one({"$or": [{"email": email}, {"backup_email": email}]})
 
     if not user:
         raise HTTPException(status_code=404, detail="No account found for this email.")
@@ -381,7 +406,7 @@ async def verify_otp(request: Request, body: OTPVerifyRequest, db=Depends(get_da
     
     now = datetime.now(tz=timezone.utc)
     await db.users.update_one(
-        {"email": email},
+        {"user_id": user["user_id"]},
         {
             "$set": {
                 "is_verified": True, 
