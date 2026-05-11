@@ -84,7 +84,7 @@ async def _analyze_page_with_vision(
 
     try:
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-3-7-sonnet-20250219",
             max_tokens=2000,
             messages=[{
                 "role": "user",

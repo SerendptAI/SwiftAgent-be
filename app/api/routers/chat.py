@@ -2,10 +2,15 @@
 Chat SSE router — streaming text-based agent responses via Server-Sent Events.
 
 POST /{company_id}/chat
-  Body: {"session_id": "...", "message": "..."}
+  Body: {
+    "session_id": "...",
+    "message": "...",
+    "user_id": null,
+    "agent": "anthropic" | "openrouter"   # optional, defaults to company setting or "anthropic"
+  }
   Returns: text/event-stream
 
-SSE event format (matches my-health-diary-be agent v2):
+SSE event format:
   event: message
   data: {"data": {"stage": "<stage>", ...}}
 
@@ -15,6 +20,7 @@ Stages:
   tool          – a specific tool is being invoked
   stream        – final agent reply text
   sources       – knowledge-base sources / blockchain data
+  navigation_guide – visual guide steps
   done          – stream complete
 """
 
@@ -24,19 +30,24 @@ import logging
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
+from typing import Literal, Optional
 
 from app.core.database import db
-from app.services import anthropic_agent_service, memory_service
+from app.services import anthropic_agent_service, openrouter_agent_service, memory_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Chat"])
+
+AgentType = Literal["anthropic", "openrouter"]
 
 
 class ChatRequest(BaseModel):
     session_id: str
     message: str
     user_id: str = None
+    # Optional — if omitted, falls back to company.ai_provider, then global default
+    agent: Optional[AgentType] = None
 
     @field_validator("message")
     @classmethod
@@ -52,9 +63,30 @@ def _sse(stage: str, **kwargs) -> str:
     return f"event: message\ndata: {json.dumps(payload)}\n\n"
 
 
-async def _chat_sse_generator(company_id: str, req: ChatRequest):
-    """SSE generator that wraps the agent streaming chat."""
+# Global default agent — change here to swap the platform default.
+_DEFAULT_AGENT: AgentType = "anthropic"
 
+_AGENT_MAP = {
+    "openrouter": openrouter_agent_service.chat_stream,
+    "anthropic": anthropic_agent_service.chat_stream,
+}
+
+
+def _resolve_agent(req: ChatRequest, company: dict):
+    """
+    Pick the streaming function to use.
+
+    Priority (highest → lowest):
+      1. req.agent   — explicitly set by the frontend/caller
+      2. company.ai_provider — per-company setting stored in MongoDB
+      3. _DEFAULT_AGENT — platform-wide fallback
+    """
+    agent_key = req.agent or company.get("ai_provider") or _DEFAULT_AGENT
+    return _AGENT_MAP.get(agent_key, _AGENT_MAP[_DEFAULT_AGENT])
+
+
+async def _chat_sse_generator(company_id: str, req: ChatRequest):
+    """SSE generator that wraps the chosen agent's streaming chat."""
     try:
         company = await db.companies.find_one({"id": company_id})
         if not company:
@@ -64,22 +96,17 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
 
         yield _sse("chat_details", session_id=req.session_id, company_id=company_id)
 
+        stream_fn = _resolve_agent(req, company)
         response_text = ""
 
-        async for event in anthropic_agent_service.chat_stream(
-            company_id, req.session_id, req.message, req.user_id
-        ):
+        async for event in stream_fn(company_id, req.session_id, req.message, req.user_id):
             event_type = event.get("type")
 
             if event_type == "thinking":
                 yield _sse("thinking", message=event.get("message", ""))
 
             elif event_type == "tool":
-                yield _sse(
-                    "tool",
-                    name=event.get("name", ""),
-                    label=event.get("label", ""),
-                )
+                yield _sse("tool", name=event.get("name", ""), label=event.get("label", ""))
 
             elif event_type == "text":
                 content = event.get("content", "")
@@ -110,6 +137,7 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
 
         yield _sse("done")
 
+        # generate session memory summary after conversation ends
         if req.user_id:
             conversation = await db.widget_conversations.find_one(
                 {"company_id": company_id, "session_id": req.session_id}
