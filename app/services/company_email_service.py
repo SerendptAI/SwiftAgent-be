@@ -58,7 +58,10 @@ async def create_ticket(
     customer_name: str | None = None,
 ) -> dict:
     """Create a new support ticket (called by the AI agent)."""
+    # ensure ticket id is unique (avoid rare collisions)
     ticket_id = str(uuid4())[:8].upper()
+    while await db.email_tickets.find_one({"id": ticket_id}):
+        ticket_id = str(uuid4())[:8].upper()
     resolve_token = str(uuid4())
     now = datetime.now(tz=timezone.utc)
 
@@ -98,7 +101,15 @@ async def create_ticket(
             {"$set": {"escalated": True, "ticket_id": ticket_id}},
         )
 
-    return doc
+    # Return a clean projection (exclude MongoDB internal _id)
+    created = await db.email_tickets.find_one({"id": ticket_id}, {"_id": 0})
+    # Defensive: ensure status remains pending
+    if created and created.get("status") != "pending":
+        logger.warning("Ticket %s created with non-pending status: %s", ticket_id, created.get("status"))
+        await db.email_tickets.update_one({"id": ticket_id}, {"$set": {"status": "pending", "updated_at": now}})
+        created["status"] = "pending"
+
+    return created or doc
 
 
 async def get_ticket(company_id: str, ticket_id: str) -> dict | None:
@@ -122,6 +133,7 @@ async def list_tickets(
         {"$limit": limit},
         {
             "$project": {
+                "_id": 0,
                 "id": 1,
                 "company_id": 1,
                 "customer_email": 1,
