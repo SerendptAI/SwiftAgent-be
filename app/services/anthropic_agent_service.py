@@ -247,6 +247,96 @@ TOOL_STAGE_LABELS = {
     "create_support_ticket": "Creating support ticket…",
 }
 
+# Multi-stage stream text flows for each tool (Agent-specific)
+# Agent 001: Bank records and payment status
+# Agent 007: Website search
+# Agent 047: Dashboard feature location
+# Agent 626: Cryptocurrency transaction analysis
+TOOL_STAGES = {
+    # Agent 001: lookup_transaction - Bank record analysis
+    "lookup_transaction": [
+        "AGENT IS SEARCHING BANK RECORDS",
+        "ACCESSING BANK RECORDS",
+        "CHECKING PAYMENT STATUS",
+        "VERIFYING TRANSACTION DETAILS",
+        "RECORDS FOUND",
+    ],
+    # Agent 001: lookup_wallet - Payment verification
+    "lookup_wallet": [
+        "AGENT IS SEARCHING PAYMENT RECORDS",
+        "CONNECTING TO PAYMENT SYSTEM",
+        "VERIFYING WALLET INFORMATION",
+        "PROCESSING REFUND STATUS",
+        "PAYMENT INFORMATION FOUND",
+    ],
+    # Agent 001 & 007: search_knowledge_base
+    "search_knowledge_base": [
+        "AGENT IS SEARCHING",
+        "SCANNING KNOWLEDGE BASE",
+        "EXTRACTING RELEVANT INFORMATION",
+        "INFORMATION FOUND",
+    ],
+    # Agent 626: lookup_transaction - Blockchain analysis
+    "lookup_transaction_crypto": [
+        "AGENT IS SEARCHING",
+        "CONNECTING TO BLOCKCHAIN",
+        "ANALYZING HASHCODE",
+        "VERIFYING TRANSACTION",
+        "TRANSACTION FOUND",
+    ],
+    # Agent 626: lookup_wallet - Wallet analysis
+    "lookup_wallet_crypto": [
+        "AGENT IS SEARCHING",
+        "CONNECTING TO BLOCKCHAIN",
+        "ANALYZING WALLET ADDRESS",
+        "RETRIEVING TRANSACTION HISTORY",
+        "WALLET INFORMATION FOUND",
+    ],
+    # Agent 626: diagnose_problem
+    "diagnose_problem": [
+        "AGENT IS SEARCHING",
+        "ANALYZING TRANSACTION DETAILS",
+        "IDENTIFYING POTENTIAL ISSUES",
+        "ISSUES IDENTIFIED",
+    ],
+    # Agent 007: scrape_documentation_link
+    "scrape_documentation_link": [
+        "AGENT IS SEARCHING",
+        "CRAWLING WEBSITE",
+        "SCANNING PAGES",
+        "EXTRACTING DOCUMENTATION",
+        "DOCUMENTATION FOUND",
+    ],
+    # Agent 047: get_dashboard_navigation
+    "get_dashboard_navigation": [
+        "AGENT IS SEARCHING",
+        "LOCATING FEATURE IN DASHBOARD",
+        "MAPPING NAVIGATION PATHS",
+        "FEATURE FOUND",
+        "GENERATING DIRECTIONS",
+    ],
+    # Agent 047: get_full_dashboard_documentation
+    "get_full_dashboard_documentation": [
+        "AGENT IS SEARCHING",
+        "SCANNING ENTIRE DASHBOARD",
+        "MAPPING ALL FEATURES",
+        "CAPTURING INTERFACE DETAILS",
+        "DASHBOARD DOCUMENTATION FOUND",
+    ],
+    # Fallback for create_support_ticket
+    "create_support_ticket": [
+        "AGENT IS PREPARING",
+        "CREATING SUPPORT TICKET",
+        "TICKET CREATED SUCCESSFULLY",
+    ],
+}
+
+
+# Helper function to emit multi-stage streams for tools
+def _get_tool_stages(tool_name: str) -> list[str]:
+    """Get the multi-stage stream text for a given tool."""
+    return TOOL_STAGES.get(tool_name, [f"Processing {tool_name}..."])
+
 
 # system prompt builder
 
@@ -842,17 +932,24 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
 
             tool_results = []
             for block in tool_use_blocks:
-                # emit tool event with friendly label
-                label = TOOL_STAGE_LABELS.get(block.name, "Working…")
-                yield {"type": "thinking", "message": label}
-                yield {"type": "tool", "name": block.name, "label": label}
+                # emit multi-stage stream for this tool
+                tool_name = block.name
+                stages = _get_tool_stages(tool_name)
+                
+                # Emit all stages for this tool
+                for stage_message in stages:
+                    yield {"type": "thinking", "message": stage_message}
+                
+                # Emit tool metadata event
+                label = TOOL_STAGE_LABELS.get(tool_name, "Working…")
+                yield {"type": "tool", "name": tool_name, "label": label}
 
-                result = await _execute_tool(block.name, block.input, company=company)
-
-                if block.name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
+                result = await _execute_tool(tool_name, block.input, company=company)
+                
+                if tool_name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
                     blockchain_data = result
 
-                if block.name == "search_knowledge_base" and isinstance(result, dict):
+                if tool_name == "search_knowledge_base" and isinstance(result, dict):
                     for r in result.get("results", []):
                         sources.append(
                             {
@@ -863,7 +960,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
 
                 # capture nav report data for later reconstruction
                 if (
-                    block.name == "get_dashboard_navigation"
+                    tool_name == "get_dashboard_navigation"
                     and isinstance(result, dict)
                     and result.get("found")
                 ):
