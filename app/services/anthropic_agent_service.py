@@ -720,10 +720,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
 
     except Exception as e:
         logger.exception("Anthropic API error")
-        reply = (
-            "I'm sorry, I'm experiencing a temporary issue. "
-            "Please try again in a moment, or contact our support team directly."
-        )
+        raise e
 
     # extract navigation_steps from reply and reconstruct guide
     guide_dump = None
@@ -915,10 +912,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
 
     except Exception as e:
         logger.exception("Anthropic API error during streaming chat")
-        reply = (
-            "I'm sorry, I'm experiencing a temporary issue. "
-            "Please try again in a moment, or contact our support team directly."
-        )
+        raise e
 
     # save conversation
     history.append(
