@@ -48,9 +48,9 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.5-flash"
     ANTHROPIC_API_KEY: str = ""
-    ANTHROPIC_MODEL: str = "claude-3-5-haiku-20241022"
+    ANTHROPIC_MODEL: str = "claude-haiku-4-5-20251001"
     OPENROUTER_API_KEY: str = ""
-    OPENROUTER_MODEL: str = "meta-llama/llama-3.3-70b-instruct:free"
+    OPENROUTER_MODEL: str = "google/gemma-4-31b-it:free"
 
     # cloudinary
     CLOUDINARY_CLOUD_NAME: str = ""

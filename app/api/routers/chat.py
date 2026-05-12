@@ -33,13 +33,13 @@ from pydantic import BaseModel, field_validator, Field
 from typing import Literal, Optional
 
 from app.core.database import db
-from app.services import anthropic_agent_service, openrouter_agent_service, memory_service
+from app.services import anthropic_agent_service, openrouter_agent_service, gemini_agent_service, memory_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Chat"])
 
-AgentType = Literal["anthropic", "openrouter"]
+AgentType = Literal["anthropic", "openrouter", "gemini"]
 
 
 class ChatRequest(BaseModel):
@@ -72,6 +72,7 @@ _DEFAULT_AGENT: AgentType = "anthropic"
 _AGENT_MAP = {
     "openrouter": openrouter_agent_service.chat_stream,
     "anthropic": anthropic_agent_service.chat_stream,
+    "gemini": gemini_agent_service.chat_stream,
 }
 
 
@@ -104,6 +105,7 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
         # Build a list of fallback agents to try
         stream_fns_to_try = [_AGENT_MAP.get(agent_key, _AGENT_MAP[_DEFAULT_AGENT])]
         if agent_key == "anthropic" or (not req.agent and not company.get("ai_provider") and _DEFAULT_AGENT == "anthropic"):
+            stream_fns_to_try.append(_AGENT_MAP["gemini"])
             stream_fns_to_try.append(_AGENT_MAP["openrouter"])
 
         response_text = ""

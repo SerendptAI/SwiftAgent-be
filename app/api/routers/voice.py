@@ -18,7 +18,7 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.core.database import db
-from app.services import anthropic_agent_service, openrouter_agent_service
+from app.services import anthropic_agent_service, openrouter_agent_service, gemini_agent_service
 from app.core.plan_enforcement import enforce_voice_minutes
 
 logger = logging.getLogger(__name__)
@@ -109,17 +109,26 @@ async def voice_call(websocket: WebSocket, company_id: str):
                         "reply", "I'm sorry, I couldn't generate a response."
                     )
                 except Exception as e:
-                    logger.warning(f"Anthropic agent chat failed: {e}. Falling back to OpenRouter...")
+                    logger.warning(f"Anthropic agent chat failed: {e}. Falling back to Gemini...")
                     try:
-                        result = await openrouter_agent_service.chat(
+                        result = await gemini_agent_service.chat(
                             company_id, session_id, text
                         )
                         reply = result.get(
                             "reply", "I'm sorry, I couldn't generate a response."
                         )
-                    except Exception as fallback_err:
-                        logger.error(f"OpenRouter fallback failed: {fallback_err}")
-                        reply = "I'm sorry, I'm having trouble right now. Please try again."
+                    except Exception as gemini_err:
+                        logger.warning(f"Gemini fallback failed: {gemini_err}. Falling back to OpenRouter...")
+                        try:
+                            result = await openrouter_agent_service.chat(
+                                company_id, session_id, text
+                            )
+                            reply = result.get(
+                                "reply", "I'm sorry, I couldn't generate a response."
+                            )
+                        except Exception as fallback_err:
+                            logger.error(f"OpenRouter fallback failed: {fallback_err}")
+                            reply = "I'm sorry, I'm having trouble right now. Please try again."
 
                 # send text reply (frontend will handle TTS/audio)
                 await websocket.send_json({"type": "reply_text", "text": reply})
