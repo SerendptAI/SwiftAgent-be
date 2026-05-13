@@ -111,9 +111,13 @@ async def get_visitors(company_id: str, limit: int = 20) -> list:
 
 
 async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
-    """Return non-escalated chats + resolved tickets merged (Resolved section)."""
+    """Return resolved tickets only (Resolved section).
+    
+    Note: Escalated chats (now tickets) are excluded; admins view them via ticket listing.
+    """
 
-    # 1. Non-escalated chats
+    # NOTE: escalated chats excluded intentionally—they now have corresponding tickets
+    # 1. Non-escalated chats ONLY
     chat_pipeline = [
         {"$match": {"company_id": company_id, "escalated": {"$ne": True}}},
         {"$sort": {"updated_at": -1}},

@@ -105,21 +105,34 @@ async def list_tickets(
     }
 
 
+async def _get_ticket_with_context(company_id: str, ticket_id: str) -> dict:
+    """Fetch ticket with attributed chat context."""
+    return await company_email_service.get_ticket_with_chat(company_id, ticket_id)
+
+
 @router.get("/{company_id}/tickets/{ticket_id}", response_model=EmailTicketResponse)
 async def get_ticket(
     company_id: str,
     ticket_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Get full ticket thread."""
+    """Get full ticket thread with attributed chat (if escalated from chat)."""
     user_id = current_user["user_id"]
     company = await company_service.get_company(company_id, user_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    ticket = await company_email_service.get_ticket(company_id, ticket_id)
-    if not ticket:
+    result = await _get_ticket_with_context(company_id, ticket_id)
+    if not result:
         raise HTTPException(status_code=404, detail="Ticket not found")
+    
+    # Return ticket with attributed chat reference if available
+    ticket = result.get("ticket", {})
+    attributed_chat = result.get("attributed_chat")
+    
+    if attributed_chat:
+        ticket["attributed_chat"] = attributed_chat
+    
     return ticket
 
 

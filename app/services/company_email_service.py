@@ -418,3 +418,26 @@ async def resolve_ticket(token: str) -> dict | None:
     if result:
         logger.info("Ticket %s resolved via token", result["id"])
     return result
+
+
+async def get_ticket_with_chat(company_id: str, ticket_id: str) -> dict | None:
+    """Fetch a ticket and its attributed chat session (if escalated from a chat)."""
+    ticket = await db.email_tickets.find_one(
+        {"company_id": company_id, "id": ticket_id},
+        {"_id": 0}
+    )
+    if not ticket:
+        return None
+    
+    # If ticket came from a chat session, fetch and attach it
+    chat_session = None
+    if ticket.get("chat_session_id"):
+        chat_session = await db.widget_conversations.find_one(
+            {"company_id": company_id, "session_id": ticket["chat_session_id"]},
+            {"_id": 0}
+        )
+    
+    return {
+        "ticket": ticket,
+        "attributed_chat": chat_session or None,
+    }
