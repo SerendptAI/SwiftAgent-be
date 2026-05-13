@@ -393,7 +393,7 @@ TICKET ESCALATION:
 """
 
 # Tool executor (shared logic, identical to anthropic service)
-async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
+async def _execute_tool(name: str, args: dict, company: dict = None, session_id: str | None = None) -> dict:
     """Execute a named tool and return its result dict."""
     try:
         if name == "search_knowledge_base":
@@ -644,7 +644,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
                 except json.JSONDecodeError:
                     args = {}
 
-                result = await _execute_tool(fn_name, args, company=company)
+                result = await _execute_tool(fn_name, args, company=company, session_id=session_id)
 
                 if fn_name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
                     blockchain_data = result
@@ -783,7 +783,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
                 except json.JSONDecodeError:
                     args = {}
 
-                result = await _execute_tool(fn_name, args, company=company)
+                result = await _execute_tool(fn_name, args, company=company, session_id=session_id)
                 
                 if fn_name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
                     blockchain_data = result

@@ -375,7 +375,7 @@ RESPONSE FORMAT:
 # tool execution
 
 
-async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
+async def _execute_tool(name: str, args: dict, company: dict = None, session_id: str | None = None) -> dict:
     """Execute a tool call and return the result."""
     try:
         if name == "search_knowledge_base":
@@ -653,7 +653,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             tool_results = []
             for fc in function_calls:
                 args = dict(fc.args) if fc.args else {}
-                result = await _execute_tool(fc.name, args, company=company)
+                result = await _execute_tool(fc.name, args, company=company, session_id=session_id)
 
                 # Track blockchain data for response
                 if fc.name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
@@ -838,7 +838,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
                 yield {"type": "tool", "name": tool_name, "label": label}
 
                 args = dict(fc.args) if fc.args else {}
-                result = await _execute_tool(tool_name, args, company=company)
+                result = await _execute_tool(tool_name, args, company=company, session_id=session_id)
                 
                 if tool_name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
                     blockchain_data = result

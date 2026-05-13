@@ -434,7 +434,7 @@ create a support ticket so the company's human team can help.
 # tool execution (shared with gemini service)
 
 
-async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
+async def _execute_tool(name: str, args: dict, company: dict = None, session_id: str | None = None) -> dict:
     """Execute a tool call and return the result."""
     try:
         if name == "search_knowledge_base":
@@ -606,8 +606,7 @@ async def _execute_tool(name: str, args: dict, company: dict = None) -> dict:
                 }
 
             try:
-                # get session_id from context if available
-                session_id = args.get("_session_id") # injected by caller
+                # Use session_id from function parameter (passed from chat context)
                 ticket = await company_email_service.create_ticket(
                     company_id=company_id,
                     customer_email=customer_email,
@@ -752,7 +751,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             # execute all tool calls and build tool_result messages
             tool_results = []
             for block in tool_use_blocks:
-                result = await _execute_tool(block.name, block.input, company=company)
+                result = await _execute_tool(block.name, block.input, company=company, session_id=session_id)
 
                 # track blockchain data for response
                 if block.name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
@@ -944,7 +943,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
                 label = TOOL_STAGE_LABELS.get(tool_name, "Working…")
                 yield {"type": "tool", "name": tool_name, "label": label}
 
-                result = await _execute_tool(tool_name, block.input, company=company)
+                result = await _execute_tool(tool_name, block.input, company=company, session_id=session_id)
                 
                 if tool_name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
                     blockchain_data = result
