@@ -56,9 +56,7 @@ async def resolve_ticket_page(token: str):
 
     if ticket["status"] == "resolved":
         html = _load_template(RESOLVED_TEMPLATE)
-        html = html.replace("{{message}}", "This ticket was already resolved.")
-        html = html.replace("{{ticket_id}}", ticket["id"])
-        html = html.replace("{{ticket_subject}}", ticket["subject"])
+        html = html.replace("{{confirmation_message}}", "This ticket was already resolved.")
         return HTMLResponse(content=html, status_code=200)
 
     html = _load_template(RESOLVE_CONFIRM_TEMPLATE)
@@ -68,16 +66,23 @@ async def resolve_ticket_page(token: str):
     return HTMLResponse(content=html, status_code=200)
 
 
-@router.post("/resolve/{token}/confirm")
+@router.post("/resolve/{token}/confirm", response_class=HTMLResponse)
 async def confirm_resolve_ticket(token: str):
-    """Confirm ticket resolution."""
+    """Confirm ticket resolution and show a styled confirmation page."""
     result = await company_email_service.resolve_ticket(token)
-    if not result:
+    html = _load_template(RESOLVED_TEMPLATE)
+
+    if result:
+        msg = "Your ticket has been confirmed as resolved. Thank you!"
+    else:
         ticket = await company_email_service.get_ticket_by_resolve_token(token)
         if ticket and ticket["status"] == "resolved":
-            return {"status": "already_resolved"}
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    return {"status": "resolved", "ticket_id": result["id"]}
+            msg = "This ticket was already resolved."
+        else:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+    html = html.replace("{{confirmation_message}}", msg)
+    return HTMLResponse(content=html, status_code=200)
 
 
 @router.get("/{company_id}/tickets")

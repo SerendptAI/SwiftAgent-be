@@ -179,10 +179,75 @@ async def count_resolved_items(company_id: str) -> int:
     return chat_count + ticket_count
 
 
+def _normalize_ticket_to_chat_session(ticket: dict, company_id: str, attributed_chat: dict | None = None) -> dict:
+    """Convert a ticket document (+ optional attributed chat) into ChatSession shape.
+
+    Maps ticket messages and attributed chat messages into the unified
+    ``{role, content, timestamp}`` format so the frontend renders them
+    identically to regular widget chats.
+    """
+    messages: list[dict] = []
+
+    # 1. Prepend attributed chat messages (the original widget conversation)
+    if attributed_chat:
+        for msg in attributed_chat.get("messages", []):
+            messages.append({
+                "role": msg.get("role", "user"),
+                "content": msg.get("content", ""),
+                "timestamp": msg.get("timestamp"),
+            })
+
+    # 2. Append ticket email messages
+    _DIRECTION_TO_ROLE = {
+        "inbound": "user",
+        "outbound": "assistant",
+        "system": "assistant",
+    }
+    for msg in ticket.get("messages", []):
+        role = _DIRECTION_TO_ROLE.get(msg.get("direction", ""), "user")
+        content = msg.get("body_text", "")
+        ts = msg.get("timestamp")
+        messages.append({
+            "role": role,
+            "content": content,
+            "timestamp": ts.isoformat() if hasattr(ts, "isoformat") else ts,
+        })
+
+    return {
+        "id": ticket["id"],
+        "company_id": company_id,
+        "session_id": ticket["id"],
+        "created_at": ticket.get("created_at", datetime.now(tz=timezone.utc)),
+        "updated_at": ticket.get("updated_at", datetime.now(tz=timezone.utc)),
+        "messages": messages,
+        "seen": True,
+    }
+
+
 async def get_chat_by_id(company_id: str, chat_id: str) -> dict:
-    return await db.widget_conversations.find_one(
+    # Try widget_conversations first
+    result = await db.widget_conversations.find_one(
         {"company_id": company_id, "id": chat_id}, {"_id": 0}
     )
+    if result:
+        return result
+
+    # Fall back to resolved ticket
+    ticket = await db.email_tickets.find_one(
+        {"company_id": company_id, "id": chat_id}, {"_id": 0}
+    )
+    if not ticket:
+        return None
+
+    # If the ticket was escalated from a chat, fetch the attributed chat
+    attributed_chat = None
+    if ticket.get("chat_session_id"):
+        attributed_chat = await db.widget_conversations.find_one(
+            {"company_id": company_id, "session_id": ticket["chat_session_id"]},
+            {"_id": 0},
+        )
+
+    return _normalize_ticket_to_chat_session(ticket, company_id, attributed_chat)
 
 
 async def mark_chat_seen(company_id: str, chat_id: str) -> bool:

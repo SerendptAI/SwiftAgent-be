@@ -306,13 +306,99 @@ def _extract_slug_from_recipient(to_email: str) -> str | None:
     return local_part if local_part else None
 
 
+# ── Quoted-reply stripping ────────────────────────────────────────────
+
+# Patterns that mark the beginning of quoted / forwarded content
+_QUOTE_SEPARATORS = [
+    re.compile(r"^-{2,}\s*Original Message\s*-{2,}", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"^On\s+.+wrote:\s*$", re.MULTILINE),
+    re.compile(r"^From:\s+.+", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"^>{1,}\s*", re.MULTILINE),  # standard "> " quote prefix lines
+]
+
+
+def _strip_quoted_reply(text: str) -> str:
+    """Extract only the new reply content, stripping quoted thread text.
+
+    Handles Gmail ("On … wrote:"), Outlook ("-----Original Message-----"),
+    and standard "> " quote-prefix lines.  Returns the stripped text, or the
+    original if nothing could be detected.
+    """
+    if not text:
+        return text
+
+    # 1. Try splitting on well-known separator lines first (most reliable)
+    for pattern in _QUOTE_SEPARATORS[:3]:  # skip the ">" pattern for now
+        match = pattern.search(text)
+        if match:
+            new_reply = text[: match.start()].rstrip()
+            if new_reply:
+                return new_reply
+
+    # 2. Fall back to stripping lines that start with ">"
+    lines = text.splitlines()
+    new_lines: list[str] = []
+    hit_quote_block = False
+    for line in lines:
+        if line.lstrip().startswith(">"):
+            hit_quote_block = True
+            continue
+        if hit_quote_block:
+            # Once we enter a quote block, skip everything after it
+            continue
+        new_lines.append(line)
+
+    stripped = "\n".join(new_lines).rstrip()
+    return stripped if stripped else text
+
+
+def _strip_quoted_html(html: str | None) -> str | None:
+    """Remove <blockquote> elements and Gmail/Outlook quote wrappers from HTML."""
+    if not html:
+        return html
+
+    # Remove <blockquote ...>...</blockquote> (greedy across newlines)
+    cleaned = re.sub(
+        r"<blockquote[^>]*>.*?</blockquote>",
+        "",
+        html,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    # Remove Gmail quote wrapper: <div class="gmail_quote">...</div>
+    cleaned = re.sub(
+        r'<div\s+class="gmail_quote"[^>]*>.*?</div>',
+        "",
+        cleaned,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    # Remove Outlook-style <div id="appendonsend">...</div>
+    cleaned = re.sub(
+        r'<div\s+id="appendonsend"[^>]*>.*?</div>',
+        "",
+        cleaned,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    # Remove Mozilla cite prefix
+    cleaned = re.sub(
+        r'<div\s+class="moz-cite-prefix"[^>]*>.*?</div>',
+        "",
+        cleaned,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    return cleaned.strip() or html
+
+
 async def process_inbound_email(payload: dict) -> dict:
     """Process an inbound email from SendGrid Inbound Parse webhook."""
     sender_raw = payload.get("from", "")
     to_raw = payload.get("to", "")
     subject = payload.get("subject", "")
-    body_text = payload.get("text", "")
-    body_html = payload.get("html")
+    body_text_raw = payload.get("text", "")
+    body_html_raw = payload.get("html")
 
     email_match = re.search(r"<([^>]+)>", sender_raw)
     sender_email = email_match.group(1) if email_match else sender_raw.strip()
@@ -369,11 +455,16 @@ async def process_inbound_email(payload: dict) -> dict:
     if msg_id_match:
         message_id = msg_id_match.group(1)
 
+    # Strip quoted thread text — keep only the customer's new reply
+    body_text = _strip_quoted_reply(body_text_raw)
+    body_html = _strip_quoted_html(body_html_raw)
+
     now = datetime.now(tz=timezone.utc)
     inbound_msg = {
         "direction": "inbound",
         "body_text": body_text,
         "body_html": body_html,
+        "body_text_full": body_text_raw,  # preserve original for debugging
         "sender_email": sender_email,
         "message_id": message_id,
         "timestamp": now,
