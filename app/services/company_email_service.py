@@ -219,6 +219,29 @@ async def send_ticket_reply(
     full_html = _build_reply_html(html_body, company_name, resolve_url, logo_url)
     
     full_html, attachments_map = process_html_for_inline_images(full_html)
+    
+    # Process base64 inline images from rich text editors
+    base64_attachments = []
+    def _replace_base64(match):
+        prefix = match.group(1)
+        quote = match.group(2)
+        mime_type = match.group(3)
+        b64_data = match.group(4)
+        
+        cid = str(uuid4())
+        ext = mime_type.split('/')[-1] if '/' in mime_type else 'png'
+        filename = f"image_{cid[:8]}.{ext}"
+        
+        base64_attachments.append({
+            "filename": filename,
+            "cid": cid,
+            "mime_type": mime_type,
+            "data": b64_data
+        })
+        return f"{prefix}{quote}cid:{cid}{quote}"
+        
+    base64_img_re = re.compile(r'(<img\b[^>]*\bsrc=)(["\'])data:(image/[a-zA-Z0-9+-]+);base64,([^"\']+)\2', re.IGNORECASE)
+    full_html = base64_img_re.sub(_replace_base64, full_html)
 
     subject = f"Re: [Ticket #{ticket_id}] {ticket['subject']}"
 
@@ -252,6 +275,19 @@ async def send_ticket_reply(
             message.add_attachment(sg_attachment)
         except Exception as e:
             logger.warning(f"Could not attach image {filename} to ticket reply: {e}")
+
+    for att in base64_attachments:
+        try:
+            sg_attachment = Attachment(
+                FileContent(att["data"]),
+                FileName(att["filename"]),
+                FileType(att["mime_type"]),
+                Disposition("inline"),
+                ContentId(att["cid"])
+            )
+            message.add_attachment(sg_attachment)
+        except Exception as e:
+            logger.warning(f"Could not attach base64 image {att['filename']} to ticket reply: {e}")
 
     message.add_header(Header("Message-ID", outbound_message_id))
     if last_message_id:
@@ -308,11 +344,14 @@ def _extract_slug_from_recipient(to_email: str) -> str | None:
 
 # ── Quoted-reply stripping ────────────────────────────────────────────
 
-# Patterns that mark the beginning of quoted / forwarded content
+# Patterns that mark the beginning of quoted / forwarded content or signatures
 _QUOTE_SEPARATORS = [
     re.compile(r"^-{2,}\s*Original Message\s*-{2,}", re.IGNORECASE | re.MULTILINE),
     re.compile(r"^On\s+.+wrote:\s*$", re.MULTILINE),
     re.compile(r"^From:\s+.+", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"^--\s*$", re.MULTILINE),  # standard signature separator
+    re.compile(r"^_{2,}\s*$", re.MULTILINE),  # alternative separator
+    re.compile(r"^Sent from (my|Apple|Yahoo|Mail).*", re.IGNORECASE | re.MULTILINE),  # mobile signature
     re.compile(r"^>{1,}\s*", re.MULTILINE),  # standard "> " quote prefix lines
 ]
 
@@ -328,7 +367,7 @@ def _strip_quoted_reply(text: str) -> str:
         return text
 
     # 1. Try splitting on well-known separator lines first (most reliable)
-    for pattern in _QUOTE_SEPARATORS[:3]:  # skip the ">" pattern for now
+    for pattern in _QUOTE_SEPARATORS[:-1]:  # skip the ">" pattern for now
         match = pattern.search(text)
         if match:
             new_reply = text[: match.start()].rstrip()
