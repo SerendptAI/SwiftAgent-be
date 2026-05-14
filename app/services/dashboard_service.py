@@ -146,6 +146,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "_id": 0,
                 "id": 1,
                 "company_id": 1,
+                "session_id": "$id",
                 "customer_email": 1,
                 "customer_name": 1,
                 "subject": 1,
@@ -154,6 +155,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "created_at": 1,
                 "updated_at": 1,
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
+                "seen": {"$literal": True},
                 "type": {"$literal": "ticket"},
             }
         },
