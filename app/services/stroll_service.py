@@ -456,20 +456,56 @@ def _select_auth_strategy(config: StrollConfig) -> str:
 
 async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tuple[bool, dict[str, str]]:
     """
-    Handle dashboard authentication.
+    Handle dashboard authentication with smart strategy selection.
 
-    Priority:
-      1. Username + password form-based login (primary)
-      2. Pre-authenticated URL / token (fallback)
+    Evaluates available credentials and picks the easiest path:
+      1. pre_auth_url — Navigate directly (screenshot login page for reference first)
+      2. form_login   — Read DOM with vision → fill → submit → verify
+      3. none         — No auth needed
 
-    Returns True if auth succeeded (or was not needed), False on failure.
+    Returns (success: bool, extra_screenshots: dict) where extra_screenshots
+    maps special keys like "__login_page__" and "__otp_page__" to Cloudinary URLs.
     """
+    extra_screenshots: dict[str, str] = {}
     creds = config.credentials
     if not creds:
-        return True  # no auth needed
+        return True, extra_screenshots
 
-    # --- Primary path: form-based login with username + password ---
-    if creds.username and creds.password:
+    strategy = _select_auth_strategy(config)
+    logger.info(f"Auth strategy selected for company {company_id}: {strategy}")
+
+    # ── Strategy 1: Pre-authenticated URL (easiest) ──────────────────────
+    if strategy == "pre_auth":
+        # Screenshot the login page for reference (if a login_url is configured)
+        login_url = creds.login_url or config.dashboard_url
+        try:
+            await page.goto(
+                login_url,
+                timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                wait_until="networkidle",
+            )
+            login_screenshot = await _capture_screenshot(page)
+            login_ss_url = await _upload_screenshot(login_screenshot, company_id, "__login_page__")
+            extra_screenshots["__login_page__"] = login_ss_url
+            logger.info(f"Login page screenshotted for reference: {login_url}")
+        except Exception as e:
+            logger.warning(f"Failed to screenshot login page for reference: {e}")
+
+        # Navigate to the pre-auth URL
+        logger.info(f"Using pre-auth URL for company {company_id}")
+        try:
+            await page.goto(
+                creds.pre_auth_url,
+                timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                wait_until="networkidle",
+            )
+            return True, extra_screenshots
+        except Exception as e:
+            logger.error(f"Pre-auth URL navigation failed for company {company_id}: {e}")
+            return False, extra_screenshots
+
+    # ── Strategy 2: Form-based login with DOM reading ────────────────────
+    if strategy == "form_login":
         login_url = creds.login_url or config.dashboard_url
         logger.info(f"Attempting form-based login for company {company_id} at {login_url}")
 
@@ -481,43 +517,55 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
             )
         except Exception as e:
             logger.error(f"Failed to navigate to login page {login_url}: {e}")
-            return False
+            return False, extra_screenshots
 
-        # find and fill username field
+        # Screenshot the login page
+        login_screenshot = await _capture_screenshot(page)
+        try:
+            login_ss_url = await _upload_screenshot(login_screenshot, company_id, "__login_page__")
+            extra_screenshots["__login_page__"] = login_ss_url
+            logger.info(f"Login page screenshotted: {login_url}")
+        except Exception as e:
+            logger.warning(f"Failed to upload login page screenshot: {e}")
+
+        # Read the DOM with Claude vision to identify form fields
+        vision_selectors = await _read_login_dom_with_vision(page, login_screenshot, login_url)
+
+        # Find and fill username — prefer vision, then config override, then heuristics
         username_el = await _find_element(
-            page, creds.username_selector, _USERNAME_SELECTORS
+            page,
+            vision_selectors.get("username_selector") or creds.username_selector,
+            _USERNAME_SELECTORS,
         )
         if not username_el:
-            logger.error(
-                f"Could not find username field on {login_url} for company {company_id}"
-            )
-            return False
+            logger.error(f"Could not find username field on {login_url} for company {company_id}")
+            return False, extra_screenshots
 
         await username_el.fill(creds.username)
 
-        # find and fill password field
+        # Find and fill password — prefer vision, then config override, then heuristics
         password_el = await _find_element(
-            page, creds.password_selector, _PASSWORD_SELECTORS
+            page,
+            vision_selectors.get("password_selector") or creds.password_selector,
+            _PASSWORD_SELECTORS,
         )
         if not password_el:
-            logger.error(
-                f"Could not find password field on {login_url} for company {company_id}"
-            )
-            return False
+            logger.error(f"Could not find password field on {login_url} for company {company_id}")
+            return False, extra_screenshots
 
         await password_el.fill(creds.password)
 
-        # find and click submit
+        # Find and click submit — prefer vision, then config override, then heuristics
         submit_el = await _find_element(
-            page, creds.submit_selector, _SUBMIT_SELECTORS
+            page,
+            vision_selectors.get("submit_selector") or creds.submit_selector,
+            _SUBMIT_SELECTORS,
         )
         if not submit_el:
-            logger.error(
-                f"Could not find submit button on {login_url} for company {company_id}"
-            )
-            return False
+            logger.error(f"Could not find submit button on {login_url} for company {company_id}")
+            return False, extra_screenshots
 
-        # click submit and wait for navigation
+        # Click submit and wait for navigation
         try:
             async with page.expect_navigation(
                 timeout=settings.STROLL_PAGE_TIMEOUT_MS,
@@ -532,7 +580,6 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
                 logger.warning(f"Post-login wait timed out for company {company_id}: {e}")
 
         # --- verify login succeeded ---
-        # heuristic: password field should no longer be visible if login succeeded
         try:
             pw_still_visible = await page.locator('input[type="password"]').first.is_visible(timeout=2000)
         except Exception:
@@ -543,11 +590,20 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
                 f"Login appears to have failed for company {company_id} — "
                 f"password field still visible after submit"
             )
-            return False
+            return False, extra_screenshots
 
         # --- detect OTP / 2FA challenge page ---
         otp_detected = await _detect_otp_page(page)
         if otp_detected:
+            # Screenshot the OTP page
+            try:
+                otp_screenshot = await _capture_screenshot(page)
+                otp_ss_url = await _upload_screenshot(otp_screenshot, company_id, "__otp_page__")
+                extra_screenshots["__otp_page__"] = otp_ss_url
+                logger.info(f"OTP page screenshotted for company {company_id}")
+            except Exception as e:
+                logger.warning(f"Failed to upload OTP page screenshot: {e}")
+
             otp_cfg = config.otp_handling
             if otp_cfg and otp_cfg.enabled:
                 logger.info(f"OTP page detected for company {company_id}, initiating challenge relay")
@@ -556,16 +612,16 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
                     filled = await _fill_and_submit_otp(page, otp_value, config)
                     if not filled:
                         logger.error(f"Failed to fill OTP for company {company_id}")
-                        return False
+                        return False, extra_screenshots
                 else:
                     logger.error(f"OTP challenge timed out or failed for company {company_id}")
-                    return False
+                    return False, extra_screenshots
             else:
                 logger.warning(
                     f"OTP page detected for company {company_id} but OTP handling is "
                     f"not enabled in config — login will likely fail"
                 )
-                return False
+                return False, extra_screenshots
 
         logger.info(f"Login succeeded for company {company_id}, now at {page.url}")
 
@@ -581,27 +637,13 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
                 )
             except Exception as e:
                 logger.error(f"Failed to navigate to dashboard after login: {e}")
-                return False
+                return False, extra_screenshots
 
-        return True
+        return True, extra_screenshots
 
-    # --- Fallback path: pre-authenticated URL / token ---
-    if creds.pre_auth_url:
-        logger.info(f"Using pre-auth URL for company {company_id}")
-        try:
-            await page.goto(
-                creds.pre_auth_url,
-                timeout=settings.STROLL_PAGE_TIMEOUT_MS,
-                wait_until="networkidle",
-            )
-            return True
-        except Exception as e:
-            logger.error(f"Pre-auth URL navigation failed for company {company_id}: {e}")
-            return False
-
-    # no credentials usable
+    # ── Strategy 3: No usable credentials ────────────────────────────────
     logger.warning(f"Credentials provided but insufficient for company {company_id}")
-    return True  # proceed unauthenticated
+    return True, extra_screenshots  # proceed unauthenticated
 
 
 async def _detect_otp_page(page: Page) -> bool:
@@ -855,7 +897,10 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
             )
 
         # — authenticate if credentials provided —
-        auth_ok = await _authenticate(page, config, company_id)
+        auth_ok, extra_screenshots = await _authenticate(page, config, company_id)
+        if extra_screenshots:
+            screenshot_urls.update(extra_screenshots)
+
         if not auth_ok:
             logger.error(f"Authentication failed for company {company_id}")
             return StrollVersion(
@@ -865,6 +910,15 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
                 graph=NavGraph(),
                 status="failed",
             )
+
+        # Screenshot dashboard home page immediately after auth
+        try:
+            dashboard_ss_bytes = await _capture_screenshot(page)
+            dashboard_ss_url = await _upload_screenshot(dashboard_ss_bytes, company_id, "__dashboard_home__")
+            screenshot_urls["__dashboard_home__"] = dashboard_ss_url
+            logger.info(f"Dashboard home screenshotted for company {company_id}")
+        except Exception as e:
+            logger.warning(f"Failed to screenshot dashboard home: {e}")
 
         # — BFS crawl —
         crawl_queue: deque[str] = deque([config.dashboard_url])
