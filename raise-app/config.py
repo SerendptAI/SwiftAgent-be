@@ -14,10 +14,12 @@ class Config:
     RAISE_APP_PASSWORD: str = os.getenv("RAISE_APP_PASSWORD")
     SECRET_KEY: str = os.getenv("SECRET_KEY")
 
-    # SMTP
-    SMTP_SERVER: str = os.getenv("SMTP_SERVER") or "smtp.zoho.com"
-    SMTP_PORT: int = int(os.getenv("SMTP_PORT") or "465")
-    SMTP_EMAIL: str = os.getenv("SMTP_EMAIL") or "raise@swiftagents.org"
+    # SMTP / ZeptoMail
+    SMTP_SERVER: str = os.getenv("SMTP_SERVER", "smtp.zeptomail.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "465"))
+    # ZeptoMail requires 'emailapikey' as username. Fall back to SMTP_EMAIL for backwards compat.
+    SMTP_USERNAME: str = os.getenv("SMTP_USERNAME") or os.getenv("SMTP_EMAIL", "emailapikey")
+    SENDER_EMAIL: str = os.getenv("SENDER_EMAIL") or os.getenv("SMTP_EMAIL", "raise@swiftagents.org")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD") or ""
 
     # App

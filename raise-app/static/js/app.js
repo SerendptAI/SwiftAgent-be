@@ -23,7 +23,7 @@ const Raise = {
     const el = document.createElement('div');
     el.id = 'loading-overlay';
     el.className = 'loading-overlay';
-    el.innerHTML = `<div class="spinner"></div><p>${msg}</p>`;
+    el.innerHTML = `<div class="spinner"></div><p id="loading-msg" style="text-align:center;">${msg}</p>`;
     document.body.appendChild(el);
   },
   hideLoading() {
@@ -71,7 +71,7 @@ const Raise = {
   },
 
   /* ─── Send emails ─── */
-  async sendEmails() {
+  async sendEmails(isTestMode = false) {
     const subject = document.getElementById('email-subject')?.value;
     const body = document.getElementById('email-body')?.value;
     const sheet = document.getElementById('sheet-select')?.value;
@@ -109,6 +109,7 @@ const Raise = {
     formData.append('body', body);
     formData.append('sheet', sheet);
     formData.append('selected_emails', selectedEmails.join(','));
+    formData.append('is_test_mode', isTestMode ? 'true' : 'false');
 
     // Attachments
     const fileInput = document.getElementById('attachment-input');
@@ -122,13 +123,34 @@ const Raise = {
 
     try {
       const resp = await fetch('/api/send', { method: 'POST', body: formData });
-      const data = await resp.json();
-      this.hideLoading();
-
-      if (data.success) {
-        this.toast(`Sent: ${data.sent} | Failed: ${data.failed}`, data.failed > 0 ? 'error' : 'success');
-      } else {
-        this.toast(data.error || 'Send failed', 'error');
+      
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        let lines = buffer.split('\n\n');
+        buffer = lines.pop(); // Keep the incomplete part
+        
+        for (let line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.substring(6));
+            
+            if (data.type === 'progress') {
+              const el = document.getElementById('loading-msg');
+              if (el) {
+                el.innerHTML = `Sending...<br><span style="font-size:12px;opacity:0.8;">${data.index} / ${data.total} | Sent: ${data.sent} | Failed: ${data.failed}</span><br><span style="font-size:10px;opacity:0.6;margin-top:4px;display:block;">${data.email}</span>`;
+              }
+            } else if (data.type === 'complete') {
+              this.hideLoading();
+              this.toast('Campaign send complete!', 'success');
+            }
+          }
+        }
       }
     } catch (e) {
       this.hideLoading();
@@ -178,11 +200,18 @@ const Raise = {
         return;
       }
 
-      let html = `<div class="checkbox-wrap" style="margin-bottom:8px"><input type="checkbox" id="select-all" onchange="Raise.toggleSelectAll(this.checked)"><label for="select-all" style="font-size:13px;color:var(--text-secondary)">Select all (${data.recipients.length})</label></div><div class="recipients-preview">`;
+      let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <div class="checkbox-wrap"><input type="checkbox" id="select-all" checked onchange="Raise.toggleSelectAll(this.checked)"><label for="select-all" style="font-size:13px;color:var(--text-secondary)">Select all (${data.recipients.length})</label></div>
+        <button type="button" class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="Raise.excludeSent()">Exclude Already Sent</button>
+      </div><div class="recipients-preview">`;
       data.recipients.forEach(r => {
         const contactJson = JSON.stringify(r).replace(/"/g, '&quot;');
         const name = r['Full Name'] || r['Email'];
-        html += `<span class="recipient-chip selected" data-contact="${contactJson}" onclick="this.classList.toggle('selected')">${name} · ${r['Email']}</span>`;
+        // Show status visually
+        let statusBadge = '';
+        if (r.last_status === 'sent') statusBadge = ' <span style="color:var(--success);font-size:10px;">(Sent)</span>';
+        
+        html += `<span class="recipient-chip selected" data-contact="${contactJson}" onclick="this.classList.toggle('selected')">${name} · ${r['Email']}${statusBadge}</span>`;
       });
       html += '</div>';
       container.innerHTML = html;
@@ -198,6 +227,60 @@ const Raise = {
       else chip.classList.remove('selected');
     });
     this.previewEmail();
+  },
+
+  excludeSent() {
+    let excluded = 0;
+    document.querySelectorAll('.recipient-chip').forEach(chip => {
+      try {
+        const contact = JSON.parse(chip.dataset.contact || '{}');
+        if (contact.last_status === 'sent') {
+          chip.classList.remove('selected');
+          excluded++;
+        }
+      } catch (e) {}
+    });
+    this.previewEmail();
+    this.toast(`Excluded ${excluded} previously sent contacts.`, 'info');
+  },
+
+  toggleLoadAll() {
+    const btn = document.getElementById('btn-load-all');
+    const select = document.getElementById('sheet-select');
+    
+    if (btn.classList.contains('active')) {
+      // Toggle off
+      btn.classList.remove('active');
+      btn.textContent = 'Load All';
+      btn.classList.replace('btn-primary', 'btn-secondary');
+      
+      select.disabled = false;
+      select.value = '';
+      
+      // Remove the __ALL__ option if it exists
+      const allOpt = Array.from(select.options).find(o => o.value === '__ALL__');
+      if (allOpt) allOpt.remove();
+      
+      document.getElementById('recipients-container').innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px;">Select a sheet above to load recipients</div>';
+      this.previewEmail();
+    } else {
+      // Toggle on
+      btn.classList.add('active');
+      btn.textContent = 'Clear All';
+      btn.classList.replace('btn-secondary', 'btn-primary');
+      
+      let allOpt = Array.from(select.options).find(o => o.value === '__ALL__');
+      if (!allOpt) {
+        allOpt = document.createElement('option');
+        allOpt.value = '__ALL__';
+        allOpt.textContent = 'All Sheets (Combined)';
+        select.appendChild(allOpt);
+      }
+      select.value = '__ALL__';
+      select.disabled = true;
+      
+      this.loadRecipients('__ALL__');
+    }
   },
 
   /* ─── File upload handling ─── */

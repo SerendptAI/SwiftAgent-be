@@ -2,8 +2,8 @@
 {% block title %}Compose Email{% endblock %}
 {% block content %}
 <div class="page-header">
-  <h2>Compose Email</h2>
-  <p>Create and send personalised emails to VC contacts</p>
+  <h2>{% if is_test_mode %}Test Mode{% else %}Compose Email{% endif %}</h2>
+  <p>{% if is_test_mode %}Simulate a campaign by sending all emails to your test address.{% else %}Create and send personalised emails to VC contacts{% endif %}</p>
 </div>
 
 <div class="compose-grid">
@@ -23,12 +23,15 @@
         <!-- Sheet selector -->
         <div class="form-group">
           <label>Select Sheet (City)</label>
-          <select class="form-control" id="sheet-select" onchange="Raise.loadRecipients(this.value)">
-            <option value="">— Choose a sheet —</option>
-            {% for s in sheets %}
-            <option value="{{ s }}" {% if s == current_sheet %}selected{% endif %}>{{ s }}</option>
-            {% endfor %}
-          </select>
+          <div style="display:flex; gap:8px;">
+            <select class="form-control" id="sheet-select" onchange="Raise.loadRecipients(this.value)" style="flex:1;">
+              <option value="">— Choose a sheet —</option>
+              {% for s in sheets %}
+              <option value="{{ s }}" {% if s == current_sheet %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-secondary" id="btn-load-all" onclick="Raise.toggleLoadAll()" style="white-space:nowrap;">Load All</button>
+          </div>
         </div>
 
         <!-- Recipients -->
@@ -114,8 +117,12 @@ Your Name" oninput="Raise.previewEmail()"></textarea>
     <!-- Action Buttons -->
     <div class="card" style="margin-bottom:24px;">
       <div class="card-body" style="display:flex;gap:12px;flex-wrap:wrap;">
+        {% if is_test_mode %}
+        <button class="btn btn-primary" onclick="Raise.sendEmails(true)" id="btn-send" style="flex:1;">🧪 Send Test Campaign</button>
+        {% else %}
         <button class="btn btn-secondary" onclick="Raise.sendTestEmail()" id="btn-test">🧪 Send Test</button>
-        <button class="btn btn-primary" onclick="Raise.sendEmails()" id="btn-send" style="flex:1;">🚀 Send Campaign</button>
+        <button class="btn btn-primary" onclick="Raise.sendEmails(false)" id="btn-send" style="flex:1;">🚀 Send Campaign</button>
+        {% endif %}
       </div>
     </div>
 

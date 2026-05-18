@@ -12,8 +12,9 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Depends, HTTPException, Form, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+import json
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -177,7 +178,36 @@ async def compose_page(request: Request, sheet: str = None):
             "sheets": sheets,
             "current_sheet": sheet,
             "recipients": recipients,
-            "from_email": config.SMTP_EMAIL,
+            "from_email": config.SENDER_EMAIL,
+            "is_test_mode": False,
+        },
+    )
+
+
+# TEST MODE
+@app.get("/test-mode", response_class=HTMLResponse)
+async def test_mode_page(request: Request, sheet: str = None):
+    if not request.session.get("authenticated"):
+        return RedirectResponse(url="/login", status_code=303)
+
+    loader = VCLoader()
+    sheets = loader.get_sheet_names()
+
+    recipients = []
+    if sheet:
+        contacts = loader.get_contacts(sheet)
+        recipients = [c for c in contacts if c.get("Email")]
+
+    return templates.TemplateResponse(
+        request=request,
+        name="compose.html",
+        context={
+            "active": "test-mode",
+            "sheets": sheets,
+            "current_sheet": sheet,
+            "recipients": recipients,
+            "from_email": config.SENDER_EMAIL,
+            "is_test_mode": True,
         },
     )
 
@@ -189,9 +219,20 @@ async def api_get_recipients(request: Request, sheet: str):
         raise HTTPException(status_code=401)
 
     loader = VCLoader()
-    contacts = loader.get_contacts(sheet)
+    if sheet == "__ALL__":
+        sheets = loader.get_sheet_names()
+        contacts = []
+        for s in sheets:
+            contacts.extend(loader.get_contacts(s))
+    else:
+        contacts = loader.get_contacts(sheet)
+        
     recipients = [c for c in contacts if c.get("Email")]
-    return {"recipients": recipients, "total": len(recipients)}
+    
+    # Enrich with email send status from DB
+    enriched = await Database.enrich_contacts_with_status(recipients)
+    
+    return {"recipients": enriched, "total": len(enriched)}
 
 
 # API: PREVIEW EMAIL
@@ -226,6 +267,7 @@ async def api_send_emails(request: Request):
     body = form.get("body", "")
     sheet = form.get("sheet", "")
     selected_emails_raw = form.get("selected_emails", "")
+    is_test_mode = form.get("is_test_mode", "false").lower() == "true"
 
     # Handle attachments
     attachments = []
@@ -244,12 +286,18 @@ async def api_send_emails(request: Request):
 
     # Determine recipients
     loader = VCLoader()
-    if selected_emails_raw:
-        selected_list = [e.strip() for e in selected_emails_raw.split(",") if e.strip()]
-        contacts = loader.get_contacts(sheet)
-        recipients = [c for c in contacts if c.get("Email") in selected_list]
+    if sheet == "__ALL__":
+        sheets = loader.get_sheet_names()
+        contacts = []
+        for s in sheets:
+            contacts.extend(loader.get_contacts(s))
     else:
         contacts = loader.get_contacts(sheet)
+
+    if selected_emails_raw:
+        selected_list = [e.strip() for e in selected_emails_raw.split(",") if e.strip()]
+        recipients = [c for c in contacts if c.get("Email") in selected_list]
+    else:
         recipients = [c for c in contacts if c.get("Email")]
 
     if not recipients:
@@ -258,23 +306,21 @@ async def api_send_emails(request: Request):
             status_code=400,
         )
 
-    # Send emails in background
-    results = await EmailService.send_bulk(
-        subject=subject,
-        body=body,
-        recipients=recipients,
-        attachments=attachments,
-    )
+    async def event_stream():
+        yield f"data: {json.dumps({'type': 'start', 'total': len(recipients)})}\n\n"
+        
+        async for update in EmailService.send_bulk(
+            subject=subject,
+            body=body,
+            recipients=recipients,
+            attachments=attachments,
+            is_test_mode=is_test_mode,
+        ):
+            yield f"data: {json.dumps({'type': 'progress', **update})}\n\n"
+            
+        yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
-    return JSONResponse(
-        {
-            "success": True,
-            "total": len(recipients),
-            "sent": results["sent"],
-            "failed": results["failed"],
-            "errors": results["errors"][:10],  # limit error details
-        }
-    )
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 # API: SEND SINGLE TEST EMAIL

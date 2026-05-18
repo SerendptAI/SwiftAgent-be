@@ -54,12 +54,19 @@ class EmailService:
         body: str,
         attachments: List[Dict] = None,
         recipient_info: Dict = None,
+        is_test_mode: bool = False,
     ) -> bool:
         """Send a single email via Zoho SMTP."""
         
+        # Validate email to avoid 501 Syntax Errors that hurt reputation
+        if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", to_email):
+            logger.error("Invalid email format rejected before sending: %s", to_email)
+            raise ValueError(f"Invalid email format: {to_email}")
+
+        
         # SAFEGUARD: Intercept emails if TEST_MODE_EMAIL is set
         original_to_email = to_email
-        if getattr(config, "TEST_MODE_EMAIL", ""):
+        if is_test_mode and getattr(config, "TEST_MODE_EMAIL", ""):
             to_email = config.TEST_MODE_EMAIL
             subject = f"[TEST for: {original_to_email}] {subject}"
             logger.info("TEST MODE ENABLED: Redirecting email intended for %s to %s", original_to_email, to_email)
@@ -67,7 +74,7 @@ class EmailService:
         def _send():
             msg = MIMEMultipart("mixed")
             msg["Subject"] = subject
-            msg["From"] = config.SMTP_EMAIL
+            msg["From"] = config.SENDER_EMAIL
             msg["To"] = to_email
 
             # Determine if body is HTML or plain text
@@ -89,7 +96,7 @@ class EmailService:
                     msg.attach(part)
 
             with smtplib.SMTP_SSL(config.SMTP_SERVER, config.SMTP_PORT) as smtp:
-                smtp.login(config.SMTP_EMAIL, config.SMTP_PASSWORD)
+                smtp.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
                 smtp.send_message(msg)
 
         try:
@@ -121,13 +128,30 @@ class EmailService:
         body: str,
         recipients: List[Dict],
         attachments: List[Dict] = None,
-    ) -> Dict:
-        """Send personalised emails to multiple recipients."""
+        is_test_mode: bool = False,
+    ):
+        """Send personalised emails to multiple recipients, yielding progress."""
         results = {"sent": 0, "failed": 0, "errors": []}
+        consecutive_failures = 0
 
-        for recipient in recipients:
+        for i, recipient in enumerate(recipients):
             email = recipient.get("Email", "").strip()
             if not email:
+                continue
+
+            if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+                logger.warning("Skipping invalid email: %s", email)
+                results["failed"] += 1
+                results["errors"].append({"email": email, "error": "Invalid email format"})
+                yield {
+                    "status": "error", 
+                    "email": email, 
+                    "error": "Invalid email format (Skipped)", 
+                    "sent": results["sent"], 
+                    "failed": results["failed"], 
+                    "total": len(recipients), 
+                    "index": i + 1
+                }
                 continue
 
             personalised_subject = EmailService.personalise(subject, recipient)
@@ -140,14 +164,34 @@ class EmailService:
                     body=personalised_body,
                     attachments=attachments,
                     recipient_info=recipient,
+                    is_test_mode=is_test_mode,
                 )
                 results["sent"] += 1
+                consecutive_failures = 0
+                yield {"status": "success", "email": email, "sent": results["sent"], "failed": results["failed"], "total": len(recipients), "index": i + 1}
             except Exception as e:
                 results["failed"] += 1
                 results["errors"].append({"email": email, "error": str(e)})
+                consecutive_failures += 1
+                yield {"status": "error", "email": email, "error": str(e), "sent": results["sent"], "failed": results["failed"], "total": len(recipients), "index": i + 1}
+                
+                # Circuit breaker for Zoho rate limits
+                if consecutive_failures >= 3 and ("550" in str(e) or "5.4.6" in str(e) or "Unusual sending activity" in str(e)):
+                    yield {
+                        "status": "error", 
+                        "email": "SYSTEM", 
+                        "error": "Zoho rate limit (5.4.6) reached. Halting campaign to protect your account.", 
+                        "sent": results["sent"], 
+                        "failed": results["failed"], 
+                        "total": len(recipients), 
+                        "index": i + 1
+                    }
+                    break
 
-            # Small delay between sends to avoid rate limiting
-            await asyncio.sleep(0.5)
+            # Increased delay and added jitter to avoid Zoho rate limiting / unusual activity blocks
+            import random
+            sleep_time = 5.0 + random.uniform(0.5, 2.5)
+            await asyncio.sleep(sleep_time)
 
         # Log the batch
         await Database.log_batch_send(
@@ -156,5 +200,3 @@ class EmailService:
             sent=results["sent"],
             failed=results["failed"],
         )
-
-        return results

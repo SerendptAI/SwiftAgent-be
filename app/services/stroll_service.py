@@ -325,7 +325,136 @@ async def _find_element(page: Page, custom_selector: Optional[str], fallback_sel
     return None
 
 
-async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> bool:
+DETECT_LOGIN_FORM_JS = """
+() => {
+    const elements = [];
+    const nodes = document.querySelectorAll(
+        'input, button, [type="submit"], [role="button"]'
+    );
+
+    nodes.forEach((el, i) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        const tag = el.tagName.toLowerCase();
+        let selector = '';
+        if (el.id) {
+            selector = '#' + el.id;
+        } else if (el.getAttribute('name')) {
+            selector = tag + '[name="' + el.getAttribute('name') + '"]';
+        } else {
+            const classes = Array.from(el.classList).slice(0, 3).join('.');
+            selector = classes ? tag + '.' + classes : tag + ':nth-of-type(' + (i + 1) + ')';
+        }
+
+        elements.push({
+            tag: tag,
+            type: el.getAttribute('type') || '',
+            name: el.getAttribute('name') || '',
+            id: el.id || '',
+            placeholder: el.getAttribute('placeholder') || '',
+            aria_label: el.getAttribute('aria-label') || '',
+            autocomplete: el.getAttribute('autocomplete') || '',
+            text: (el.textContent || '').trim().slice(0, 80),
+            selector: selector
+        });
+    });
+
+    return elements;
+}
+"""
+
+
+async def _read_login_dom_with_vision(
+    page: Page, screenshot_bytes: bytes, page_url: str,
+) -> dict:
+    """
+    Use Claude vision to intelligently identify login form fields.
+
+    Sends the page screenshot + extracted DOM elements to Claude,
+    which returns the exact selectors for username, password, and submit.
+
+    Returns dict with keys: username_selector, password_selector, submit_selector
+    """
+    client = _get_anthropic_client()
+
+    try:
+        form_elements = await page.evaluate(DETECT_LOGIN_FORM_JS)
+    except Exception as e:
+        logger.warning(f"Failed to extract login form DOM: {e}")
+        form_elements = []
+
+    elements_text = json.dumps(form_elements[:40], indent=2)
+
+    try:
+        response = await client.messages.create(
+            model="claude-3-7-sonnet-20250219",
+            max_tokens=1000,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": base64.b64encode(screenshot_bytes).decode(),
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            f"This is a screenshot of a login page at {page_url}.\n\n"
+                            f"DOM form elements detected:\n{elements_text}\n\n"
+                            "Identify the login form fields. Return JSON:\n"
+                            '{"username_selector": "CSS selector or null",'
+                            ' "password_selector": "CSS selector or null",'
+                            ' "submit_selector": "CSS selector or null"}\n\n'
+                            "Use selectors from the DOM list. Prefer #id, then [name=...], then class-based."
+                        ),
+                    },
+                ],
+            }],
+        )
+
+        text = response.content[0].text
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0]
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0]
+
+        result = json.loads(text.strip())
+        logger.info(f"Vision identified login selectors: {result}")
+        return result
+
+    except Exception as e:
+        logger.warning(f"Vision login DOM analysis failed for {page_url}: {e}")
+        return {"username_selector": None, "password_selector": None, "submit_selector": None}
+
+
+def _select_auth_strategy(config: StrollConfig) -> str:
+    """
+    Evaluate available credentials and select the easiest auth strategy.
+
+    Priority (easiest first):
+      1. pre_auth_url — Just navigate, zero DOM interaction needed.
+      2. form_login   — Username+password, requires DOM reading + form fill.
+      3. none         — No credentials, proceed unauthenticated.
+    """
+    creds = config.credentials
+    if not creds:
+        return "none"
+
+    if creds.pre_auth_url:
+        return "pre_auth"
+
+    if creds.username and creds.password:
+        return "form_login"
+
+    return "none"
+
+
+async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tuple[bool, dict[str, str]]:
     """
     Handle dashboard authentication.
 
