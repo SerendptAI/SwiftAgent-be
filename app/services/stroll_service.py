@@ -84,8 +84,8 @@ async def _analyze_page_with_vision(
 
     try:
         response = await client.messages.create(
-            model="claude-3-7-sonnet-20250219",
-            max_tokens=2000,
+            model=settings.ANTHROPIC_MODEL,
+            max_tokens=4096,
             messages=[{
                 "role": "user",
                 "content": [
@@ -103,14 +103,14 @@ async def _analyze_page_with_vision(
                             f"This is a screenshot of the page '{page_title}' at {page_url}.\n\n"
                             f"Detected interactive elements from the DOM:\n{elements_text}\n\n"
                             "Please provide:\n"
-                            "1. A one-sentence summary of what this page is for.\n"
-                            "2. For each interactive element above, a human-readable description "
-                            "of what it does (e.g., 'Opens the billing settings page'). "
-                            "If an element has no text label (icon-only), describe it based on "
-                            "what you see in the screenshot.\n\n"
+                            "1. A 'scratchpad' string where you reason about the layout as a senior QA engineer. Your goal is to systematically uncover every core feature (especially Settings, Profiles, Upload forms, and core workflows). Plan out which elements to click next to achieve this.\n"
+                            "2. A one-sentence summary of what this page is for.\n"
+                            "3. For each interactive element above, a human-readable description of what it does.\n"
+                            "4. A list of CSS selectors (chosen strictly from the provided list) that the crawler should click next. PRIORITIZE navigation to Settings, Uploads, and unmapped features. Exclude truly destructive actions (Delete Account, Log Out, Process Payment) or redundant elements you've clearly already explored.\n"
+                            "5. An 'is_exploration_complete' boolean. Set this to true ONLY if you are absolutely confident there are no more meaningful forms, settings, or sub-pages to explore on this screen.\n\n"
                             "Respond in JSON format:\n"
-                            '{"page_summary": "...", "elements": [{"selector": "...", '
-                            '"human_description": "..."}]}'
+                            '{"scratchpad": "...", "page_summary": "...", "elements": [{"selector": "...", '
+                            '"human_description": "..."}], "navigation_selectors_to_explore": ["selector1", "selector_2"], "is_exploration_complete": false}'
                         ),
                     },
                 ],
@@ -133,10 +133,18 @@ async def _analyze_page_with_vision(
 DETECT_ELEMENTS_JS = """
 () => {
     const elements = [];
-    const selectors = 'a[href], button, [role="tab"], [role="menuitem"], ' +
-                      '[role="button"], nav a, .nav-link, .sidebar-link, ' +
-                      '[data-toggle], [data-bs-toggle]';
-    const nodes = document.querySelectorAll(selectors);
+    const allNodes = document.querySelectorAll('a, button, [role="button"], [role="tab"], [role="menuitem"], input, [type="submit"]');
+    
+    // Also find any element with cursor: pointer (crucial for React SPAs that use divs for buttons)
+    const pointerNodes = Array.from(document.querySelectorAll('*')).filter(el => {
+        // avoid expensive getComputedStyle for non-likely elements like path, script, etc
+        if (['path', 'svg', 'script', 'style', 'html', 'body'].includes(el.tagName.toLowerCase())) return false;
+        try {
+            return window.getComputedStyle(el).cursor === 'pointer';
+        } catch(e) { return false; }
+    });
+
+    const nodes = Array.from(new Set([...Array.from(allNodes), ...pointerNodes]));
 
     nodes.forEach((el, i) => {
         const rect = el.getBoundingClientRect();
@@ -151,7 +159,11 @@ DETECT_ELEMENTS_JS = """
         ).slice(0, 100);
 
         const href = el.getAttribute('href') || '';
-        const isNav = el.tagName === 'A' || el.closest('nav') !== null ||
+        const isNav = el.tagName === 'A' || 
+                      el.closest('nav') !== null ||
+                      el.closest('aside') !== null ||
+                      el.closest('[class*="sidebar"]') !== null ||
+                      el.closest('[class*="menu"]') !== null ||
                       el.getAttribute('role') === 'tab' ||
                       el.getAttribute('role') === 'menuitem';
 
@@ -161,9 +173,14 @@ DETECT_ELEMENTS_JS = """
             selector = '#' + el.id;
         } else {
             const tag = el.tagName.toLowerCase();
-            const classes = Array.from(el.classList).slice(0, 3).join('.');
-            selector = classes ? `${tag}.${classes}` : `${tag}:nth-of-type(${i + 1})`;
+            const classes = Array.from(el.classList).slice(0, 3).map(c => CSS.escape(c)).join('.');
+            selector = classes ? `${tag}.${classes}` : tag;
         }
+        
+        // Guarantee uniqueness for Playwright clicks and vision mapping
+        const strollId = `stroll-${i}`;
+        el.setAttribute('data-stroll-id', strollId);
+        selector = `${selector}[data-stroll-id="${strollId}"]`;
 
         elements.push({
             selector: selector,
@@ -388,7 +405,7 @@ async def _read_login_dom_with_vision(
 
     try:
         response = await client.messages.create(
-            model="claude-3-7-sonnet-20250219",
+            model=settings.ANTHROPIC_MODEL,
             max_tokens=1000,
             messages=[{
                 "role": "user",
@@ -406,10 +423,11 @@ async def _read_login_dom_with_vision(
                         "text": (
                             f"This is a screenshot of a login page at {page_url}.\n\n"
                             f"DOM form elements detected:\n{elements_text}\n\n"
-                            "Identify the login form fields. Return JSON:\n"
-                            '{"username_selector": "CSS selector or null",'
-                            ' "password_selector": "CSS selector or null",'
-                            ' "submit_selector": "CSS selector or null"}\n\n'
+                            "Identify the login form fields. Keep in mind this might be a passwordless (OTP/magic link) login or a traditional one.\n"
+                            "Return JSON:\n"
+                            '{"username_selector": "CSS selector for email/username or null",\n'
+                            ' "password_selector": "CSS selector for password or null",\n'
+                            ' "submit_selector": "CSS selector for the login/continue/submit button or null"}\n\n'
                             "Use selectors from the DOM list. Prefer #id, then [name=...], then class-based."
                         ),
                     },
@@ -510,11 +528,18 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
         logger.info(f"Attempting form-based login for company {company_id} at {login_url}")
 
         try:
-            await page.goto(
-                login_url,
-                timeout=settings.STROLL_PAGE_TIMEOUT_MS,
-                wait_until="networkidle",
-            )
+            try:
+                await page.goto(
+                    login_url,
+                    timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                    wait_until="networkidle",
+                )
+            except Exception:
+                await page.goto(
+                    login_url,
+                    timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                    wait_until="load",
+                )
         except Exception as e:
             logger.error(f"Failed to navigate to login page {login_url}: {e}")
             return False, extra_screenshots
@@ -549,11 +574,10 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
             vision_selectors.get("password_selector") or creds.password_selector,
             _PASSWORD_SELECTORS,
         )
-        if not password_el:
-            logger.error(f"Could not find password field on {login_url} for company {company_id}")
-            return False, extra_screenshots
-
-        await password_el.fill(creds.password)
+        if password_el:
+            await password_el.fill(creds.password)
+        else:
+            logger.info(f"No password field found on {login_url} — assuming passwordless/OTP login flow")
 
         # Find and click submit — prefer vision, then config override, then heuristics
         submit_el = await _find_element(
@@ -561,23 +585,33 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
             vision_selectors.get("submit_selector") or creds.submit_selector,
             _SUBMIT_SELECTORS,
         )
-        if not submit_el:
-            logger.error(f"Could not find submit button on {login_url} for company {company_id}")
-            return False, extra_screenshots
-
-        # Click submit and wait for navigation
-        try:
-            async with page.expect_navigation(
-                timeout=settings.STROLL_PAGE_TIMEOUT_MS,
-                wait_until="networkidle",
-            ):
-                await submit_el.click()
-        except Exception:
-            # some SPAs don't trigger a full navigation — wait for network idle instead
+        if submit_el:
+            # Click submit and wait for navigation
             try:
-                await page.wait_for_load_state("networkidle", timeout=settings.STROLL_PAGE_TIMEOUT_MS)
-            except Exception as e:
-                logger.warning(f"Post-login wait timed out for company {company_id}: {e}")
+                async with page.expect_navigation(
+                    timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                    wait_until="networkidle",
+                ):
+                    await submit_el.click()
+            except Exception:
+                # some SPAs don't trigger a full navigation — wait for network idle instead
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=settings.STROLL_PAGE_TIMEOUT_MS)
+                except Exception as e:
+                    logger.warning(f"Post-login wait timed out for company {company_id}: {e}")
+        else:
+            logger.info(f"No submit button found on {login_url} — pressing Enter instead")
+            try:
+                async with page.expect_navigation(
+                    timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                    wait_until="networkidle",
+                ):
+                    await username_el.press("Enter")
+            except Exception:
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=settings.STROLL_PAGE_TIMEOUT_MS)
+                except Exception as e:
+                    logger.warning(f"Post-login wait timed out for company {company_id}: {e}")
 
         # --- verify login succeeded ---
         try:
@@ -592,27 +626,50 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
             )
             return False, extra_screenshots
 
-        # --- detect OTP / 2FA challenge page ---
-        otp_detected = await _detect_otp_page(page)
-        if otp_detected:
+        # --- detect OTP / 2FA challenge page with retry loop ---
+        otp_attempts = 0
+        while otp_attempts < 3:
+            otp_detected = await _detect_otp_page(page)
+            if not otp_detected:
+                break  # Not on an OTP page anymore
+            
+            otp_attempts += 1
             # Screenshot the OTP page
             try:
                 otp_screenshot = await _capture_screenshot(page)
-                otp_ss_url = await _upload_screenshot(otp_screenshot, company_id, "__otp_page__")
-                extra_screenshots["__otp_page__"] = otp_ss_url
-                logger.info(f"OTP page screenshotted for company {company_id}")
+                otp_ss_url = await _upload_screenshot(otp_screenshot, company_id, f"__otp_page_{otp_attempts}__")
+                extra_screenshots[f"__otp_page_{otp_attempts}__"] = otp_ss_url
+                logger.info(f"OTP page screenshotted for company {company_id} (Attempt {otp_attempts})")
             except Exception as e:
                 logger.warning(f"Failed to upload OTP page screenshot: {e}")
 
             otp_cfg = config.otp_handling
             if otp_cfg and otp_cfg.enabled:
-                logger.info(f"OTP page detected for company {company_id}, initiating challenge relay")
+                logger.info(f"OTP page detected for company {company_id}, initiating challenge relay (Attempt {otp_attempts}/3)")
                 otp_value = await _handle_otp_challenge(page, config, company_id)
                 if otp_value:
                     filled = await _fill_and_submit_otp(page, otp_value, config)
                     if not filled:
                         logger.error(f"Failed to fill OTP for company {company_id}")
                         return False, extra_screenshots
+                    
+                    # Give the SPA time to trigger the background API call and transition the DOM
+                    # We use a hard wait because networkidle might return instantly before the fetch even begins
+                    await page.wait_for_timeout(4000)
+                    try:
+                        await page.wait_for_load_state("networkidle", timeout=2000)
+                    except Exception:
+                        pass
+                    
+                    # Check if we are STILL on the OTP page (incorrect OTP entered)
+                    if await _detect_otp_page(page):
+                        logger.warning(f"OTP submission {otp_attempts} failed (incorrect OTP). Prompting again.")
+                        if otp_attempts >= 3:
+                            logger.error("Max OTP attempts reached.")
+                            return False, extra_screenshots
+                        continue
+                    else:
+                        break  # Successfully bypassed OTP!
                 else:
                     logger.error(f"OTP challenge timed out or failed for company {company_id}")
                     return False, extra_screenshots
@@ -872,11 +929,19 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
 
         # — health check —
         try:
-            response = await page.goto(
-                config.dashboard_url,
-                timeout=settings.STROLL_PAGE_TIMEOUT_MS,
-                wait_until="networkidle",
-            )
+            try:
+                response = await page.goto(
+                    config.dashboard_url,
+                    timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                    wait_until="networkidle",
+                )
+            except Exception:
+                response = await page.goto(
+                    config.dashboard_url,
+                    timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                    wait_until="load",
+                )
+            
             if not response or response.status >= 400:
                 logger.error(f"Dashboard unhealthy: HTTP {response.status if response else 'no response'}")
                 return StrollVersion(
@@ -931,15 +996,23 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
                 continue
             visited.add(current_url)
 
-            try:
-                await page.goto(
-                    current_url,
-                    timeout=settings.STROLL_PAGE_TIMEOUT_MS,
-                    wait_until="networkidle",
-                )
-            except Exception as e:
-                logger.warning(f"Failed to navigate to {current_url}: {e}")
-                continue
+            # Only hard-navigate if we are not already on the target URL
+            if page.url.split("#")[0].rstrip("/") != current_url.split("#")[0].rstrip("/"):
+                try:
+                    await page.goto(
+                        current_url,
+                        timeout=settings.STROLL_PAGE_TIMEOUT_MS,
+                        wait_until="load",
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to navigate to {current_url}: {e}")
+                    continue
+                    
+            # Always wait for animations/splash screens to settle before analyzing
+            await page.wait_for_timeout(3000)
+            
+            # Update current_url to the actual resolved URL (handles redirects and history.replaceState)
+            current_url = page.url
 
             # generate stable page id from URL
             page_id = hashlib.sha256(current_url.encode()).hexdigest()[:12]
@@ -955,6 +1028,8 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
             dom_hash = _compute_dom_hash(dom_content)
 
             page_title = await page.title() or current_url
+
+            logger.info(f"Reading DOM and capturing layout of {current_url} to plan next moves...")
 
             # Claude vision analysis for rich understanding
             vision_result = await _analyze_page_with_vision(
@@ -992,11 +1067,21 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
             screenshot_url = await _upload_screenshot(screenshot_bytes, company_id, page_id)
             screenshot_urls[page_id] = screenshot_url
 
-            # discover navigation targets and build edges
-            for elem in elements:
-                if elem.type != "nav":
-                    continue
+            # --- Navigation & Edge Building ---
+            selectors_to_explore = set(vision_result.get("navigation_selectors_to_explore", []))
+            
+            if vision_result.get("is_exploration_complete"):
+                logger.info("Agent determined exploration is complete for this branch. Skipping further clicks here.")
+                selectors_to_explore = set()
+                
+            if "scratchpad" in vision_result:
+                logger.info(f"Vision Scratchpad [{page_title}]: {vision_result['scratchpad']}")
+            logger.info(f"Vision suggested nav elements: {list(selectors_to_explore)}")
 
+            nav_candidates = [e for e in elements if e.type == "nav" or e.selector in selectors_to_explore]
+            click_nav_elements = []
+
+            for elem in nav_candidates:
                 # find the raw element's href
                 raw_match = next(
                     (r for r in raw_elements if r["selector"] == elem.selector),
@@ -1007,6 +1092,11 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
 
                 href = raw_match.get("href", "")
                 if not href:
+                    # If it has no href, queue it for SPA click exploration
+                    # Only click it if Claude explicitly said we should.
+                    # We drop the blind `elem.type == "nav"` fallback because it clicks hidden screen-reader spans.
+                    if elem.selector in selectors_to_explore:
+                        click_nav_elements.append(elem)
                     continue
 
                 dest_url = _normalize_url(href, config.dashboard_url)
@@ -1036,6 +1126,116 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
 
                 # enqueue for crawling
                 crawl_queue.append(dest_url)
+
+            # --- SPA Click Exploration for nav items without href ---
+            # Track the element AND the node ID it originated from
+            click_queue = deque([(elem, page_id) for elem in click_nav_elements])
+            while click_queue:
+                elem, from_node_id = click_queue.popleft()
+                try:
+                    # If the URL changed, we navigated! Stop trying to click elements from the old DOM.
+                    new_page_url = page.url.split("#")[0]
+                    if new_page_url.rstrip("/") != current_url.split("#")[0].rstrip("/"):
+                        logger.info(f"URL changed naturally (from {current_url} to {page.url}). Breaking loop.")
+                        if new_page_url not in visited and new_page_url.startswith("http"):
+                            crawl_queue.append(new_page_url)
+                        break
+
+                    click_el = page.locator(elem.selector).first
+                    if await click_el.is_visible():
+                        logger.info(f"Click-exploring SPA nav element (DOM selector): {elem.selector}")
+                        await click_el.click(timeout=3000)
+                    elif elem.bbox:
+                        logger.info(f"Click-exploring SPA nav element (BBox fallback): {elem.selector}")
+                        x = elem.bbox.x + (elem.bbox.w / 2)
+                        y = elem.bbox.y + (elem.bbox.h / 2)
+                        await page.mouse.click(x, y)
+                    else:
+                        logger.warning(f"Could not click element {elem.selector} - not visible and no bbox")
+                        continue
+                        
+                    # Wait briefly for SPA transition (network or dom)
+                    try:
+                        await page.wait_for_load_state("networkidle", timeout=2000)
+                    except Exception:
+                        await page.wait_for_timeout(1500)
+                    
+                    new_url = page.url.split("#")[0]
+                    new_dom_hash = _compute_dom_hash(await page.content())
+                    
+                    # If URL changed, treat it as a new page to visit
+                    if new_url != current_url.split("#")[0] and new_url.startswith("http"):
+                        dest_id = hashlib.sha256(new_url.encode()).hexdigest()[:12]
+                        
+                        edge = Edge(
+                            from_page=page_id,
+                            to_page=dest_id,
+                            via=elem,
+                            instruction=f"Click '{elem.label or elem.human_description}' on the {page_title} page",
+                        )
+                        graph.edges.append(edge)
+                        
+                        if new_url not in visited:
+                            crawl_queue.append(new_url)
+                            
+                    # If URL did NOT change but DOM changed significantly (e.g. a Modal opened)
+                    elif new_dom_hash != dom_hash:
+                        virtual_id = hashlib.sha256((current_url + new_dom_hash).encode()).hexdigest()[:12]
+                        logger.info(f"Detected in-page state change (modal/tab). Mapping sub-state {virtual_id}...")
+                        
+                        modal_bytes = await _capture_screenshot(page)
+                        modal_url = await _upload_screenshot(modal_bytes, company_id, virtual_id)
+                        screenshot_urls[virtual_id] = modal_url
+                        
+                        modal_raw = await page.evaluate(DETECT_ELEMENTS_JS)
+                        modal_vision = await _analyze_page_with_vision(
+                            modal_bytes, modal_raw, f"State after clicking {elem.label or 'button'} on {page_title}", current_url
+                        )
+                        
+                        v_map = {e.get("selector", ""): e.get("human_description", "") for e in modal_vision.get("elements", [])}
+                        modal_elements = [
+                            InteractiveElement(
+                                selector=r["selector"],
+                                label=r.get("label", ""),
+                                human_description=v_map.get(r["selector"], ""),
+                                type=r.get("type", "action"),
+                                bbox=BoundingBox(**r["bbox"]) if r.get("bbox") else None,
+                            ) for r in modal_raw
+                        ]
+                        
+                        node = PageNode(
+                            id=virtual_id,
+                            url=current_url,
+                            title=f"Modal/State: {elem.label or elem.human_description}",
+                            page_summary=modal_vision.get("page_summary", "Modal state"),
+                            elements=modal_elements,
+                            dom_hash=new_dom_hash,
+                        )
+                        graph.nodes[virtual_id] = node
+                        
+                        edge = Edge(
+                            from_page=from_node_id,
+                            to_page=virtual_id,
+                            via=elem,
+                            instruction=f"Click '{elem.label or elem.human_description}' to open this state",
+                        )
+                        graph.edges.append(edge)
+                        
+                        # Add modal elements to the FRONT of the queue so we explore them while the modal is open
+                        if not modal_vision.get("is_exploration_complete"):
+                            modal_selectors = set(modal_vision.get("navigation_selectors_to_explore", []))
+                            if modal_selectors:
+                                new_candidates = [(e, virtual_id) for e in modal_elements if e.selector in modal_selectors]
+                                # We must reverse them because extendleft reverses the order
+                                click_queue.extendleft(reversed(new_candidates))
+                                logger.info(f"Injected {len(new_candidates)} elements from new sub-state to explore immediately.")
+                        else:
+                            logger.info("Agent determined exploration is complete for this modal. Not clicking further inside.")
+                            
+                        # Removed hard reload so SPA state isn't destroyed
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to click-explore SPA element {elem.selector}: {e}")
 
     finally:
         try:

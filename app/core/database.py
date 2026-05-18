@@ -59,7 +59,8 @@ async def create_indexes():
 
     # credential auth — query performance indexes (always safe)
     await db.users.create_index([("email", 1), ("is_verified", 1)])
-    await db.users.create_index("otp_expires", expireAfterSeconds=0, sparse=True)
+    # CRITICAL FIX: Removed TTL index on otp_expires. It was deleting entire existing user accounts 
+    # if they requested an OTP but didn't enter it before it expired.
 
     # unique email index — skipped if duplicate data exists in the collection.
     try:
