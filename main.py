@@ -27,6 +27,7 @@ from app.api.routers import (
     stroll_public,
     email,
     mobile,
+    sdk,
 )
 from app.core.config import settings
 from app.core.database import create_indexes
@@ -156,6 +157,7 @@ class WidgetCorsBypassMiddleware:
     """
 
     BYPASS_PREFIXES = (
+        "/api/v1/sdk",
         "/api/v1/voice",
         "/api/v1/chat",
         "/api/v1/public/stroll",
@@ -250,6 +252,7 @@ app.include_router(stroll.router, prefix="/api/v1/stroll")
 app.include_router(stroll_public.router, prefix="/api/v1/public/stroll")
 app.include_router(email.router, prefix="/api/v1/email")
 app.include_router(mobile.router, prefix="/api/v1/mobile")
+app.include_router(sdk.router, prefix="/api/v1/sdk", tags=["SDK"])
 
 
 # global exception handler

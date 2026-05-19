@@ -1,0 +1,213 @@
+"""
+SDK Business Logic Service.
+
+Handles: SDK initialization (user upsert), conversation listing, and detail fetching.
+"""
+
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from app.core.database import db
+
+async def init_sdk_user(company_id: str, email: str) -> dict:
+    """
+    Find or create an SDK user record.
+    Returns: {"email": str, "is_new": bool}
+    """
+    now = datetime.now(tz=timezone.utc)
+    
+    # Try to find existing
+    existing = await db.sdk_users.find_one({"company_id": company_id, "email": email})
+    
+    if existing:
+        # Update last_seen
+        await db.sdk_users.update_one(
+            {"_id": existing["_id"]},
+            {"$set": {"last_seen_at": now}}
+        )
+        return {"email": email, "is_new": False}
+    
+    # Create new
+    doc = {
+        "company_id": company_id,
+        "email": email,
+        "created_at": now,
+        "last_seen_at": now,
+    }
+    await db.sdk_users.insert_one(doc)
+    return {"email": email, "is_new": True}
+
+
+async def get_conversation_history(
+    company_id: str, email: str, limit: int = 20, cursor: Optional[str] = None
+) -> dict:
+    """
+    Unified list of a user's interactions: chats (widget_conversations) + tickets (email_tickets).
+    """
+    cursor_filter = {}
+    if cursor:
+        try:
+            # Parse cursor as ISO datetime string for updated_at filtering
+            cursor_dt = datetime.fromisoformat(cursor.replace("Z", "+00:00"))
+            cursor_filter = {"updated_at": {"$lt": cursor_dt}}
+        except ValueError:
+            pass # Invalid cursor, ignore
+
+    # 1. Fetch Chat Sessions
+    chat_query = {
+        "company_id": company_id, 
+        "sdk_user_email": email,
+        "escalated": {"$ne": True}, # exclude chats that became tickets
+        **cursor_filter
+    }
+    chats_cursor = db.widget_conversations.find(chat_query).sort("updated_at", -1).limit(limit)
+    raw_chats = await chats_cursor.to_list(length=limit)
+
+    # 2. Fetch Tickets
+    ticket_query = {
+        "company_id": company_id,
+        "customer_email": email,
+        **cursor_filter
+    }
+    tickets_cursor = db.email_tickets.find(ticket_query).sort("updated_at", -1).limit(limit)
+    raw_tickets = await tickets_cursor.to_list(length=limit)
+
+    # 3. Normalize & Merge
+    items: List[Dict[str, Any]] = []
+
+    for c in raw_chats:
+        messages = c.get("messages", [])
+        last_msg = messages[-1]["content"] if messages else None
+        
+        # Determine resolved status.
+        # An escalated chat itself isn't "resolved" in this context; its corresponding ticket might be.
+        resolved = False 
+
+        items.append({
+            "id": c.get("session_id"),
+            "type": "chat",
+            "subject": None,
+            "last_message": last_msg,
+            "resolved": resolved,
+            "message_count": len(messages),
+            "created_at": c.get("created_at"),
+            "updated_at": c.get("updated_at"),
+        })
+
+    for t in raw_tickets:
+        messages = t.get("messages", [])
+        last_msg = messages[-1]["body_text"] if messages else None
+        
+        items.append({
+            "id": t.get("id"),
+            "type": "ticket",
+            "subject": t.get("subject"),
+            "last_message": last_msg,
+            "resolved": t.get("status") == "resolved",
+            "message_count": len(messages),
+            "created_at": t.get("created_at"),
+            "updated_at": t.get("updated_at"),
+        })
+
+    # Sort merged list descending by updated_at
+    items.sort(key=lambda x: x["updated_at"], reverse=True)
+
+    # Truncate to limit
+    items = items[:limit]
+
+    # Generate next_cursor
+    next_cursor = None
+    if items:
+        next_cursor = items[-1]["updated_at"].isoformat()
+
+    # Determine has_next (approximate: if we fetched limit items, there MIGHT be more)
+    # A true has_next requires checking count > limit, but this is standard for cursor pagination
+    has_next = len(items) == limit
+
+    return {
+        "items": items,
+        "next_cursor": next_cursor,
+        "has_next": has_next
+    }
+
+
+async def get_conversation_detail(company_id: str, email: str, conversation_id: str) -> Optional[dict]:
+    """
+    Fetch the full detail for a conversation, resolving against both chats and tickets.
+    """
+    # 1. Try Chat Session first
+    chat = await db.widget_conversations.find_one({
+        "company_id": company_id,
+        "sdk_user_email": email,
+        "session_id": conversation_id
+    })
+    
+    if chat:
+        messages = chat.get("messages", [])
+        formatted_messages = [
+            {
+                "role": m.get("role", "user"),
+                "content": m.get("content", ""),
+                "timestamp": m.get("timestamp")
+            }
+            for m in messages
+        ]
+        
+        return {
+            "id": chat.get("session_id"),
+            "type": "chat",
+            "subject": None,
+            "resolved": False,
+            "messages": formatted_messages,
+            "created_at": chat.get("created_at"),
+            "updated_at": chat.get("updated_at"),
+        }
+
+    # 2. Try Ticket Session
+    ticket = await db.email_tickets.find_one({
+        "company_id": company_id,
+        "customer_email": email,
+        "id": conversation_id
+    })
+
+    if ticket:
+        messages = ticket.get("messages", [])
+        formatted_messages = [
+            {
+                "role": m.get("direction", "user"), # inbound/outbound/system
+                "content": m.get("body_text", ""),
+                "timestamp": m.get("timestamp").isoformat() if isinstance(m.get("timestamp"), datetime) else m.get("timestamp")
+            }
+            for m in messages
+        ]
+        
+        # Attach attributed chat if this ticket was escalated
+        attributed_chat = None
+        if ticket.get("chat_session_id"):
+             linked_chat = await db.widget_conversations.find_one({
+                 "company_id": company_id,
+                 "session_id": ticket.get("chat_session_id")
+             })
+             if linked_chat:
+                 attributed_chat = [
+                    {
+                        "role": m.get("role", "user"),
+                        "content": m.get("content", ""),
+                        "timestamp": m.get("timestamp")
+                    }
+                    for m in linked_chat.get("messages", [])
+                 ]
+
+        return {
+            "id": ticket.get("id"),
+            "type": "ticket",
+            "subject": ticket.get("subject"),
+            "resolved": ticket.get("status") == "resolved",
+            "messages": formatted_messages,
+            "attributed_chat": attributed_chat,
+            "created_at": ticket.get("created_at"),
+            "updated_at": ticket.get("updated_at"),
+        }
+
+    # Not found in either
+    return None

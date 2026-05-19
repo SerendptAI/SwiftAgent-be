@@ -329,3 +329,58 @@ async def remove_member_or_invite(
         return {"status": "success", "message": "User removed from company"}
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
+
+# ── API Key Management ──────────────────────────────────────────────────
+
+from app.services import api_key_service
+from app.models.sdk_models import ApiKeyCreateRequest, ApiKeyCreateResponse, ApiKeyListItem
+from typing import List
+
+@router.post("/{company_id}/api-keys", response_model=ApiKeyCreateResponse)
+async def create_api_key(
+    company_id: str,
+    req: ApiKeyCreateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate a new SDK API key for the company. Raw key is returned ONLY once."""
+    company = await company_service.get_company(company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    if company.get("user_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    return await api_key_service.create_api_key(company_id, label=req.label)
+
+
+@router.get("/{company_id}/api-keys", response_model=List[ApiKeyListItem])
+async def list_api_keys(
+    company_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """List all SDK API keys for the company (returns prefixes only, never raw keys)."""
+    company = await company_service.get_company(company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    if company.get("user_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    return await api_key_service.list_api_keys(company_id)
+
+
+@router.delete("/{company_id}/api-keys/{key_id}")
+async def revoke_api_key(
+    company_id: str,
+    key_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Revoke an active API key."""
+    company = await company_service.get_company(company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    if company.get("user_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    success = await api_key_service.revoke_api_key(company_id, key_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Key not found or already revoked")
+    return {"status": "revoked"}
