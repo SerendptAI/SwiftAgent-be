@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from enum import StrEnum
 
+from typing import Any
 from pydantic import BaseModel, Field
 
 
@@ -55,7 +56,7 @@ class WorkingMemory(BaseModel):
     current_issue: str | None = None
     issue_resolved: bool = False
     pending_actions: list[str] = []
-    context_window: list[dict[str, str]] = []
+    context_window: list[dict[str, Any]] = []
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -71,10 +72,10 @@ class MemorySummaryRequest(BaseModel):
     session_id: str
     company_id: str
     user_id: str | None = None
-    messages: list[dict[str, str]]
+    messages: list[dict[str, Any]]
 
 
 class MemoryExtractFactsRequest(BaseModel):
     user_id: str
     company_id: str
-    messages: list[dict[str, str]]
+    messages: list[dict[str, Any]]
