@@ -19,7 +19,7 @@ from google.genai import types
 
 from app.core.config import settings
 from app.core.database import db
-from app.services import knowledge_service, chain_service, stroll_index_service, memory_service
+from app.services import knowledge_service, chain_service, stroll_index_service, memory_service, page_reader_service
 from app.services.stroll_index_service import extract_navigation_steps, reconstruct_navigation_guide
 from app.services.blockchain import detect, evm, bitcoin, prices
 from app.models.memory_models import WorkingMemory
@@ -186,6 +186,25 @@ TOOLS = [
                     required=["url"],
                 ),
             ),
+            types.FunctionDeclaration(
+                name="read_website_page",
+                description=(
+                    "Read the contents of a specific website URL. "
+                    "Returns the visible text on the page and a list of links found on that page. "
+                    "Use this to answer questions by reading the user's current page, or to follow "
+                    "links to find more information."
+                ),
+                parameters=types.Schema(
+                    type="OBJECT",
+                    properties={
+                        "url": types.Schema(
+                            type="STRING",
+                            description="The URL of the page to read",
+                        ),
+                    },
+                    required=["url"],
+                ),
+            ),
         ]
     )
 ]
@@ -200,6 +219,7 @@ TOOL_STAGE_LABELS = {
     "get_dashboard_navigation": "Searching dashboard navigation…",
     "get_full_dashboard_documentation": "Generating complete dashboard documentation…",
     "scrape_documentation_link": "Scraping documentation link…",
+    "read_website_page": "Reading website page…",
 }
 
 # Multi-stage stream text flows for each tool (Agent-specific)
@@ -284,6 +304,12 @@ TOOL_STAGES = {
         "CREATING SUPPORT TICKET",
         "TICKET CREATED SUCCESSFULLY",
     ],
+    "read_website_page": [
+        "AGENT IS SEARCHING",
+        "LOADING WEBPAGE",
+        "READING PAGE CONTENT",
+        "EXTRACTING RELEVANT DATA",
+    ],
 }
 
 
@@ -296,7 +322,7 @@ def _get_tool_stages(tool_name: str) -> list[str]:
 # system prompt builder
 
 
-def _build_system_prompt(company: dict, memory_context: str = "") -> str:
+def _build_system_prompt(company: dict, memory_context: str = "", page_url: str = "") -> str:
     company_name = company.get("name", "the company")
     brand_tone = company.get("brand_tone", "professional and helpful")
     description = company.get("description", "")
@@ -309,8 +335,21 @@ MEMORY CONTEXT:
 {memory_context}
 """
 
+    resolved_url = page_url if page_url else company.get("website", "")
+    context_section = ""
+    if resolved_url:
+        location_type = "is currently viewing this URL" if page_url else "is visiting the company website"
+        context_section = f"""
+CURRENT USER LOCATION:
+The customer {location_type}: {resolved_url}
+
+If they ask a question that might be answered by the page they are on, use the `read_website_page` tool on that URL to read it.
+If the answer isn't there, you can use `read_website_page` on the links returned by the tool to search deeper into the website.
+"""
+
     return f"""You are a senior customer support agent for {company_name}. \
 You respond with expertise, empathy, and clarity.
+{context_section}
 
 COMPANY CONTEXT:
 - Name: {company_name}
@@ -526,6 +565,13 @@ async def _execute_tool(name: str, args: dict, company: dict = None, session_id:
                 return {"success": True, "message": f"Successfully scraped and ingested documentation from {url}."}
             return {"error": f"Failed to scrape documentation from {url}."}
 
+        elif name == "read_website_page":
+            url = args.get("url", "")
+            if not url:
+                return {"error": "No URL provided to read."}
+            result = await page_reader_service.read_website_page(url)
+            return result
+
         else:
             return {"error": f"Unknown tool: {name}"}
 
@@ -574,7 +620,7 @@ async def _save_conversation(company_id: str, session_id: str, messages: list[di
 # main chat function
 
 
-async def chat(company_id: str, session_id: str, user_message: str, user_id: str = None) -> dict:
+async def chat(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None) -> dict:
     """
     Process a chat message from the widget.
 
@@ -605,7 +651,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
         memory_str = memory_data.get("memory_context", "") if memory_data else ""
 
     # build system prompt and messages
-    system_prompt = _build_system_prompt(company, memory_str)
+    system_prompt = _build_system_prompt(company, memory_str, page_url)
 
     # Convert history to Gemini format
     gemini_history = []
@@ -745,7 +791,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
 # streaming chat (SSE)
 
 
-async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None):
+async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None):
     """
     Async generator that streams the Gemini agent chat flow as events.
 
@@ -776,7 +822,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
         memory_str = memory_data.get("memory_context", "") if memory_data else ""
 
     # build system prompt and messages
-    system_prompt = _build_system_prompt(company, memory_str)
+    system_prompt = _build_system_prompt(company, memory_str, page_url)
 
     # Convert history to Gemini format
     gemini_history = []

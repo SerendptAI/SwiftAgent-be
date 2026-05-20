@@ -23,6 +23,7 @@ from app.services import (
     chain_service,
     stroll_index_service,
     company_email_service,
+    page_reader_service,
 )
 from app.services.stroll_index_service import extract_navigation_steps, reconstruct_navigation_guide
 from app.services.blockchain import detect, evm, bitcoin, prices
@@ -225,6 +226,25 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_website_page",
+            "description": (
+                "Read the contents of a specific website URL. "
+                "Returns the visible text on the page and a list of links found on that page. "
+                "Use this to answer questions by reading the user's current page, or to follow "
+                "links to find more information."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "The URL of the page to read"}
+                },
+                "required": ["url"],
+            },
+        },
+    },
 ]
 
 # Tool stage labels for the SSE stream
@@ -238,6 +258,7 @@ TOOL_STAGE_LABELS = {
     "get_full_dashboard_documentation": "Generating complete dashboard documentation…",
     "scrape_documentation_link": "Scraping documentation link…",
     "create_support_ticket": "Creating support ticket…",
+    "read_website_page": "Reading website page…",
 }
 
 # Multi-stage stream text flows for each tool (Agent-specific)
@@ -322,6 +343,12 @@ TOOL_STAGES = {
         "CREATING SUPPORT TICKET",
         "TICKET CREATED SUCCESSFULLY",
     ],
+    "read_website_page": [
+        "AGENT IS SEARCHING",
+        "LOADING WEBPAGE",
+        "READING PAGE CONTENT",
+        "EXTRACTING RELEVANT DATA",
+    ],
 }
 
 # Helper function to emit multi-stage streams for tools
@@ -333,7 +360,7 @@ def _get_tool_stages(tool_name: str) -> list[str]:
 # System prompt
 
 
-def _build_system_prompt(company: dict, memory_context: str = "") -> str:
+def _build_system_prompt(company: dict, memory_context: str = "", page_url: str = "") -> str:
     company_name = company.get("name", "the company")
     brand_tone = company.get("brand_tone", "professional and helpful")
     description = company.get("description", "")
@@ -343,8 +370,21 @@ def _build_system_prompt(company: dict, memory_context: str = "") -> str:
     if memory_context:
         memory_section = f"\nMEMORY CONTEXT (from previous conversations):\n{memory_context}\n"
 
+    resolved_url = page_url if page_url else company.get("website", "")
+    context_section = ""
+    if resolved_url:
+        location_type = "is currently viewing this URL" if page_url else "is visiting the company website"
+        context_section = f"""
+CURRENT USER LOCATION:
+The customer {location_type}: {resolved_url}
+
+If they ask a question that might be answered by the page they are on, use the `read_website_page` tool on that URL to read it.
+If the answer isn't there, you can use `read_website_page` on the links returned by the tool to search deeper into the website.
+"""
+
     return f"""You are a senior customer support agent for {company_name}. \
 You respond with expertise, empathy, and clarity.
+{context_section}
 
 COMPANY CONTEXT:
 - Name: {company_name}
@@ -540,6 +580,13 @@ async def _execute_tool(name: str, args: dict, company: dict = None, session_id:
                 logger.exception("Failed to create support ticket")
                 return {"error": "Failed to create ticket"}
 
+        elif name == "read_website_page":
+            url = args.get("url", "")
+            if not url:
+                return {"error": "No URL provided to read."}
+            result = await page_reader_service.read_website_page(url)
+            return result
+
         else:
             return {"error": f"Unknown tool: {name}"}
 
@@ -587,7 +634,7 @@ def _history_to_openai(history: list[dict], max_msgs: int = 10) -> list[dict]:
 
 
 # Non-streaming chat
-async def chat(company_id: str, session_id: str, user_message: str, user_id: str = None) -> dict:
+async def chat(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None) -> dict:
     """Process a chat message and return a complete response dict."""
     company = await db.companies.find_one({"id": company_id})
     if not company:
@@ -605,7 +652,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
         if user_id:
             working_mem.identified_user = True
 
-    system_prompt = _build_system_prompt(company, memory_str)
+    system_prompt = _build_system_prompt(company, memory_str, page_url)
     messages = [{"role": "system", "content": system_prompt}]
     messages += _history_to_openai(history)
     messages.append({"role": "user", "content": user_message})
@@ -701,7 +748,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
 # Streaming chat (SSE)
 
 
-async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None):
+async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None):
     """
     Async generator yielding dicts with a "type" key:
         thinking  – status update for the frontend loader
@@ -732,7 +779,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
         if user_id:
             working_mem.identified_user = True
 
-    system_prompt = _build_system_prompt(company, memory_str)
+    system_prompt = _build_system_prompt(company, memory_str, page_url)
     messages = [{"role": "system", "content": system_prompt}]
     messages += _history_to_openai(history)
     messages.append({"role": "user", "content": user_message})

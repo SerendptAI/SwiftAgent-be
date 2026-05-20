@@ -51,6 +51,7 @@ class ChatRequest(BaseModel):
         None, 
         description="Select the AI provider to use. Provide 'openrouter' to route through the OpenRouter service, or 'anthropic' for Claude. If omitted, falls back to the company's ai_provider setting or the platform default."
     )
+    page_url: Optional[str] = Field(None, description="The URL the user is currently viewing.")
 
     @field_validator("message")
     @classmethod
@@ -113,7 +114,7 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
         for idx, stream_fn in enumerate(stream_fns_to_try):
             try:
                 response_text = ""
-                async for event in stream_fn(company_id, req.session_id, req.message, req.user_id):
+                async for event in stream_fn(company_id, req.session_id, req.message, req.user_id, req.page_url):
                     event_type = event.get("type")
 
                     if event_type == "thinking":
