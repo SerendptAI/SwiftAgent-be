@@ -185,7 +185,7 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
 
     except Exception:
         logger.exception(f"Chat SSE error for company {company_id}")
-        yield _sse("error", message="An internal error occurred")
+        yield _sse("error", message="Something went wrong on our end. Please refresh and try again.")
         yield _sse("done")
 
 

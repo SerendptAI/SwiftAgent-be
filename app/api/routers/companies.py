@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
@@ -25,6 +26,8 @@ from app.models.email_models import (
 from app.services import company_service, cloudinary_service
 from app.core.plan_enforcement import enforce_company_limit, enforce_member_limit
 from fastapi import UploadFile, File, Form
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Companies"])
 
@@ -84,7 +87,7 @@ async def get_company(
     user_id = current_user["user_id"]
     company = await company_service.get_company(company_id, user_id, admin_only=False)
     if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+        raise HTTPException(status_code=404, detail="Company not found. Please check the company ID or ensure you have access.")
     return company
 
 
@@ -205,7 +208,8 @@ async def update_logo(
             file, folder=f"logos/{company_id}"
         )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Logo upload failed: {e}")
+        logger.error(f"Logo upload failed for company {company_id}: {e}")
+        raise HTTPException(status_code=502, detail="Logo upload failed. Please try a different image or try again later.")
     return await company_service.update_logo(company_id, user_id, logo_url)
 
 
@@ -346,8 +350,8 @@ async def create_api_key(
     company = await company_service.get_company(company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    if company.get("user_id") != current_user["id"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    if company.get("user_id") != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Only the company admin can manage API keys.")
 
     return await api_key_service.create_api_key(company_id, label=req.label)
 
@@ -361,8 +365,8 @@ async def list_api_keys(
     company = await company_service.get_company(company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    if company.get("user_id") != current_user["id"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    if company.get("user_id") != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Only the company admin can manage API keys.")
 
     return await api_key_service.list_api_keys(company_id)
 
@@ -377,8 +381,8 @@ async def revoke_api_key(
     company = await company_service.get_company(company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    if company.get("user_id") != current_user["id"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    if company.get("user_id") != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="Only the company admin can manage API keys.")
 
     success = await api_key_service.revoke_api_key(company_id, key_id)
     if not success:

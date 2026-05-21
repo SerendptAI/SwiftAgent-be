@@ -44,7 +44,7 @@ async def inbound_email_webhook(request: Request):
         return result
     except Exception as e:
         logger.exception("Error processing inbound email: %s", e)
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Failed to process inbound email. The message could not be routed to a ticket."}
 
 
 @router.get("/resolve/{token}", response_class=HTMLResponse)
@@ -169,7 +169,7 @@ async def reply_to_ticket(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.exception("Failed to send ticket reply: %s", e)
-        raise HTTPException(status_code=502, detail="Failed to send email")
+        raise HTTPException(status_code=502, detail="Failed to send the reply email. The mail server may be temporarily unavailable. Please try again.")
 
 
 @router.patch("/{company_id}/tickets/{ticket_id}/seen")

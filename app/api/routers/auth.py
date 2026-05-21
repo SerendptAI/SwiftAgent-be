@@ -234,7 +234,7 @@ async def callback(request: Request, db=Depends(get_database)):
     name = user_info.get("name", "")
 
     if not google_id or not email:
-        raise HTTPException(status_code=400, detail="Failed to retrieve user info from Google")
+        raise HTTPException(status_code=400, detail="Google sign-in failed. Could not retrieve your account information. Please try again.")
 
     is_new = not bool(await db.users.find_one({"email": email}))
     if is_new:
@@ -378,7 +378,7 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
         # Rollback partial signups to not pollute the db with unverified garbage
         if is_new:
             await db.users.delete_one({"email": email, "is_verified": False})
-        raise HTTPException(status_code=503, detail="Failed to send verification email. Please try again.")
+        raise HTTPException(status_code=503, detail="We couldn't deliver the verification email. Please check the email address and try again.")
 
     return LoginResponse(
         message="A verification code has been sent to your email.",

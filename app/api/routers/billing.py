@@ -2,6 +2,7 @@ import json
 import base64
 import hmac
 import hashlib
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from app.core.auth import get_current_user
@@ -14,6 +15,7 @@ from app.core.plan_enforcement import get_usage_summary
 from app.services.company_service import get_company
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/plans")
@@ -62,7 +64,8 @@ async def create_checkout_session(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to initialize checkout session")
+        logger.error(f"Checkout session creation failed: {e}")
+        raise HTTPException(status_code=500, detail="Unable to start checkout. Please try again or contact support.")
 
 
 @router.post("/webhooks/palmpay", response_model=WebhookResponse)
@@ -89,7 +92,7 @@ async def palmpay_webhook(request: Request, background_tasks: BackgroundTasks):
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid PalmPay signature")
     elif not palmpay_pub_key_pem:
-        raise HTTPException(status_code=500, detail="PalmPay public key not configured")
+        raise HTTPException(status_code=500, detail="Payment verification service is temporarily unavailable.")
 
     payload = json.loads(payload_body)
     background_tasks.add_task(billing_service.process_palmpay_webhook, payload)
@@ -104,7 +107,7 @@ async def polar_webhook(request: Request, background_tasks: BackgroundTasks):
     webhook_secret = settings.POLAR_WEBHOOK_SECRET
 
     if not webhook_secret:
-        raise HTTPException(status_code=500, detail="Webhook secret not configured")
+        raise HTTPException(status_code=500, detail="Payment verification service is temporarily unavailable.")
 
     if not signature:
         raise HTTPException(status_code=400, detail="Missing signature")

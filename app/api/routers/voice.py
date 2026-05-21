@@ -95,7 +95,7 @@ async def voice_call(websocket: WebSocket, company_id: str):
 
                 if not session_id:
                     await websocket.send_json(
-                        {"type": "error", "message": "Session not started"}
+                        {"type": "error", "message": "Voice session not started. Send a 'start' message before sending text."}
                     )
                     continue
 
@@ -152,7 +152,7 @@ async def voice_call(websocket: WebSocket, company_id: str):
         logger.exception(f"Call error: {e}")
         try:
             await websocket.send_json(
-                {"type": "error", "message": "Internal server error"}
+                {"type": "error", "message": "An unexpected error occurred during the call. Please try reconnecting."}
             )
             await websocket.close()
         except Exception:

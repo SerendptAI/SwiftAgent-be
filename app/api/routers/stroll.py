@@ -86,7 +86,7 @@ async def get_config(company_id: str, user: dict = Depends(get_current_user)):
     await _verify_company_access(user["user_id"], company_id)
     config = await stroll_service.get_stroll_config(company_id)
     if not config:
-        raise HTTPException(status_code=404, detail="Stroll configuration not found")
+        raise HTTPException(status_code=404, detail="No stroll configuration found. Set up your dashboard URL and credentials first.")
     return config.model_dump()
 
 

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 from fastapi import (
@@ -24,6 +25,8 @@ from app.services import knowledge_service, cloudinary_service, text_extraction_
 from app.core.database import get_database
 from app.core.config import settings
 from app.core.plan_enforcement import enforce_document_limit
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Knowledge"])
 
@@ -163,7 +166,8 @@ async def upload_knowledge_document(
     try:
         extracted_text = text_extraction_service.extract_text(filename, content)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.warning(f"Unsupported file upload attempt for company {company_id}: {e}")
+        raise HTTPException(status_code=400, detail="Unsupported file type. We support PDF, DOCX, TXT, and CSV files.")
 
     if not extracted_text.strip():
         raise HTTPException(

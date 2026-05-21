@@ -22,7 +22,7 @@ async def get_current_user(
         # fetch user from db to ensure validity
         user = await db.users.find_one({"user_id": user_id})
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(status_code=401, detail="Your account was not found. It may have been deleted or deactivated. Please sign in again.")
 
         return user
 

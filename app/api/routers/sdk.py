@@ -165,7 +165,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
 
     except Exception as e:
         logger.exception(f"SDK Chat SSE error for company {company_id}")
-        yield _sse("error", message="An internal error occurred")
+        yield _sse("error", message="Something went wrong on our end. Please refresh and try again.")
         yield _sse("done")
 
 
@@ -180,7 +180,7 @@ async def sdk_chat_endpoint(
     Uses the authenticated SDK session token.
     """
     if session["company_id"] != company_id:
-        raise HTTPException(status_code=403, detail="Session does not belong to this company")
+        raise HTTPException(status_code=403, detail="Your session is not authorized for this company. Please re-initialize the SDK.")
 
     email = session["email"]
     return StreamingResponse(
@@ -200,7 +200,7 @@ async def list_sdk_conversations(
     Get a unified list of the user's conversation history (both chats and tickets).
     """
     if session["company_id"] != company_id:
-        raise HTTPException(status_code=403, detail="Session does not belong to this company")
+        raise HTTPException(status_code=403, detail="Your session is not authorized for this company. Please re-initialize the SDK.")
 
     result = await sdk_service.get_conversation_history(
         company_id=company_id,
@@ -221,7 +221,7 @@ async def get_sdk_conversation_detail(
     Get full details (message thread) for a specific conversation (chat or ticket).
     """
     if session["company_id"] != company_id:
-        raise HTTPException(status_code=403, detail="Session does not belong to this company")
+        raise HTTPException(status_code=403, detail="Your session is not authorized for this company. Please re-initialize the SDK.")
 
     detail = await sdk_service.get_conversation_detail(
         company_id=company_id,
