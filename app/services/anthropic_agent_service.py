@@ -855,7 +855,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             reply = "I apologize, but I wasn't able to generate a response. Could you please rephrase your question?"
 
     except Exception as e:
-        logger.exception("Anthropic API error")
+        logger.error(f"Anthropic API error: {e}")
         raise e
 
     # extract navigation_steps from reply and reconstruct guide
@@ -1054,7 +1054,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
                     yield {"type": "navigation_guide", "guide": guide.model_dump()}
 
     except Exception as e:
-        logger.exception("Anthropic API error during streaming chat")
+        logger.error(f"Anthropic API error during streaming chat: {e}")
         raise e
 
     # save conversation

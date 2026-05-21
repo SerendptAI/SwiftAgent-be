@@ -727,8 +727,8 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
                 if guide:
                     guide_dump = guide.model_dump()
 
-    except Exception:
-        logger.exception("OpenRouter API error")
+    except Exception as e:
+        logger.error(f"OpenRouter API error: {e}")
         reply = "I'm sorry, I'm experiencing a temporary issue. Please try again in a moment."
 
     # persist conversation
@@ -868,8 +868,8 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
                 if guide:
                     yield {"type": "navigation_guide", "guide": guide.model_dump()}
 
-    except Exception:
-        logger.exception("OpenRouter API error during streaming chat")
+    except Exception as e:
+        logger.error(f"OpenRouter API error during streaming chat: {e}")
         reply = "I'm sorry, I'm experiencing a temporary issue. Please try again in a moment."
 
     # persist conversation

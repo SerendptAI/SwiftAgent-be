@@ -645,10 +645,16 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
     history = await _load_conversation(company_id, session_id)
 
     # load memory context
-    memory_str = ""
-    if user_id:
-        memory_data = await memory_service.load_memory(user_id)
-        memory_str = memory_data.get("memory_context", "") if memory_data else ""
+    memory_context = await memory_service.load_memory_context(
+        company_id=company_id, user_id=user_id, session_id=session_id
+    )
+    memory_str = memory_service.format_memory_context(memory_context)
+
+    working_mem = memory_context.working_memory
+    if not working_mem:
+        working_mem = WorkingMemory(session_id=session_id)
+        if user_id:
+            working_mem.identified_user = True
 
     # build system prompt and messages
     system_prompt = _build_system_prompt(company, memory_str, page_url)
@@ -748,7 +754,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             reply = "I apologize, but I wasn't able to generate a response. Could you please rephrase your question?"
 
     except Exception as e:
-        logger.exception("Gemini API error")
+        logger.error(f"Gemini API error: {e}")
         raise e
 
     # save conversation
@@ -768,18 +774,8 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
     )
     await _save_conversation(company_id, session_id, history)
 
-    # save working memory and extract facts
-    if user_id:
-        working_memory = WorkingMemory(
-            user_id=user_id,
-            company_id=company_id,
-            session_id=session_id,
-            messages=history[-4:],
-        )
-        await memory_service.save_working_memory(working_memory)
-        extracted_facts = await memory_service.extract_facts(user_message, reply)
-        if extracted_facts:
-            await memory_service.add_facts(user_id, extracted_facts)
+    working_mem.context_window = history[-10:]
+    await memory_service.save_working_memory(working_mem)
 
     return {
         "reply": reply,
@@ -815,11 +811,16 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
     # load conversation history
     history = await _load_conversation(company_id, session_id)
 
-    # load memory context
-    memory_str = ""
-    if user_id:
-        memory_data = await memory_service.load_memory(user_id)
-        memory_str = memory_data.get("memory_context", "") if memory_data else ""
+    memory_context = await memory_service.load_memory_context(
+        company_id=company_id, user_id=user_id, session_id=session_id
+    )
+    memory_str = memory_service.format_memory_context(memory_context)
+
+    working_mem = memory_context.working_memory
+    if not working_mem:
+        working_mem = WorkingMemory(session_id=session_id)
+        if user_id:
+            working_mem.identified_user = True
 
     # build system prompt and messages
     system_prompt = _build_system_prompt(company, memory_str, page_url)
@@ -952,7 +953,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
                     yield {"type": "navigation_guide", "guide": guide.model_dump()}
 
     except Exception as e:
-        logger.exception("Gemini API error during streaming chat")
+        logger.error(f"Gemini API error during streaming chat: {e}")
         raise e
 
     # save conversation
@@ -972,18 +973,8 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
     )
     await _save_conversation(company_id, session_id, history)
 
-    # save working memory and extract facts
-    if user_id:
-        working_memory = WorkingMemory(
-            user_id=user_id,
-            company_id=company_id,
-            session_id=session_id,
-            messages=history[-4:],
-        )
-        await memory_service.save_working_memory(working_memory)
-        extracted_facts = await memory_service.extract_facts(user_message, reply)
-        if extracted_facts:
-            await memory_service.add_facts(user_id, extracted_facts)
+    working_mem.context_window = history[-10:]
+    await memory_service.save_working_memory(working_mem)
 
     # emit final events
     yield {"type": "text", "content": reply}
