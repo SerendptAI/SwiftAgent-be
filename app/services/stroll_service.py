@@ -21,6 +21,9 @@ from urllib.parse import urljoin, urlparse
 from uuid import uuid4
 
 import anthropic
+import openai
+from google import genai
+from google.genai import types
 from playwright.async_api import async_playwright, Browser, Page
 
 from app.core.config import settings
@@ -68,21 +71,11 @@ def _get_anthropic_client() -> anthropic.AsyncAnthropic:
     return anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 
-async def _analyze_page_with_vision(
-    screenshot_bytes: bytes,
-    raw_elements: list[dict],
-    page_title: str,
-    page_url: str,
-) -> dict:
-    """
-    Use Claude vision to semantically understand a page screenshot.
-    Returns enriched element descriptions and a page summary.
-    """
-    client = _get_anthropic_client()
-
-    elements_text = json.dumps(raw_elements[:30], indent=2)  # cap to avoid token overflow
-
+async def _call_vision_with_fallback(prompt_text: str, screenshot_bytes: bytes) -> str:
+    """Three-tier agent fallback specifically for vision analysis."""
+    # 1. Try Anthropic
     try:
+        client = _get_anthropic_client()
         response = await client.messages.create(
             model=settings.ANTHROPIC_MODEL,
             max_tokens=4096,
@@ -99,25 +92,101 @@ async def _analyze_page_with_vision(
                     },
                     {
                         "type": "text",
-                        "text": (
-                            f"This is a screenshot of the page '{page_title}' at {page_url}.\n\n"
-                            f"Detected interactive elements from the DOM:\n{elements_text}\n\n"
-                            "Please provide:\n"
-                            "1. A 'scratchpad' string where you reason about the layout as a senior QA engineer. Your goal is to systematically uncover every core feature (especially Settings, Profiles, Upload forms, and core workflows). Plan out which elements to click next to achieve this.\n"
-                            "2. A one-sentence summary of what this page is for.\n"
-                            "3. For each interactive element above, a human-readable description of what it does.\n"
-                            "4. A list of CSS selectors (chosen strictly from the provided list) that the crawler should click next. PRIORITIZE navigation to Settings, Uploads, and unmapped features. Exclude truly destructive actions (Delete Account, Log Out, Process Payment) or redundant elements you've clearly already explored.\n"
-                            "5. An 'is_exploration_complete' boolean. Set this to true ONLY if you are absolutely confident there are no more meaningful forms, settings, or sub-pages to explore on this screen.\n\n"
-                            "Respond in JSON format:\n"
-                            '{"scratchpad": "...", "page_summary": "...", "elements": [{"selector": "...", '
-                            '"human_description": "..."}], "navigation_selectors_to_explore": ["selector1", "selector_2"], "is_exploration_complete": false}'
-                        ),
+                        "text": prompt_text,
                     },
                 ],
             }],
         )
+        return response.content[0].text
+    except Exception as e:
+        logger.warning(f"Anthropic vision failed: {e}. Falling back to Gemini...")
 
-        text = response.content[0].text
+    # 2. Try Gemini
+    try:
+        gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        response = await gemini_client.aio.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=[
+                types.Part.from_bytes(data=screenshot_bytes, mime_type="image/png"),
+                types.Part.from_text(text=prompt_text)
+            ],
+            config=types.GenerateContentConfig(
+                temperature=0.3,
+            )
+        )
+        reply = ""
+        if response.candidates and response.candidates[0].content:
+            for part in response.candidates[0].content.parts:
+                if part.text:
+                    reply += part.text
+        if not reply:
+            raise Exception("Empty response from Gemini")
+        return reply
+    except Exception as e:
+        logger.warning(f"Gemini vision failed: {e}. Falling back to OpenRouter...")
+
+    # 3. Try OpenRouter
+    try:
+        or_client = openai.AsyncOpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=settings.OPENROUTER_API_KEY,
+        )
+        b64_image = base64.b64encode(screenshot_bytes).decode()
+        response = await or_client.chat.completions.create(
+            model=settings.OPENROUTER_MODEL,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt_text
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{b64_image}"
+                        }
+                    }
+                ]
+            }],
+            max_tokens=4096,
+            temperature=0.3,
+        )
+        return response.choices[0].message.content or ""
+    except Exception as e:
+        logger.error(f"OpenRouter vision failed: {e}. All vision providers exhausted.")
+        raise Exception("All vision providers exhausted") from e
+
+
+async def _analyze_page_with_vision(
+    screenshot_bytes: bytes,
+    raw_elements: list[dict],
+    page_title: str,
+    page_url: str,
+) -> dict:
+    """
+    Use Claude vision to semantically understand a page screenshot.
+    Returns enriched element descriptions and a page summary.
+    """
+    elements_text = json.dumps(raw_elements[:30], indent=2)  # cap to avoid token overflow
+
+    prompt_text = (
+        f"This is a screenshot of the page '{page_title}' at {page_url}.\n\n"
+        f"Detected interactive elements from the DOM:\n{elements_text}\n\n"
+        "Please provide:\n"
+        "1. A 'scratchpad' string where you reason about the layout as a senior QA engineer. Your goal is to systematically uncover every core feature (especially Settings, Profiles, Upload forms, and core workflows). Plan out which elements to click next to achieve this.\n"
+        "2. A one-sentence summary of what this page is for.\n"
+        "3. For each interactive element above, a human-readable description of what it does.\n"
+        "4. A list of CSS selectors (chosen strictly from the provided list) that the crawler should click next. PRIORITIZE navigation to Settings, Uploads, and unmapped features. Exclude truly destructive actions (Delete Account, Log Out, Process Payment) or redundant elements you've clearly already explored.\n"
+        "5. An 'is_exploration_complete' boolean. Set this to true ONLY if you are absolutely confident there are no more meaningful forms, settings, or sub-pages to explore on this screen.\n\n"
+        "Respond in JSON format:\n"
+        '{"scratchpad": "...", "page_summary": "...", "elements": [{"selector": "...", '
+        '"human_description": "..."}], "navigation_selectors_to_explore": ["selector1", "selector_2"], "is_exploration_complete": false}'
+    )
+
+    try:
+        text = await _call_vision_with_fallback(prompt_text, screenshot_bytes)
+        
         # extract JSON from response (handle markdown code blocks)
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0]
@@ -393,8 +462,6 @@ async def _read_login_dom_with_vision(
 
     Returns dict with keys: username_selector, password_selector, submit_selector
     """
-    client = _get_anthropic_client()
-
     try:
         form_elements = await page.evaluate(DETECT_LOGIN_FORM_JS)
     except Exception as e:
@@ -403,39 +470,20 @@ async def _read_login_dom_with_vision(
 
     elements_text = json.dumps(form_elements[:40], indent=2)
 
-    try:
-        response = await client.messages.create(
-            model=settings.ANTHROPIC_MODEL,
-            max_tokens=1000,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": base64.b64encode(screenshot_bytes).decode(),
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            f"This is a screenshot of a login page at {page_url}.\n\n"
-                            f"DOM form elements detected:\n{elements_text}\n\n"
-                            "Identify the login form fields. Keep in mind this might be a passwordless (OTP/magic link) login or a traditional one.\n"
-                            "Return JSON:\n"
-                            '{"username_selector": "CSS selector for email/username or null",\n'
-                            ' "password_selector": "CSS selector for password or null",\n'
-                            ' "submit_selector": "CSS selector for the login/continue/submit button or null"}\n\n'
-                            "Use selectors from the DOM list. Prefer #id, then [name=...], then class-based."
-                        ),
-                    },
-                ],
-            }],
-        )
+    prompt_text = (
+        f"This is a screenshot of a login page at {page_url}.\n\n"
+        f"DOM form elements detected:\n{elements_text}\n\n"
+        "Identify the login form fields. Keep in mind this might be a passwordless (OTP/magic link) login or a traditional one.\n"
+        "Return JSON:\n"
+        '{"username_selector": "CSS selector for email/username or null",\n'
+        ' "password_selector": "CSS selector for password or null",\n'
+        ' "submit_selector": "CSS selector for the login/continue/submit button or null"}\n\n'
+        "Use selectors from the DOM list. Prefer #id, then [name=...], then class-based."
+    )
 
-        text = response.content[0].text
+    try:
+        text = await _call_vision_with_fallback(prompt_text, screenshot_bytes)
+        
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0]
         elif "```" in text:
