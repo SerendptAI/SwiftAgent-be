@@ -109,3 +109,12 @@ async def create_indexes():
     await db.otp_challenges.create_index([("user_id", 1), ("status", 1)])
     await db.otp_challenges.create_index("expires_at", expireAfterSeconds=0)
 
+    # Forms
+    await db.forms.create_index("company_id")
+    await db.forms.create_index([("company_id", 1), ("created_at", -1)])
+    await db.form_submissions.create_index("form_id")
+    await db.form_submissions.create_index("company_id")
+    await db.form_submissions.create_index([("company_id", 1), ("is_read", 1)])
+    await db.form_submissions.create_index([("form_id", 1), ("submitted_at", -1)])
+
+
