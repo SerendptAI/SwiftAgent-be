@@ -25,6 +25,7 @@ import base64
 
 from app.core.config import settings
 from app.core.database import db
+from app.core.utils import get_random_avatar
 from app.services import company_service
 from app.services.email_utils import process_html_for_inline_images, get_image_data
 
@@ -65,8 +66,15 @@ async def create_ticket(
     resolve_token = str(uuid4())
     now = datetime.now(tz=timezone.utc)
 
+    avatar = get_random_avatar()
+    if chat_session_id:
+        chat_session = await db.widget_conversations.find_one({"company_id": company_id, "session_id": chat_session_id})
+        if chat_session and "avatar" in chat_session:
+            avatar = chat_session["avatar"]
+
     doc = {
         "id": ticket_id,
+        "avatar": avatar,
         "company_id": company_id,
         "customer_email": customer_email,
         "customer_name": customer_name,

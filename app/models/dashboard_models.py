@@ -41,6 +41,7 @@ class ChatSessionSummary(BaseModel):
     session_id: str
     created_at: datetime
     updated_at: datetime
+    avatar: Optional[str] = None
     message_count: int = 0
     seen: bool = False
 

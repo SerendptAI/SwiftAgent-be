@@ -19,6 +19,7 @@ import anthropic
 from app.core.config import settings
 from app.core.database import db
 from app.core.validators import validate_email
+from app.core.utils import get_random_avatar
 from app.services import (
     knowledge_service,
     chain_service,
@@ -710,6 +711,7 @@ async def _save_conversation(company_id: str, session_id: str, messages: list[di
                 "company_id": company_id,
                 "session_id": session_id,
                 "created_at": datetime.now(tz=timezone.utc),
+                "avatar": get_random_avatar(),
             },
         },
         upsert=True,

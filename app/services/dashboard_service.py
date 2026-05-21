@@ -131,6 +131,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "updated_at": 1,
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "seen": {"$ifNull": ["$seen", False]},
+                "avatar": 1,
                 "type": {"$literal": "chat"},
             }
         },
@@ -156,6 +157,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "updated_at": 1,
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "seen": {"$literal": True},
+                "avatar": 1,
                 "type": {"$literal": "ticket"},
             }
         },
@@ -222,6 +224,7 @@ def _normalize_ticket_to_chat_session(ticket: dict, company_id: str, attributed_
         "created_at": ticket.get("created_at", datetime.now(tz=timezone.utc)),
         "updated_at": ticket.get("updated_at", datetime.now(tz=timezone.utc)),
         "messages": messages,
+        "avatar": ticket.get("avatar"),
         "seen": True,
     }
 

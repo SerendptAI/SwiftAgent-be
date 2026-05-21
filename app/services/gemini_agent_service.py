@@ -19,6 +19,7 @@ from google.genai import types
 
 from app.core.config import settings
 from app.core.database import db
+from app.core.utils import get_random_avatar
 from app.services import knowledge_service, chain_service, stroll_index_service, memory_service, page_reader_service
 from app.services.stroll_index_service import extract_navigation_steps, reconstruct_navigation_guide
 from app.services.blockchain import detect, evm, bitcoin, prices
@@ -611,6 +612,7 @@ async def _save_conversation(company_id: str, session_id: str, messages: list[di
                 "company_id": company_id,
                 "session_id": session_id,
                 "created_at": datetime.now(tz=timezone.utc),
+                "avatar": get_random_avatar(),
             },
         },
         upsert=True,

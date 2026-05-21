@@ -19,6 +19,7 @@ from app.models.sdk_models import (
 )
 from app.services import sdk_service, anthropic_agent_service, openrouter_agent_service, gemini_agent_service
 from app.api.routers.chat import _AGENT_MAP, _DEFAULT_AGENT, _sse
+from app.core.utils import get_random_avatar
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,9 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                  "$set": {
                      "sdk_user_email": email,
                      "source": "sdk",
+                 },
+                 "$setOnInsert": {
+                     "avatar": get_random_avatar(),
                  }
              },
              upsert=True

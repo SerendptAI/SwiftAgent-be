@@ -24,6 +24,7 @@ class EmailTicket(BaseModel):
     resolve_token: str
     messages: List[TicketMessage] = []
     unseen_count: int = 0
+    avatar: Optional[str] = None
     # originating chat context
     chat_session_id: Optional[str] = None
     chat_summary: Optional[str] = None
@@ -103,6 +104,7 @@ class EmailTicketResponse(BaseModel):
     status: str
     messages: List[TicketMessage] = []
     unseen_count: int = 0
+    avatar: Optional[str] = None
     chat_session_id: Optional[str] = None
     chat_summary: Optional[str] = None
     created_at: Optional[datetime] = None
@@ -119,5 +121,6 @@ class EmailTicketSummary(BaseModel):
     status: str
     message_count: int = 0
     unseen_count: int = 0
+    avatar: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
