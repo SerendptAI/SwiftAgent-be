@@ -30,6 +30,7 @@ from app.api.routers import (
     sdk,
     forms,
     forms_public,
+    integrations,
 )
 from app.core.config import settings
 from app.core.database import create_indexes
@@ -258,6 +259,11 @@ app.include_router(mobile.router, prefix="/api/v1/mobile")
 app.include_router(sdk.router, prefix="/api/v1/sdk", tags=["SDK"])
 app.include_router(forms.router, prefix="/api/v1/forms", tags=["Forms"])
 app.include_router(forms_public.router, prefix="/api/v1/public/forms", tags=["Forms"])
+app.include_router(
+    integrations.router,
+    prefix="/api/v1/companies/{company_id}/integrations",
+    tags=["API Integrations"],
+)
 
 # global exception handler
 @app.exception_handler(Exception)

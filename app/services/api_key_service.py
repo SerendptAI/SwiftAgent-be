@@ -14,7 +14,7 @@ from app.core.database import db
 
 logger = logging.getLogger(__name__)
 
-_KEY_PREFIX = "sk_live_"
+_KEY_PREFIX = "swa_live_"
 _KEY_BYTES = 32  # 256-bit key
 
 

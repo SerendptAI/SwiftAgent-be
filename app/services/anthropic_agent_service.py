@@ -26,6 +26,7 @@ from app.services import (
     stroll_index_service,
     company_email_service,
     page_reader_service,
+    integration_service,
 )
 from app.services.stroll_index_service import extract_navigation_steps, reconstruct_navigation_guide
 from app.services.blockchain import detect, evm, bitcoin, prices
@@ -253,6 +254,61 @@ TOOLS = [
             "required": ["url"],
         },
     },
+    {
+        "name": "get_api_documentation",
+        "description": (
+            "Retrieve the API documentation for a company's registered internal API. "
+            "Call this BEFORE using query_company_api to understand what endpoints are "
+            "available, what parameters they accept, and what they return. "
+            "If the customer's question might be answerable by looking up company data, call this first."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "integration_name": {
+                    "type": "string",
+                    "description": (
+                        "Optional: name of a specific integration. "
+                        "If omitted, returns a summary of ALL available integrations."
+                    ),
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "query_company_api",
+        "description": (
+            "Query one of the company's registered internal APIs to verify or look up "
+            "customer data. This tool makes READ-ONLY (GET) requests. Use it when a "
+            "customer asks you to verify an order, check a balance, confirm a shipment, "
+            "or look up any record that the company has exposed via their API. "
+            "IMPORTANT: Before calling this tool, first call get_api_documentation "
+            "to understand available endpoints and required parameters."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "integration_name": {
+                    "type": "string",
+                    "description": "The name of the registered API integration to use",
+                },
+                "endpoint_name": {
+                    "type": "string",
+                    "description": "The specific endpoint to call (from the API documentation)",
+                },
+                "path_params": {
+                    "type": "object",
+                    "description": "Path parameters to substitute in the URL, e.g. {\"order_id\": \"ORD-12345\"}",
+                },
+                "query_params": {
+                    "type": "object",
+                    "description": "Optional query string parameters",
+                },
+            },
+            "required": ["integration_name", "endpoint_name"],
+        },
+    },
 ]
 
 
@@ -267,6 +323,8 @@ TOOL_STAGE_LABELS = {
     "scrape_documentation_link": "Scraping documentation link…",
     "create_support_ticket": "Creating support ticket…",
     "read_website_page": "Reading website page…",
+    "get_api_documentation": "Loading API documentation…",
+    "query_company_api": "Querying company API…",
 }
 
 # Multi-stage stream text flows for each tool (Agent-specific)
@@ -357,6 +415,18 @@ TOOL_STAGES = {
         "READING PAGE CONTENT",
         "EXTRACTING RELEVANT DATA",
     ],
+    "get_api_documentation": [
+        "AGENT IS SEARCHING",
+        "LOADING API DOCUMENTATION",
+        "DOCUMENTATION LOADED",
+    ],
+    "query_company_api": [
+        "AGENT IS VERIFYING",
+        "CONNECTING TO COMPANY API",
+        "QUERYING DATA",
+        "VERIFYING RECORDS",
+        "DATA RETRIEVED",
+    ],
 }
 
 
@@ -369,7 +439,7 @@ def _get_tool_stages(tool_name: str) -> list[str]:
 # system prompt builder
 
 
-def _build_system_prompt(company: dict, memory_context: str = "", page_url: str = "") -> str:
+def _build_system_prompt(company: dict, memory_context: str = "", page_url: str = "", integration_count: int = 0) -> str:
     company_name = company.get("name", "the company")
     brand_tone = company.get("brand_tone", "professional and helpful")
     description = company.get("description", "")
@@ -469,6 +539,14 @@ create a support ticket so the company's human team can help.
 - You MUST get the customer's confirmation before creating the ticket.
 - After creating the ticket, tell the customer the ticket ID and that the team will follow up via email.
 - Never create a ticket without the customer's explicit consent.
+{f'''
+COMPANY API INTEGRATIONS:
+This company has {integration_count} registered internal API(s) you can query to verify customer data.
+- Use `get_api_documentation` FIRST to see what endpoints are available
+- Then use `query_company_api` to make read-only (GET) requests to look up or verify data
+- Only use these when a customer asks you to verify, check, or look up specific data
+- NEVER modify data — these are read-only lookups only
+''' if integration_count > 0 else ''}
 """
 
 
@@ -672,6 +750,27 @@ async def _execute_tool(name: str, args: dict, company: dict = None, session_id:
             result = await page_reader_service.read_website_page(url)
             return result
 
+        elif name == "get_api_documentation":
+            if not company:
+                return {"error": "Company context not available"}
+            company_id = company.get("id", "")
+            intg_name = args.get("integration_name")
+            docs = await integration_service.get_api_documentation(company_id, intg_name)
+            return {"documentation": docs}
+
+        elif name == "query_company_api":
+            if not company:
+                return {"error": "Company context not available"}
+            company_id = company.get("id", "")
+            result = await integration_service.execute_get_request(
+                company_id=company_id,
+                integration_name=args.get("integration_name", ""),
+                endpoint_name=args.get("endpoint_name", ""),
+                path_params=args.get("path_params"),
+                query_params=args.get("query_params"),
+            )
+            return result
+
         else:
             return {"error": f"Unknown tool: {name}"}
 
@@ -758,7 +857,8 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             working_mem.identified_user = True
 
     # build system prompt and messages
-    system_prompt = _build_system_prompt(company, memory_str, page_url)
+    integration_count = await integration_service.get_active_integration_count(company_id)
+    system_prompt = _build_system_prompt(company, memory_str, page_url, integration_count)
 
     # convert history to Claude format
     claude_messages = []
@@ -941,7 +1041,8 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
             working_mem.identified_user = True
 
     # build system prompt and messages
-    system_prompt = _build_system_prompt(company, memory_str, page_url)
+    integration_count = await integration_service.get_active_integration_count(company_id)
+    system_prompt = _build_system_prompt(company, memory_str, page_url, integration_count)
 
     claude_messages = []
     for msg in history[-10:]:

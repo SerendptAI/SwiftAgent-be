@@ -20,7 +20,7 @@ from google.genai import types
 from app.core.config import settings
 from app.core.database import db
 from app.core.utils import get_random_avatar
-from app.services import knowledge_service, chain_service, stroll_index_service, memory_service, page_reader_service
+from app.services import knowledge_service, chain_service, stroll_index_service, memory_service, page_reader_service, integration_service
 from app.services.stroll_index_service import extract_navigation_steps, reconstruct_navigation_guide
 from app.services.blockchain import detect, evm, bitcoin, prices
 from app.models.memory_models import WorkingMemory
@@ -206,6 +206,60 @@ TOOLS = [
                     required=["url"],
                 ),
             ),
+            types.FunctionDeclaration(
+                name="get_api_documentation",
+                description=(
+                    "Retrieve the API documentation for a company's registered internal API. "
+                    "Call this BEFORE using query_company_api to understand what endpoints are "
+                    "available, what parameters they accept, and what they return. "
+                    "If the customer's question might be answerable by looking up company data, call this first."
+                ),
+                parameters=types.Schema(
+                    type="OBJECT",
+                    properties={
+                        "integration_name": types.Schema(
+                            type="STRING",
+                            description=(
+                                "Optional: name of a specific integration. "
+                                "If omitted, returns a summary of ALL available integrations."
+                            ),
+                        ),
+                    },
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="query_company_api",
+                description=(
+                    "Query one of the company's registered internal APIs to verify or look up "
+                    "customer data. This tool makes READ-ONLY (GET) requests. Use it when a "
+                    "customer asks you to verify an order, check a balance, confirm a shipment, "
+                    "or look up any record that the company has exposed via their API. "
+                    "IMPORTANT: Before calling this tool, first call get_api_documentation "
+                    "to understand available endpoints and required parameters."
+                ),
+                parameters=types.Schema(
+                    type="OBJECT",
+                    properties={
+                        "integration_name": types.Schema(
+                            type="STRING",
+                            description="The name of the registered API integration to use",
+                        ),
+                        "endpoint_name": types.Schema(
+                            type="STRING",
+                            description="The specific endpoint to call (from the API documentation)",
+                        ),
+                        "path_params": types.Schema(
+                            type="OBJECT",
+                            description="Path parameters to substitute in the URL, e.g. {order_id: ORD-12345}",
+                        ),
+                        "query_params": types.Schema(
+                            type="OBJECT",
+                            description="Optional query string parameters",
+                        ),
+                    },
+                    required=["integration_name", "endpoint_name"],
+                ),
+            ),
         ]
     )
 ]
@@ -221,6 +275,8 @@ TOOL_STAGE_LABELS = {
     "get_full_dashboard_documentation": "Generating complete dashboard documentation…",
     "scrape_documentation_link": "Scraping documentation link…",
     "read_website_page": "Reading website page…",
+    "get_api_documentation": "Loading API documentation…",
+    "query_company_api": "Querying company API…",
 }
 
 # Multi-stage stream text flows for each tool (Agent-specific)
@@ -311,6 +367,18 @@ TOOL_STAGES = {
         "READING PAGE CONTENT",
         "EXTRACTING RELEVANT DATA",
     ],
+    "get_api_documentation": [
+        "AGENT IS SEARCHING",
+        "LOADING API DOCUMENTATION",
+        "DOCUMENTATION LOADED",
+    ],
+    "query_company_api": [
+        "AGENT IS VERIFYING",
+        "CONNECTING TO COMPANY API",
+        "QUERYING DATA",
+        "VERIFYING RECORDS",
+        "DATA RETRIEVED",
+    ],
 }
 
 
@@ -323,7 +391,7 @@ def _get_tool_stages(tool_name: str) -> list[str]:
 # system prompt builder
 
 
-def _build_system_prompt(company: dict, memory_context: str = "", page_url: str = "") -> str:
+def _build_system_prompt(company: dict, memory_context: str = "", page_url: str = "", integration_count: int = 0) -> str:
     company_name = company.get("name", "the company")
     brand_tone = company.get("brand_tone", "professional and helpful")
     description = company.get("description", "")
@@ -409,6 +477,14 @@ RESPONSE FORMAT:
 - For simple greetings or casual messages, respond briefly and naturally (1-2 sentences).
 - Only use structured responses (sections, bullet points) for complex or technical questions.
 - Keep answers concise and to the point. Avoid unnecessary preamble or filler.
+{f'''
+COMPANY API INTEGRATIONS:
+This company has {integration_count} registered internal API(s) you can query to verify customer data.
+- Use `get_api_documentation` FIRST to see what endpoints are available
+- Then use `query_company_api` to make read-only (GET) requests to look up or verify data
+- Only use these when a customer asks you to verify, check, or look up specific data
+- NEVER modify data — these are read-only lookups only
+''' if integration_count > 0 else ''}
 """
 
 
@@ -573,6 +649,27 @@ async def _execute_tool(name: str, args: dict, company: dict = None, session_id:
             result = await page_reader_service.read_website_page(url)
             return result
 
+        elif name == "get_api_documentation":
+            if not company:
+                return {"error": "Company context not available"}
+            company_id = company.get("id", "")
+            intg_name = args.get("integration_name")
+            docs = await integration_service.get_api_documentation(company_id, intg_name)
+            return {"documentation": docs}
+
+        elif name == "query_company_api":
+            if not company:
+                return {"error": "Company context not available"}
+            company_id = company.get("id", "")
+            result = await integration_service.execute_get_request(
+                company_id=company_id,
+                integration_name=args.get("integration_name", ""),
+                endpoint_name=args.get("endpoint_name", ""),
+                path_params=args.get("path_params"),
+                query_params=args.get("query_params"),
+            )
+            return result
+
         else:
             return {"error": f"Unknown tool: {name}"}
 
@@ -659,7 +756,8 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             working_mem.identified_user = True
 
     # build system prompt and messages
-    system_prompt = _build_system_prompt(company, memory_str, page_url)
+    integration_count = await integration_service.get_active_integration_count(company_id)
+    system_prompt = _build_system_prompt(company, memory_str, page_url, integration_count)
 
     # Convert history to Gemini format
     gemini_history = []
@@ -825,7 +923,8 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
             working_mem.identified_user = True
 
     # build system prompt and messages
-    system_prompt = _build_system_prompt(company, memory_str, page_url)
+    integration_count = await integration_service.get_active_integration_count(company_id)
+    system_prompt = _build_system_prompt(company, memory_str, page_url, integration_count)
 
     # Convert history to Gemini format
     gemini_history = []

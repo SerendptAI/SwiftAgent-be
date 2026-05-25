@@ -19,7 +19,7 @@ class ApiKeyCreateRequest(BaseModel):
 class ApiKeyCreateResponse(BaseModel):
     """Returned ONCE when a key is generated — the raw key is never shown again."""
     id: str
-    key: str  # full raw key, e.g. "sk_live_Ab3x..."
+    key: str  # full raw key, e.g. "swa_live_Ab3x..."
     key_prefix: str
     label: str
     created_at: datetime
