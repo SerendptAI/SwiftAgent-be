@@ -99,10 +99,16 @@ async def get_company_public(
     company = await company_service.get_company(company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    name = company["name"]
-    website = company["website"]
-    logo_url = company["logo_url"]
-    return {"name": name, "website": website, "logo_url": logo_url}
+    name = company.get("name")
+    website = company.get("website")
+    logo_url = company.get("logo_url")
+    suggested_ai_prompts = company.get("suggested_ai_prompts", [])
+    return {
+        "name": name, 
+        "website": website, 
+        "logo_url": logo_url,
+        "suggested_ai_prompts": suggested_ai_prompts
+    }
 
 
 @router.patch("/{company_id}/identity", response_model=CompanyResponse)

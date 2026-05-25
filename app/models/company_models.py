@@ -24,6 +24,7 @@ class CompanyInfoUpdate(BaseModel):
     contact_email: Optional[str] = None
     support_email: Optional[str] = None
     phone_number: Optional[str] = None
+    suggested_ai_prompts: Optional[List[str]] = None
 
 class CompanySecurityUpdate(BaseModel):
     backup_email: Optional[str] = None
@@ -57,6 +58,7 @@ class CompanyIdentityUpdate(BaseModel):
     brand_tone: Optional[str] = None
     primary_language: str = "English"
     support_emails: Optional[List[EmailStr]] = None
+    suggested_ai_prompts: Optional[List[str]] = None
 
     @field_validator("support_emails")
     @classmethod
@@ -114,6 +116,7 @@ class CompanyResponse(BaseModel):
     customer_value: Optional[str] = None
     brand_tone: Optional[str] = None
     primary_language: str = "English"
+    suggested_ai_prompts: List[str] = []
     # step 4
     enabled_sources: List[str] = []
     custom_info: List[str] = []
@@ -141,6 +144,7 @@ class CompanySummary(BaseModel):
     logo_url: Optional[str] = None
     setup_complete: bool = False
     onboarding_step: int = 1
+    suggested_ai_prompts: List[str] = []
 
 class LogoUpdate(BaseModel):
     logo_url: str
