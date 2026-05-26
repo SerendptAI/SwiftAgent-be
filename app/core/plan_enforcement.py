@@ -3,8 +3,8 @@ Plan enforcement helpers.
 
 Each enforce_* function checks whether the current usage for a company or user
 exceeds the limit defined by their subscription tier.  When the limit is
-exceeded an HTTPException(403) is raised with a user-friendly message that uses
-the frontend tier names (Yellow Pill / Purple Pill / Orange Pill).
+exceeded an HTTPException(402) is raised with a user-friendly message that uses
+the frontend tier names (Basic / Pro / Enterprise).
 
 Subscription expiry is also checked: a company whose subscription has lapsed
 (>30 days since subscription_started_at) is treated as having no active plan.
@@ -76,7 +76,7 @@ def get_subscription_expiry(company: dict) -> datetime | None:
     return started_at + timedelta(days=SUBSCRIPTION_DURATION_DAYS)
 
 
-def _upgrade_message(tier: str, resource: str) -> str:
+def _upgrade_message(tier: str, resource: str, limit: int | float | None = None) -> str:
     """Build a user-friendly upgrade prompt."""
     display = get_display_name(tier)
     next_tiers = {
@@ -85,9 +85,10 @@ def _upgrade_message(tier: str, resource: str) -> str:
         "enterprise": "",
     }
     upgrade_hint = next_tiers.get(tier, "a higher plan")
+    limit_text = f" (Limit: {limit})" if limit is not None else ""
     if upgrade_hint:
-        return f"Your {display} plan limit for {resource} has been reached. Upgrade to {upgrade_hint} for more."
-    return f"Your {display} plan limit for {resource} has been reached."
+        return f"Your {display} plan limit for {resource} has been reached. Upgrade to {upgrade_hint} for more.{limit_text}"
+    return f"Your {display} plan limit for {resource} has been reached.{limit_text}"
 
 
 async def enforce_company_limit(user_id: str) -> None:
@@ -116,8 +117,8 @@ async def enforce_company_limit(user_id: str) -> None:
 
     if len(owned) >= max_companies:
         raise HTTPException(
-            status_code=400,
-            detail=_upgrade_message(best_tier, "companies"),
+            status_code=402,
+            detail=_upgrade_message(best_tier, "companies", max_companies),
         )
 
 
@@ -138,8 +139,8 @@ async def enforce_agent_limit(company: dict) -> None:
 
     if current_count >= max_agents:
         raise HTTPException(
-            status_code=400,
-            detail=_upgrade_message(tier, "deployed agents"),
+            status_code=402,
+            detail=_upgrade_message(tier, "deployed agents", max_agents),
         )
 
 
@@ -160,8 +161,8 @@ async def enforce_document_limit(company: dict) -> None:
 
     if current_count >= max_docs:
         raise HTTPException(
-            status_code=400,
-            detail=_upgrade_message(tier, "document uploads"),
+            status_code=402,
+            detail=_upgrade_message(tier, "document uploads", max_docs),
         )
 
 
@@ -190,8 +191,8 @@ async def enforce_member_limit(company: dict) -> None:
 
     if total >= max_members:
         raise HTTPException(
-            status_code=400,
-            detail=_upgrade_message(tier, "team members"),
+            status_code=402,
+            detail=_upgrade_message(tier, "team members", max_members),
         )
 
 
@@ -235,8 +236,8 @@ async def enforce_voice_minutes(company: dict) -> None:
 
     if total_minutes >= max_minutes:
         raise HTTPException(
-            status_code=400,
-            detail=_upgrade_message(tier, "voice minutes"),
+            status_code=402,
+            detail=_upgrade_message(tier, "voice minutes", max_minutes),
         )
 
 
