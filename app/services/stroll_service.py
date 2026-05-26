@@ -539,6 +539,15 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
 
     strategy = _select_auth_strategy(config)
     logger.info(f"Auth strategy selected for company {company_id}: {strategy}")
+    
+    # Decrypt password for usage
+    if creds.password:
+        from app.core.encryption import decrypt
+        try:
+            creds.password = decrypt(creds.password)
+        except ValueError:
+            # Leave as is if it's legacy unencrypted
+            pass
 
     # ── Strategy 1: Pre-authenticated URL (easiest) ──────────────────────
     if strategy == "pre_auth":
@@ -1552,10 +1561,21 @@ async def save_stroll_config(
 ) -> StrollConfig:
     """Create or update stroll configuration for a company."""
     now = datetime.now(tz=timezone.utc)
+    config_data = data.model_dump()
+
+    existing_doc = await db.stroll_configs.find_one({"company_id": company_id})
+
+    if config_data.get("credentials"):
+        new_pw = config_data["credentials"].get("password")
+        if new_pw and new_pw != "********":
+            from app.core.encryption import encrypt
+            config_data["credentials"]["password"] = encrypt(new_pw)
+        elif new_pw == "********" and existing_doc and existing_doc.get("credentials"):
+            config_data["credentials"]["password"] = existing_doc["credentials"].get("password")
 
     config_doc = {
         "company_id": company_id,
-        **data.model_dump(),
+        **config_data,
         "updated_at": now,
     }
 
@@ -1568,4 +1588,4 @@ async def save_stroll_config(
         upsert=True,
     )
 
-    return StrollConfig(company_id=company_id, **data.model_dump(), updated_at=now)
+    return StrollConfig(company_id=company_id, **config_data, updated_at=now)

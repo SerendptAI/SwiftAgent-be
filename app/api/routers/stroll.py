@@ -87,7 +87,10 @@ async def get_config(company_id: str, user: dict = Depends(get_current_user)):
     config = await stroll_service.get_stroll_config(company_id)
     if not config:
         raise HTTPException(status_code=404, detail="No stroll configuration found. Set up your dashboard URL and credentials first.")
-    return config.model_dump()
+    data = config.model_dump()
+    if data.get("credentials") and data["credentials"].get("password"):
+        data["credentials"]["password"] = "********"
+    return data
 
 
 @router.put("/{company_id}/config")
@@ -111,7 +114,10 @@ async def update_config(
     
     schedule_stroll_job(company_id, data.schedule)
     
-    return config.model_dump()
+    data_out = config.model_dump()
+    if data_out.get("credentials") and data_out["credentials"].get("password"):
+        data_out["credentials"]["password"] = "********"
+    return data_out
 
 
 @router.post("/{company_id}/run")
