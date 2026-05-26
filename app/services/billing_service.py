@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class BillingService:
     def __init__(self):
-        self.polar_api_url = "https://api.polar.sh/v1"
+        self.polar_api_url = getattr(settings, "POLAR_API_URL", "https://api.polar.sh/v1")
 
     async def create_checkout_session(
         self, company_id: str, tier: str, user_timezone: str,

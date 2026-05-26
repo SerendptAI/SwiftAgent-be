@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     FISH_AUDIO_VOICE_ID: str = ""
 
     # billing
+    POLAR_API_URL: str = "https://api.polar.sh/v1"
     POLAR_ACCESS_TOKEN: str = ""
     POLAR_WEBHOOK_SECRET: str = ""
     
