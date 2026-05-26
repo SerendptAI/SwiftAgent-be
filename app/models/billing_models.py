@@ -13,6 +13,9 @@ class CheckoutSessionRequest(BaseModel):
 class CheckoutSessionResponse(BaseModel):
     checkout_url: str
 
+class PortalSessionResponse(BaseModel):
+    portal_url: str
+
 class BillingDetailsResponse(BaseModel):
     subscription_tier: Optional[str]
     subscription_status: str

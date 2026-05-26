@@ -7,7 +7,7 @@ from app.core.database import db
 from app.core.config import settings
 from app.core.plan_enforcement import get_usage_summary
 from app.core.billing_limits import TIER_LIMITS, is_african_timezone
-from app.models.billing_models import CheckoutSessionRequest, CheckoutSessionResponse, WebhookResponse
+from app.models.billing_models import CheckoutSessionRequest, CheckoutSessionResponse, WebhookResponse, PortalSessionResponse
 from app.services.billing_service import billing_service
 from app.services.company_service import get_company
 
@@ -79,6 +79,33 @@ async def create_checkout_session(
         raise HTTPException(
             status_code=500,
             detail="Unable to start checkout. Please try again or contact support."
+        )
+
+
+@router.post("/{company_id}/portal", response_model=PortalSessionResponse)
+async def create_portal_session(
+    company_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Generate a Polar customer portal URL so the user can manage/cancel their subscription."""
+    company = await db.companies.find_one(
+        {"id": company_id, "user_id": current_user["user_id"]}
+    )
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    customer_id = company.get("customer_id")
+    if not customer_id:
+        raise HTTPException(status_code=400, detail="This company does not have an active billing customer ID.")
+
+    try:
+        portal_url = await billing_service.create_customer_portal_session(customer_id)
+        return PortalSessionResponse(portal_url=portal_url)
+    except Exception as e:
+        logger.error(f"Portal session creation failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to open billing portal. Please try again or contact support."
         )
 
 

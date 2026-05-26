@@ -80,6 +80,32 @@ class BillingService:
             data = response.json()
             return data.get("url", f"https://sandbox.polar.sh/checkout/dummy?company_id={company_id}")
 
+    async def create_customer_portal_session(self, customer_id: str) -> str:
+        """Create a Polar customer portal session URL."""
+        if not settings.POLAR_ACCESS_TOKEN:
+            return "https://sandbox.polar.sh/purchases"
+
+        headers = {
+            "Authorization": f"Bearer {settings.POLAR_ACCESS_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "customer_id": customer_id
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.polar_api_url}/customer-sessions/",
+                headers=headers, json=payload
+            )
+            if response.status_code in (200, 201):
+                data = response.json()
+                return data.get("customer_portal_url", "https://polar.sh/purchases")
+            else:
+                logger.error(f"Polar customer portal failed: {response.text}")
+                return "https://polar.sh/purchases"
+
     async def process_polar_webhook(self, payload: Dict[str, Any]) -> bool:
         """Process webhook events from Polar.sh"""
         event = payload.get("type")
@@ -114,6 +140,27 @@ class BillingService:
                     await company_cache.delete(key)
 
                 logger.info(f"Polar success for company {company_id}, upgraded to {tier}. Sub: {sub_id}")
+                return True
+                
+        elif event == "subscription.canceled":
+            metadata = data.get("metadata", {})
+            company_id = metadata.get("company_id")
+            if company_id:
+                await db.companies.update_one(
+                    {"id": company_id},
+                    {"$set": {
+                        "subscription_status": "canceled",
+                    }}
+                )
+                from app.core.cache import company_cache
+                keys_to_delete = [
+                    key for key in list(company_cache._store.keys())
+                    if key.startswith(f"company:{company_id}:")
+                ]
+                for key in keys_to_delete:
+                    await company_cache.delete(key)
+                
+                logger.info(f"Polar subscription canceled for company {company_id}")
                 return True
 
         return False
