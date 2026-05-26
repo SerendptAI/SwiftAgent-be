@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, BackgroundTasks
-import hmac, hashlib
+import hmac, hashlib, base64
 
 from app.core.auth import get_current_user
 from app.core.database import db
@@ -112,20 +112,37 @@ async def create_portal_session(
 @router.post("/webhooks/polar", response_model=WebhookResponse)
 async def polar_webhook(request: Request, background_tasks: BackgroundTasks):
     """Handle Polar webhooks."""
-    signature = request.headers.get("webhook-signature")
-    webhook_secret = settings.POLAR_WEBHOOK_SECRET
+    webhook_id = request.headers.get("webhook-id")
+    webhook_timestamp = request.headers.get("webhook-timestamp")
+    webhook_signature = request.headers.get("webhook-signature")
 
+    if not webhook_id or not webhook_timestamp or not webhook_signature:
+        raise HTTPException(status_code=400, detail="Missing webhook headers")
+        
+    webhook_secret = settings.POLAR_WEBHOOK_SECRET
     if not webhook_secret:
         raise HTTPException(status_code=500, detail="Payment verification service is temporarily unavailable.")
-    if not signature:
-        raise HTTPException(status_code=400, detail="Missing signature")
+
+    try:
+        secret = webhook_secret.removeprefix("whsec_")
+        secret_bytes = base64.b64decode(secret)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Invalid server webhook secret")
 
     payload_body = await request.body()
-    hash_digest = hmac.new(
-        webhook_secret.encode("utf-8"), payload_body, hashlib.sha256
-    ).hexdigest()
+    to_sign = f"{webhook_id}.{webhook_timestamp}.{payload_body.decode('utf-8')}".encode("utf-8")
 
-    if hash_digest != signature:
+    computed_signature = hmac.new(secret_bytes, to_sign, hashlib.sha256).digest()
+    computed_signature_b64 = base64.b64encode(computed_signature).decode("utf-8")
+
+    passed = False
+    for sig in webhook_signature.split(" "):
+        parts = sig.split(",")
+        if len(parts) == 2 and parts[0] == "v1" and hmac.compare_digest(parts[1], computed_signature_b64):
+            passed = True
+            break
+
+    if not passed:
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     payload = await request.json()

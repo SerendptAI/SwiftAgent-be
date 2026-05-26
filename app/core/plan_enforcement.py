@@ -33,7 +33,7 @@ def _is_subscription_active(company: dict) -> bool:
       - subscription_started_at exists and is within the last SUBSCRIPTION_DURATION_DAYS
     """
     status = company.get("subscription_status", "inactive")
-    if status != "active":
+    if status not in ("active", "canceled"):
         return False
 
     started_at = company.get("subscription_started_at")
