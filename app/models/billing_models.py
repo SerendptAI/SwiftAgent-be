@@ -8,6 +8,7 @@ class SavedCard(BaseModel):
 class CheckoutSessionRequest(BaseModel):
     company_id: str
     tier: str # "basic", "pro", "enterprise"
+    user_timezone: str = "" # e.g. "Africa/Lagos", "America/New_York"
 
 class CheckoutSessionResponse(BaseModel):
     checkout_url: str

@@ -62,17 +62,21 @@ class Settings(BaseSettings):
     FISH_AUDIO_VOICE_ID: str = ""
 
     # billing
-    PALMPAY_MERCHANT_ID: str = ""
-    PALMPAY_PRIVATE_KEY: str = ""
-    PALMPAY_PALMPAY_PUBLIC_KEY: str = ""
-    PALMPAY_API_URL: str = "https://api.palmpay-inc.com"
     POLAR_ACCESS_TOKEN: str = ""
     POLAR_WEBHOOK_SECRET: str = ""
     
-    # Polar product IDs for subscription tiers
-    POLAR_PRODUCT_BASIC: str = "76c6aab0-e9df-4528-b418-e16aa70abba5"
-    POLAR_PRODUCT_PRO: str = "9e6e7deb-a5e4-40b0-ad8e-1106a3d3a76c"
-    POLAR_PRODUCT_ENTERPRISE: str = "bb76d48f-e41e-4a16-9a33-1ee1c0f4786f"
+    # Polar product IDs — African pricing
+    POLAR_PRODUCT_BASIC_AF: str = "76c6aab0-e9df-4528-b418-e16aa70abba5"
+    POLAR_PRODUCT_PRO_AF: str = "9e6e7deb-a5e4-40b0-ad8e-1106a3d3a76c"
+    POLAR_PRODUCT_ENTERPRISE_AF: str = "bb76d48f-e41e-4a16-9a33-1ee1c0f4786f"
+    
+    # Polar product IDs — International pricing
+    POLAR_PRODUCT_BASIC_INTL: str = "52c04072-a8a6-4ad7-a999-374079acbfd1"
+    POLAR_PRODUCT_PRO_INTL: str = "8ff00348-f76a-4b5a-afd0-207e39ba910e"
+    POLAR_PRODUCT_ENTERPRISE_INTL: str = "5d3eca44-241f-43cd-a4c7-bc2a00f0ffd4"
+    
+    # Discount for International Basic (50% off)
+    POLAR_DISCOUNT_BASIC_INTL: str = "845c8f40-0c9b-4743-8abb-c5bc944ff829"
 
     # blockchain
     ETHERSCAN_API_KEY: str = ""

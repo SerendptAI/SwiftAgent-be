@@ -1,12 +1,18 @@
-AFRICAN_COUNTRIES = [
-    "Nigeria", "Ghana", "Kenya", "South Africa", "Egypt", 
-    "Morocco", "Uganda", "Tanzania", "Ethiopia", "Rwanda", "Senegal"
-]
+# Timezone prefix used to detect African users via browser timezone
+AFRICAN_TIMEZONE_PREFIX = "Africa/"
+
+def is_african_timezone(tz: str | None) -> bool:
+    """Check if a timezone string belongs to an African region."""
+    if not tz:
+        return False
+    return tz.startswith(AFRICAN_TIMEZONE_PREFIX)
 
 TIER_LIMITS = {
     "basic": {
-        "price_ngn": 25000,
-        "price_usd": 18,
+        "price_usd_af": 18,
+        "price_usd_intl": 200,
+        "price_usd_intl_discounted": 100,
+        "trial_months_af": 6,
         "display_name": "Basic",
         "agents_limit": 1,
         "documents_limit": 10,
@@ -19,8 +25,8 @@ TIER_LIMITS = {
         "companies_per_user": 1,
     },
     "pro": {
-        "price_ngn": 45000,
-        "price_usd": 34,
+        "price_usd_af": 34,
+        "price_usd_intl": 700,
         "display_name": "Pro",
         "agents_limit": 3,
         "documents_limit": 50,
@@ -33,8 +39,8 @@ TIER_LIMITS = {
         "companies_per_user": 3,
     },
     "enterprise": {
-        "price_ngn": 80000,
-        "price_usd": 60,
+        "price_usd_af": 60,
+        "price_usd_intl": 1700,
         "display_name": "Enterprise",
         "agents_limit": -1, # -1 signifies unlimited
         "documents_limit": -1,
