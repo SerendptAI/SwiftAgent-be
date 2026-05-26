@@ -1,33 +1,293 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
-<meta charset="utf-8" />
-    <meta name="color-scheme" content="light" />
-    <meta name="supported-color-schemes" content="light" />
-<style>
-  :root {
-    color-scheme: light;
-    supported-color-schemes: light;
-  }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
+  <title>Ticket reply</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:AllowPNG/>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap");
+
+    :root {
+      color-scheme: light;
+      supported-color-schemes: light;
+    }
+
+    body,
+    table,
+    td,
+    a {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    table,
+    td {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      height: auto;
+      line-height: 100%;
+      outline: none;
+      text-decoration: none;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    table {
+      border-collapse: collapse !important;
+    }
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+    a[x-apple-data-detectors] {
+      color: inherit !important;
+      text-decoration: none !important;
+      font-size: inherit !important;
+      font-family: inherit !important;
+      font-weight: inherit !important;
+      line-height: inherit !important;
+    }
+
+    body {
+      background-color: #f5f5f4;
+      color: #111111;
+      font-family: "DM Mono", "Courier New", Courier, monospace;
+      overflow-x: hidden;
+    }
+
+    .email-container {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #f5f5f4;
+    }
+
+    .display-font {
+      font-family: "Greed Narrow-TRIAL", "Arial Narrow", Impact, sans-serif;
+      font-stretch: condensed;
+    }
+
+    .logo-cell img {
+      display: block;
+      max-width: 160px;
+      max-height: 70px !important;
+      margin: 0 auto !important;
+    }
+
+    .company-name {
+      margin: 18px 0 0;
+      color: #111111;
+      font-family: "DM Mono", "Courier New", Courier, monospace;
+      font-size: 18px;
+      line-height: 1.45;
+      font-weight: 400;
+      letter-spacing: 0;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .heading-text {
+      margin: 0;
+      color: #697454;
+      background-image: url("images/text-bg.jpg");
+      background-position: center center;
+      background-size: cover;
+      background-repeat: no-repeat;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: rgba(0, 0, 0, 0);
+      font-size: 58px;
+      line-height: 1.24;
+      font-weight: 600;
+      letter-spacing: -1.16px;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .message-content {
+      color: #111111;
+      font-family: "DM Mono", "Courier New", Courier, monospace;
+      font-size: 18px;
+      line-height: 2.02;
+      font-weight: 400;
+      letter-spacing: 0;
+      text-align: left;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .message-content p {
+      margin: 0 0 24px;
+    }
+
+    .message-content p:last-child {
+      margin-bottom: 0;
+    }
+
+    .message-content a {
+      color: #697454 !important;
+      text-decoration: underline;
+    }
+
+    .resolve-copy {
+      margin: 0;
+      color: #111111;
+      font-family: "DM Mono", "Courier New", Courier, monospace;
+      font-size: 18px;
+      line-height: 2;
+      font-weight: 400;
+      letter-spacing: 0;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .resolve-button {
+      display: block;
+      width: 100%;
+      height: 54px;
+      border-radius: 8px;
+      background-color: #f24d33;
+      box-shadow: -4px 8px 0 #000000;
+      color: #ffffff !important;
+      font-family: "DM Mono", "Courier New", Courier, monospace;
+      font-size: 18px;
+      line-height: 54px;
+      font-weight: 500;
+      letter-spacing: 0;
+      text-align: center;
+      text-decoration: none;
+      text-transform: uppercase;
+    }
+
+    .footer-text {
+      margin: 0;
+      color: #6b6b65;
+      font-family: "DM Mono", "Courier New", Courier, monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      font-weight: 400;
+      letter-spacing: 0;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    @media only screen and (max-width: 620px) {
+      .email-container { width: 100% !important; max-width: 100% !important; }
+      .logo-cell { padding: 82px 58px 58px !important; }
+      .heading-cell { padding: 0 58px 64px !important; }
+      .heading-text { font-size: 52px !important; line-height: 1.24 !important; letter-spacing: -1.04px !important; }
+      .message-cell { padding: 0 85px 72px !important; }
+      .resolve-copy-cell { padding: 0 58px 28px !important; }
+      .button-cell { padding: 0 42px 34px !important; }
+      .footer-cell { padding: 0 58px 94px !important; }
+    }
+
+    @media only screen and (max-width: 480px) {
+      .logo-cell { padding: 52px 34px 42px !important; }
+      .logo-cell img { max-width: 130px !important; max-height: 56px !important; }
+      .company-name { font-size: 16px !important; line-height: 1.45 !important; }
+      .heading-cell { padding: 0 28px 48px !important; }
+      .heading-text { font-size: 38px !important; line-height: 1.24 !important; letter-spacing: -0.76px !important; }
+      .message-cell { padding: 0 42px 58px !important; }
+      .message-content { font-size: 16px !important; line-height: 2 !important; }
+      .resolve-copy-cell { padding: 0 34px 24px !important; }
+      .resolve-copy { font-size: 16px !important; line-height: 2 !important; }
+      .button-cell { padding: 0 28px 34px !important; }
+      .resolve-button { height: 54px !important; border-radius: 8px !important; font-size: 16px !important; line-height: 54px !important; box-shadow: -3px 6px 0 #000000 !important; }
+      .footer-cell { padding: 0 34px 94px !important; }
+    }
+
+    @media only screen and (max-width: 375px) {
+      .heading-cell { padding-left: 20px !important; padding-right: 20px !important; }
+      .heading-text { font-size: 33px !important; letter-spacing: -0.66px !important; }
+      .message-cell { padding-left: 28px !important; padding-right: 28px !important; }
+      .resolve-copy-cell { padding-left: 24px !important; padding-right: 24px !important; }
+      .button-cell { padding-left: 24px !important; padding-right: 24px !important; }
+      .footer-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 94px !important; }
+    }
+  </style>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a1a1a; background-color: #ffffff; max-width: 600px; margin: 0 auto; padding: 24px 24px 94px;">
-  {{logo_block}}
-  <div style="line-height: 1.6;">
-    {{body_html}}
+<body style="margin: 0; padding: 0; background-color: #f5f5f4;">
+  <div style="display: none; max-height: 0; overflow: hidden;">
+    {{company_name}} replied to your ticket.
+    &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
   </div>
-  <hr style="border: none; border-top: 1px solid #e5e5e5; margin: 32px 0;" />
-  <div style="text-align: center; margin: 24px 0;">
-    <p style="color: #666; font-size: 14px; margin-bottom: 12px;">
-      Is your issue resolved?
-    </p>
-    <a href="{{resolve_url}}"
-       style="display: inline-block; background-color: #10b981; color: #ffffff; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 600; font-size: 14px;">
-      ✓ Mark as Resolved
-    </a>
-  </div>
-  <p style="color: #999; font-size: 12px; text-align: center;">
-    Sent by {{company_name}} via Swift Agent
-  </p>
+
+  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4;">
+    <!--[if mso | IE]>
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" align="center" style="width:600px;">
+    <tr>
+    <td>
+    <![endif]-->
+
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
+      <tr>
+        <td class="logo-cell" style="padding: 82px 58px 58px; text-align: center;">
+          {{logo_block}}
+          <p class="company-name">{{company_name}}</p>
+        </td>
+      </tr>
+
+      <tr>
+        <td class="heading-cell" style="padding: 0 58px 64px; text-align: center;">
+          <h1 class="display-font heading-text">You've got a reply</h1>
+        </td>
+      </tr>
+
+      <tr>
+        <td class="message-cell" style="padding: 0 85px 72px;">
+          <div class="message-content">
+            {{body_html}}
+          </div>
+        </td>
+      </tr>
+
+      <tr>
+        <td class="resolve-copy-cell" style="padding: 0 58px 28px;">
+          <p class="resolve-copy">Is your issue resolved?</p>
+        </td>
+      </tr>
+
+      <tr>
+        <td class="button-cell" style="padding: 0 42px 34px;">
+          <a href="{{resolve_url}}" target="_blank" class="resolve-button">Mark as resolved</a>
+        </td>
+      </tr>
+
+      <tr>
+        <td class="footer-cell" style="padding: 0 58px 94px;">
+          <p class="footer-text">Sent by {{company_name}} via Swift Agent</p>
+        </td>
+      </tr>
+    </table>
+
+    <!--[if mso | IE]>
+    </td>
+    </tr>
+    </table>
+    <![endif]-->
+  </center>
 </body>
 </html>
