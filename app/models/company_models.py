@@ -51,6 +51,8 @@ class CompanyMemberResponse(BaseModel):
     email: str
     role: str
     status: str
+    name: Optional[str] = None
+    picture: Optional[str] = None
 
 class CompanyIdentityUpdate(BaseModel):
     description: Optional[str] = None

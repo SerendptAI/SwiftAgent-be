@@ -22,7 +22,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from fastapi.responses import RedirectResponse
 from google_auth_oauthlib.flow import Flow
 
@@ -38,6 +38,7 @@ from app.models.auth_models import (
     ReferralRequest,
     RefreshTokenRequest,
     UserProfileUpdate,
+    UserNameUpdate,
     UserSecurityUpdate,
     RegistrationInterestRequest,
     RegistrationInterestResponse,
@@ -50,7 +51,7 @@ from app.services.credential_auth_service import (
     within_otp_grace_period,
 )
 from app.services.welcome_email_service import send_welcome_email
-from app.services import registration_service
+from app.services import registration_service, cloudinary_service
 from fastapi.responses import HTMLResponse
 router = APIRouter(tags=["Auth"])
 logger = logging.getLogger(__name__)
@@ -279,7 +280,9 @@ async def get_me(current_user: dict = Depends(get_current_user), db=Depends(get_
     """Return the authenticated user's profile."""
     if "_id" in current_user:
         current_user["_id"] = str(current_user["_id"])
-    current_user.pop("otp_code", None)
+    # Strip all internal/sensitive fields before returning
+    for field in ("otp_code", "otp_expires", "google_id"):
+        current_user.pop(field, None)
 
     company = await db.companies.find_one(
         {
@@ -300,13 +303,82 @@ async def update_me(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_database),
 ):
-    """Update the authenticated user's profile."""
+    """Update the authenticated user's profile fields (name, picture, personal_email, personal_phone)."""
     update_data = data.model_dump(exclude_none=True)
     if not update_data:
-        return {"status": "success"}
+        return {"status": "success", "user": current_user}
     update_data["updated_at"] = datetime.now(tz=timezone.utc)
-    await db.users.update_one({"user_id": current_user["user_id"]}, {"$set": update_data})
-    return {"status": "success"}
+    updated = await db.users.find_one_and_update(
+        {"user_id": current_user["user_id"]},
+        {"$set": update_data},
+        return_document=True,
+    )
+    if updated:
+        updated.pop("_id", None)
+        updated.pop("otp_code", None)
+        updated.pop("otp_expires", None)
+        updated.pop("google_id", None)
+    return {"status": "success", "user": updated}
+
+
+@router.patch("/me/name")
+async def update_name(
+    data: UserNameUpdate,
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_database),
+):
+    """Update the authenticated user's display name."""
+    now = datetime.now(tz=timezone.utc)
+    updated = await db.users.find_one_and_update(
+        {"user_id": current_user["user_id"]},
+        {"$set": {"name": data.name, "updated_at": now}},
+        return_document=True,
+    )
+    picture = updated.get("picture") if updated else None
+    return {"status": "success", "name": data.name, "picture": picture}
+
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+@router.patch("/me/pfp")
+async def update_pfp(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_database),
+):
+    """Update the authenticated user's profile picture (pfp)."""
+    user_id = current_user["user_id"]
+    
+    content_type = file.content_type
+    if content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Allowed: JPEG, PNG, WebP, GIF"
+        )
+        
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Max 5MB")
+        
+    try:
+        picture_url = await cloudinary_service.upload_image(
+            file, folder=f"pfps/{user_id}"
+        )
+    except Exception as e:
+        logger.error(f"Profile picture upload failed for user {user_id}: {e}")
+        raise HTTPException(status_code=502, detail="Profile picture upload failed. Please try a different image or try again later.")
+        
+    now = datetime.now(tz=timezone.utc)
+    updated = await db.users.find_one_and_update(
+        {"user_id": user_id},
+        {"$set": {"picture": picture_url, "updated_at": now}},
+        return_document=True,
+    )
+    name = updated.get("name") if updated else None
+    return {"status": "success", "picture": picture_url, "name": name}
 
 
 @router.patch("/me/security")

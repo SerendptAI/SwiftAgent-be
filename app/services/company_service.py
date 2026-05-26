@@ -322,29 +322,51 @@ async def get_unified_members(company_id: str, admin_user_id: str) -> list:
         
     owner = await db.users.find_one({"user_id": company["user_id"]})
     owner_email = owner.get("email") if owner else ""
+    owner_name = owner.get("name") if owner else None
+    owner_picture = owner.get("picture") if owner else None
     
     unified = []
     unified.append({
         "email": owner_email,
         "role": "Admin",
-        "status": "Active"
+        "status": "Active",
+        "name": owner_name,
+        "picture": owner_picture
     })
     
+    member_emails = [m.get("email") for m in company.get("members", []) if m.get("email")]
+    pending_emails = [i.get("email") for i in company.get("pending_invites", []) if i.get("email")]
+    all_emails = list(set(member_emails + pending_emails))
+    
+    user_docs = {}
+    if all_emails:
+        cursor = db.users.find({"email": {"$in": all_emails}})
+        async for u in cursor:
+            user_docs[u.get("email")] = u
+            
     for m in company.get("members", []):
+        email = m.get("email")
+        user = user_docs.get(email, {})
         unified.append({
-            "email": m.get("email"),
+            "email": email,
             "role": "Member",
-            "status": "Active"
+            "status": "Active",
+            "name": user.get("name"),
+            "picture": user.get("picture")
         })
         
     now = datetime.now(tz=timezone.utc)
     for i in company.get("pending_invites", []):
+        email = i.get("email")
+        user = user_docs.get(email, {})
         age = now - i.get("invited_at", now)
         status = "Pending" if age.days < 10 else "Expired"
         unified.append({
-            "email": i.get("email"),
+            "email": email,
             "role": "Member",
-            "status": status
+            "status": status,
+            "name": user.get("name"),
+            "picture": user.get("picture")
         })
         
     return unified

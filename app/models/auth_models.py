@@ -8,8 +8,13 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 class UserProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    picture: Optional[str] = None
     personal_email: Optional[EmailStr] = None
     personal_phone: Optional[str] = None
+
+class UserNameUpdate(BaseModel):
+    name: str
 
 class UserSecurityUpdate(BaseModel):
     backup_email: Optional[EmailStr] = None
