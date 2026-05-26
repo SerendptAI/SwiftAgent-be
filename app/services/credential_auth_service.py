@@ -40,6 +40,7 @@ async def send_otp_email(to_email: str, otp_code: str, ttl_minutes: int, purpose
 
     try:
         html = _TEMPLATE_PATH.read_text(encoding="utf-8")
+        html = html.replace("{{base_url}}", settings.API_BASE_URL)
         html = (
             html
             .replace("{{ttl_minutes}}", str(ttl_minutes))

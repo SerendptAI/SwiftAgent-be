@@ -16,6 +16,7 @@ async def send_invite_email(to_email: str, company_name: str, accept_link: str) 
 
     try:
         html = _TEMPLATE_PATH.read_text(encoding="utf-8")
+        html = html.replace("{{base_url}}", settings.API_BASE_URL)
         html = (
             html.replace("{{company_name}}", company_name)
                 .replace("{{invite_url}}", accept_link)

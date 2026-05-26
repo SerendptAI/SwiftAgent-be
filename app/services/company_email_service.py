@@ -47,7 +47,8 @@ def _get_sendgrid_client() -> SendGridAPIClient:
 
 
 def _load_template(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+    html = path.read_text(encoding="utf-8")
+    return html.replace("{{base_url}}", settings.API_BASE_URL)
 
 
 async def create_ticket(

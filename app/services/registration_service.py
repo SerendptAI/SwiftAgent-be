@@ -24,7 +24,8 @@ APPROVED_TEMPLATE = TEMPLATES_DIR / "admin_registration_approved.html"
 
 
 def _load_template(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+    html = path.read_text(encoding="utf-8")
+    return html.replace("{{base_url}}", settings.API_BASE_URL)
 
 
 def _get_admin_email() -> str:

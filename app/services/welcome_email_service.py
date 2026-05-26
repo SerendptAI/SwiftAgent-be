@@ -20,6 +20,7 @@ async def send_welcome_email(to_email: str, name: Optional[str] = None) -> None:
     """
     try:
         html = TEMPLATE_PATH.read_text(encoding="utf-8")
+        html = html.replace("{{base_url}}", settings.API_BASE_URL)
     except Exception as e:
         logger.exception("Failed to read welcome.html: %s", e)
         return

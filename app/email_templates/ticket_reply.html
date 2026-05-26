@@ -111,7 +111,7 @@
     .heading-text {
       margin: 0;
       color: #697454;
-      background-image: url("images/text-bg.jpg");
+      background-image: url('{{base_url}}/email-assets/text-bg.jpg');
       background-position: center center;
       background-size: cover;
       background-repeat: no-repeat;
@@ -278,7 +278,11 @@
 
       <tr>
         <td class="footer-cell" style="padding: 0 58px 94px;">
-          <p class="footer-text">Sent by {{company_name}} via Swift Agent</p>
+          <div style="text-align: center;">
+            <p class="footer-text">Sent by {{company_name}} via Swift Agent</p>
+            <br>
+            <img src="{{base_url}}/email-assets/logo.png" width="72" height="70" alt="SwiftAgent" style="display: block; margin: 0 auto;">
+          </div>
         </td>
       </tr>
     </table>
