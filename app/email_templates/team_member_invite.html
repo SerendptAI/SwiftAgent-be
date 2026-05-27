@@ -1,231 +1,371 @@
-<!DOCTYPE html>
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="light" />
-    <meta name="supported-color-schemes" content="light" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="x-apple-disable-message-reformatting">
-  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
-  <title>Team member invite</title>
-  <style>
-      @import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap");
+<!doctype html>
+<html
+    lang="en"
+    xmlns="http://www.w3.org/1999/xhtml"
+    xmlns:v="urn:schemas-microsoft-com:vml"
+    xmlns:o="urn:schemas-microsoft-com:office:office"
+>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="color-scheme" content="light" />
+        <meta name="supported-color-schemes" content="light" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="x-apple-disable-message-reformatting" />
+        <meta
+            name="format-detection"
+            content="telephone=no,address=no,email=no,date=no,url=no"
+        />
+        <title>Team member invite</title>
+        <style>
+            @import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap");
 
-      :root {
-        color-scheme: light;
-        supported-color-schemes: light;
-      }
+            :root {
+                color-scheme: light;
+                supported-color-schemes: light;
+            }
 
-      body,
-      table,
-      td,
-      a {
-        -webkit-text-size-adjust: 100%;
-        -ms-text-size-adjust: 100%;
-      }
-      table,
-      td {
-        mso-table-lspace: 0pt;
-        mso-table-rspace: 0pt;
-      }
-      img {
-        -ms-interpolation-mode: bicubic;
-        border: 0;
-        height: auto;
-        line-height: 100%;
-        outline: none;
-        text-decoration: none;
-      }
-    body { margin: 0; padding: 0; width: 100% !important; height: 100% !important; }
-    table { border-collapse: collapse !important; }
-    *, *::before, *::after { box-sizing: border-box; }
+            body,
+            table,
+            td,
+            a {
+                -webkit-text-size-adjust: 100%;
+                -ms-text-size-adjust: 100%;
+            }
+            table,
+            td {
+                mso-table-lspace: 0pt;
+                mso-table-rspace: 0pt;
+            }
+            img {
+                -ms-interpolation-mode: bicubic;
+                border: 0;
+                height: auto;
+                line-height: 100%;
+                outline: none;
+                text-decoration: none;
+            }
+            body {
+                margin: 0;
+                padding: 0;
+                width: 100% !important;
+                height: 100% !important;
+            }
+            table {
+                border-collapse: collapse !important;
+            }
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+            }
 
-    body {
-      background-color: #f5f5f4;
-      color: #111111;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      overflow-x: hidden;
-    }
+            body {
+                background-color: #f5f5f4;
+                color: #111111;
+                font-family: "DM Mono", "Courier New", Courier, monospace;
+                overflow-x: hidden;
+            }
 
-    .email-container {
-      width: 100%;
-      max-width: 600px;
-      margin: 0 auto;
-      background-color: #f5f5f4;
-    }
+            .email-container {
+                width: 100%;
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: #f5f5f4;
+            }
 
-    .display-font {
-      font-family: 'Greed Narrow-TRIAL', 'Arial Narrow', Impact, sans-serif;
-      font-stretch: condensed;
-    }
+            .display-font {
+                font-family:
+                    "Greed Narrow-TRIAL", "Arial Narrow", Impact, sans-serif;
+                font-stretch: condensed;
+            }
 
-    .brand-row {
-      display: inline-block;
-      white-space: nowrap;
-    }
+            .brand-row {
+                display: inline-block;
+                white-space: nowrap;
+            }
 
-    .brand-logo,
-    .partner-logo,
-    .brand-x {
-      display: inline-block;
-      vertical-align: middle;
-    }
+            .brand-logo,
+            .partner-logo,
+            .brand-x {
+                display: inline-block;
+                vertical-align: middle;
+            }
 
-    .brand-logo {
-      width: 72px;
-      height: 70px;
-    }
+            .brand-logo {
+                width: 72px;
+                height: 70px;
+            }
 
-    .partner-logo {
-      width: 72px;
-      height: 70px;
-    }
+            .partner-logo {
+                width: 72px;
+                height: 70px;
+            }
 
-    .brand-x {
-      padding: 0 16px;
-      color: #000000;
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 44px;
-      line-height: 1;
-      font-weight: 700;
-    }
+            .brand-x {
+                padding: 0 16px;
+                color: #000000;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 44px;
+                line-height: 1;
+                font-weight: 700;
+            }
 
-    .heading-text {
-      margin: 0;
-      color: #48543f;
-      background-image: url('{{base_url}}/email-assets/text-bg-2.jpg');
-      background-position: center center;
-      background-size: cover;
-      background-repeat: no-repeat;
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: rgba(0,0,0,0);
-      font-size: 58px;
-      line-height: 1.24;
-      font-weight: 600;
-      letter-spacing: -2.32px;
-      text-align: center;
-      vertical-align: middle;
-    }
+            .heading-text {
+                margin: 0;
+                color: #48543f;
+                background-image: url("{{base_url}}/email-assets/text-bg-2.jpg");
+                background-position: center center;
+                background-size: cover;
+                background-repeat: no-repeat;
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: rgba(0, 0, 0, 0);
+                font-size: 58px;
+                line-height: 1.24;
+                font-weight: 600;
+                letter-spacing: -2.32px;
+                text-align: center;
+                vertical-align: middle;
+            }
 
-    .body-text {
-      max-width: 430px;
-      margin: 0 auto;
-      color: #111111;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      font-size: 18px;
-      line-height: 2;
-      font-weight: 400;
-      letter-spacing: 0;
-      text-align: center;
-      text-transform: uppercase;
-    }
+            .body-text {
+                max-width: 430px;
+                margin: 0 auto;
+                color: #111111;
+                font-family: "DM Mono", "Courier New", Courier, monospace;
+                font-size: 18px;
+                line-height: 2;
+                font-weight: 400;
+                letter-spacing: 0;
+                text-align: center;
+                text-transform: uppercase;
+            }
 
-    .invite-button {
-      display: block;
-      width: 100%;
-      height: 54px;
-      border-radius: 8px;
-      background-color: #f24d33;
-      box-shadow: -4px 8px 0 #000000;
-      color: #ffffff !important;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      font-size: 18px;
-      line-height: 54px;
-      font-weight: 500;
-      letter-spacing: 0;
-      text-align: center;
-      text-decoration: none;
-      text-transform: uppercase;
-    }
+            .invite-button {
+                display: block;
+                width: 100%;
+                height: 54px;
+                border-radius: 8px;
+                background-color: #f24d33;
+                box-shadow: -4px 8px 0 #000000;
+                color: #ffffff !important;
+                font-family: "DM Mono", "Courier New", Courier, monospace;
+                font-size: 18px;
+                line-height: 54px;
+                font-weight: 500;
+                letter-spacing: 0;
+                text-align: center;
+                text-decoration: none;
+                text-transform: uppercase;
+            }
 
-    .hero-frame {
-      width: 100%;
-    }
+            .hero-frame {
+                width: 100%;
+            }
 
-    .hero-image {
-      display: block;
-      width: 100%;
-      height: auto;
-    }
+            .hero-image {
+                display: block;
+                width: 100%;
+                height: auto;
+            }
 
-    @media only screen and (max-width: 620px) {
-      .email-container { width: 100% !important; max-width: 100% !important; }
-      .logo-cell { padding-top: 72px !important; padding-bottom: 55px !important; }
-      .heading-cell { padding: 0 70px 20px !important; }
-      .heading-text { font-size: 52px !important; line-height: 1.24 !important; letter-spacing: -2.08px !important; }
-      .copy-cell { padding: 0 58px 114px !important; }
-      .button-cell { padding: 0 42px 114px !important; }
-      .image-cell { padding: 0 58px 94px !important; }
-    }
+            @media only screen and (max-width: 620px) {
+                .email-container {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                }
+                .logo-cell {
+                    padding-top: 72px !important;
+                    padding-bottom: 55px !important;
+                }
+                .heading-cell {
+                    padding: 0 70px 20px !important;
+                }
+                .heading-text {
+                    font-size: 52px !important;
+                    line-height: 1.24 !important;
+                    letter-spacing: -2.08px !important;
+                }
+                .copy-cell {
+                    padding: 0 58px 114px !important;
+                }
+                .button-cell {
+                    padding: 0 42px 114px !important;
+                }
+                .image-cell {
+                    padding: 0 58px 94px !important;
+                }
+            }
 
-    @media only screen and (max-width: 480px) {
-      .logo-cell { padding-top: 48px !important; padding-bottom: 58px !important; }
-      .brand-logo,
-      .partner-logo { width: 58px !important; height: 57px !important; }
-      .brand-x { padding: 0 16px !important; font-size: 36px !important; }
-      .heading-cell { padding: 0 34px 20px !important; }
-      .heading-text { font-size: 38px !important; line-height: 1.24 !important; letter-spacing: -1.52px !important; }
-      .copy-cell { padding: 0 38px 80px !important; }
-      .body-text { font-size: 16px !important; line-height: 2 !important; }
-      .button-cell { padding: 0 28px 80px !important; }
-      .invite-button { height: 54px !important; border-radius: 8px !important; font-size: 16px !important; line-height: 54px !important; font-weight: 500 !important; }
-      .image-cell { padding: 0 34px 94px !important; }
-    }
+            @media only screen and (max-width: 480px) {
+                .logo-cell {
+                    padding-top: 48px !important;
+                    padding-bottom: 58px !important;
+                }
+                .brand-logo,
+                .partner-logo {
+                    width: 58px !important;
+                    height: 57px !important;
+                }
+                .brand-x {
+                    padding: 0 16px !important;
+                    font-size: 36px !important;
+                }
+                .heading-cell {
+                    padding: 0 34px 20px !important;
+                }
+                .heading-text {
+                    font-size: 38px !important;
+                    line-height: 1.24 !important;
+                    letter-spacing: -1.52px !important;
+                }
+                .copy-cell {
+                    padding: 0 38px 80px !important;
+                }
+                .body-text {
+                    font-size: 16px !important;
+                    line-height: 2 !important;
+                }
+                .button-cell {
+                    padding: 0 28px 80px !important;
+                }
+                .invite-button {
+                    height: 54px !important;
+                    border-radius: 8px !important;
+                    font-size: 16px !important;
+                    line-height: 54px !important;
+                    font-weight: 500 !important;
+                }
+                .image-cell {
+                    padding: 0 34px 94px !important;
+                }
+            }
 
-    @media only screen and (max-width: 375px) {
-      .logo-cell { padding-top: 42px !important; padding-bottom: 52px !important; }
-      .brand-logo,
-      .partner-logo { width: 50px !important; height: 49px !important; }
-      .brand-x { padding: 0 16px !important; font-size: 32px !important; }
-      .heading-cell { padding-left: 20px !important; padding-right: 20px !important; }
-      .heading-text { font-size: 33px !important; letter-spacing: -1.32px !important; }
-      .copy-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 80px !important; }
-      .button-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 80px !important; }
-      .image-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 94px !important; }
-    }
-  </style>
-</head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f4;">
-  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4;">
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
-      <tr>
-        <td class="logo-cell" style="padding: 72px 0 55px; text-align: center;">
-          <span class="brand-row">
-            <img src="{{base_url}}/email-assets/logo.png" width="72" height="70" alt="SwiftAgent" class="brand-logo">
-            <span class="brand-x">x</span>
-            <img src="{{base_url}}/email-assets/logo 2.png" width="72" height="70" alt="{{company_name}}" class="partner-logo">
-          </span>
-        </td>
-      </tr>
+            @media only screen and (max-width: 375px) {
+                .logo-cell {
+                    padding-top: 42px !important;
+                    padding-bottom: 52px !important;
+                }
+                .brand-logo,
+                .partner-logo {
+                    width: 50px !important;
+                    height: 49px !important;
+                }
+                .brand-x {
+                    padding: 0 16px !important;
+                    font-size: 32px !important;
+                }
+                .heading-cell {
+                    padding-left: 20px !important;
+                    padding-right: 20px !important;
+                }
+                .heading-text {
+                    font-size: 33px !important;
+                    letter-spacing: -1.32px !important;
+                }
+                .copy-cell {
+                    padding-left: 24px !important;
+                    padding-right: 24px !important;
+                    padding-bottom: 80px !important;
+                }
+                .button-cell {
+                    padding-left: 24px !important;
+                    padding-right: 24px !important;
+                    padding-bottom: 80px !important;
+                }
+                .image-cell {
+                    padding-left: 24px !important;
+                    padding-right: 24px !important;
+                    padding-bottom: 94px !important;
+                }
+            }
+        </style>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #f5f5f4">
+        <center
+            role="article"
+            aria-roledescription="email"
+            lang="en"
+            style="width: 100%; overflow-x: hidden; background-color: #f5f5f4"
+        >
+            <table
+                role="presentation"
+                cellspacing="0"
+                cellpadding="0"
+                border="0"
+                align="center"
+                width="100%"
+                style="max-width: 600px; margin: 0 auto"
+                class="email-container"
+            >
+                <tr>
+                    <td
+                        class="logo-cell"
+                        style="padding: 72px 0 55px; text-align: center"
+                    >
+                        <span class="brand-row">
+                            <img
+                                src="{{base_url}}/email-assets/logo.png"
+                                width="72"
+                                height="70"
+                                alt="SwiftAgent"
+                                class="brand-logo"
+                            />
+                            <span class="brand-x">x</span>
+                            <img
+                                src="{{base_url}}/email-assets/logo 2.png"
+                                width="72"
+                                height="70"
+                                alt="{{company_name}}"
+                                class="partner-logo"
+                            />
+                        </span>
+                    </td>
+                </tr>
 
-      <tr>
-        <td class="heading-cell" style="padding: 0 70px 20px; text-align: center;">
-          <h1 class="display-font heading-text">You've been invited</h1>
-        </td>
-      </tr>
+                <tr>
+                    <td
+                        class="heading-cell"
+                        style="padding: 0 70px 20px; text-align: center"
+                    >
+                        <h1 class="display-font heading-text">
+                            You've been invited
+                        </h1>
+                    </td>
+                </tr>
 
-      <tr>
-        <td class="copy-cell" style="padding: 0 58px 114px;">
-          <p class="body-text">You've been invited to join the {{company_name}} team, click the link below to join</p>
-        </td>
-      </tr>
+                <tr>
+                    <td class="copy-cell" style="padding: 0 58px 114px">
+                        <p class="body-text">
+                            You've been invited to join the {{company_name}}
+                            team, click the link below to join
+                        </p>
+                    </td>
+                </tr>
 
-      <tr>
-        <td class="button-cell" style="padding: 0 42px 114px;">
-          <a href="{{invite_url}}" class="invite-button">Join the crew</a>
-        </td>
-      </tr>
+                <tr>
+                    <td class="button-cell" style="padding: 0 42px 114px">
+                        <a href="{{invite_url}}" class="invite-button"
+                            >Join the crew</a
+                        >
+                    </td>
+                </tr>
 
-      <tr>
-        <td class="image-cell" style="padding: 0 58px 94px;">
-          <div class="hero-frame">
-            <img src="{{base_url}}/email-assets/ticket-closed.png" width="484" height="381" alt="Team member invite" class="hero-image">
-          </div>
-        </td>
-      </tr>
-    </table>
-  </center>
-</body>
+                <tr>
+                    <td class="image-cell" style="padding: 0 58px 94px">
+                        <div class="hero-frame">
+                            <img
+                                src="{{base_url}}/email-assets/invite-teammate.png"
+                                width="484"
+                                height="381"
+                                alt="Team member invite"
+                                class="hero-image"
+                            />
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </center>
+    </body>
 </html>
