@@ -1,3 +1,4 @@
+import base64
 import logging
 import re
 from datetime import datetime, timezone
@@ -7,34 +8,33 @@ from uuid import uuid4
 from pymongo import ReturnDocument
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import (
-    Mail,
-    From,
-    To,
-    Subject,
-    Content,
-    Header,
-    MimeType,
     Attachment,
+    Content,
+    ContentId,
+    Disposition,
     FileContent,
     FileName,
     FileType,
-    Disposition,
-    ContentId,
+    From,
+    Header,
+    Mail,
+    MimeType,
+    Subject,
+    To,
 )
-import base64
 
 from app.core.config import settings
 from app.core.database import db
 from app.core.utils import get_random_avatar
 from app.services import company_service
-from app.services.email_utils import process_html_for_inline_images, get_image_data
+from app.services.email_utils import get_image_data, process_html_for_inline_images
 
 logger = logging.getLogger(__name__)
 
 _sg_client = None
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "email_templates"
-TICKET_REPLY_TEMPLATE = TEMPLATES_DIR / "ticket_reply.html"
+TICKET_REPLY_TEMPLATE = TEMPLATES_DIR / "response.html"
 
 _TICKET_ID_RE = re.compile(r"\[Ticket\s*#([A-Z0-9]{8})\]", re.IGNORECASE)
 
@@ -69,7 +69,9 @@ async def create_ticket(
 
     avatar = get_random_avatar()
     if chat_session_id:
-        chat_session = await db.widget_conversations.find_one({"company_id": company_id, "session_id": chat_session_id})
+        chat_session = await db.widget_conversations.find_one(
+            {"company_id": company_id, "session_id": chat_session_id}
+        )
         if chat_session and "avatar" in chat_session:
             avatar = chat_session["avatar"]
 
@@ -114,17 +116,19 @@ async def create_ticket(
     created = await db.email_tickets.find_one({"id": ticket_id}, {"_id": 0})
     # Defensive: ensure status remains pending
     if created and created.get("status") != "pending":
-        logger.warning("Ticket %s created with non-pending status: %s", ticket_id, created.get("status"))
-        await db.email_tickets.update_one({"id": ticket_id}, {"$set": {"status": "pending", "updated_at": now}})
+        logger.warning(
+            "Ticket %s created with non-pending status: %s", ticket_id, created.get("status")
+        )
+        await db.email_tickets.update_one(
+            {"id": ticket_id}, {"$set": {"status": "pending", "updated_at": now}}
+        )
         created["status"] = "pending"
 
     return created or doc
 
 
 async def get_ticket(company_id: str, ticket_id: str) -> dict | None:
-    return await db.email_tickets.find_one(
-        {"company_id": company_id, "id": ticket_id}
-    )
+    return await db.email_tickets.find_one({"company_id": company_id, "id": ticket_id})
 
 
 async def list_tickets(
@@ -226,30 +230,30 @@ async def send_ticket_reply(
 
     html_body = body_html or f"<p>{body_text}</p>"
     full_html = _build_reply_html(html_body, company_name, resolve_url, logo_url)
-    
+
     full_html, attachments_map = process_html_for_inline_images(full_html)
-    
+
     # Process base64 inline images from rich text editors
     base64_attachments = []
+
     def _replace_base64(match):
         prefix = match.group(1)
         quote = match.group(2)
         mime_type = match.group(3)
         b64_data = match.group(4)
-        
+
         cid = str(uuid4())
-        ext = mime_type.split('/')[-1] if '/' in mime_type else 'png'
+        ext = mime_type.split("/")[-1] if "/" in mime_type else "png"
         filename = f"image_{cid[:8]}.{ext}"
-        
-        base64_attachments.append({
-            "filename": filename,
-            "cid": cid,
-            "mime_type": mime_type,
-            "data": b64_data
-        })
+
+        base64_attachments.append(
+            {"filename": filename, "cid": cid, "mime_type": mime_type, "data": b64_data}
+        )
         return f"{prefix}{quote}cid:{cid}{quote}"
-        
-    base64_img_re = re.compile(r'(<img\b[^>]*\bsrc=)(["\'])data:(image/[a-zA-Z0-9+-]+);base64,([^"\']+)\2', re.IGNORECASE)
+
+    base64_img_re = re.compile(
+        r'(<img\b[^>]*\bsrc=)(["\'])data:(image/[a-zA-Z0-9+-]+);base64,([^"\']+)\2', re.IGNORECASE
+    )
     full_html = base64_img_re.sub(_replace_base64, full_html)
 
     subject = f"Re: [Ticket #{ticket_id}] {ticket['subject']}"
@@ -273,13 +277,13 @@ async def send_ticket_reply(
     for filename, cid in attachments_map.items():
         try:
             data, maintype, subtype = get_image_data(filename)
-            encoded = base64.b64encode(data).decode('utf-8')
+            encoded = base64.b64encode(data).decode("utf-8")
             sg_attachment = Attachment(
                 FileContent(encoded),
                 FileName(filename),
                 FileType(f"{maintype}/{subtype}"),
                 Disposition("inline"),
-                ContentId(cid)
+                ContentId(cid),
             )
             message.add_attachment(sg_attachment)
         except Exception as e:
@@ -292,7 +296,7 @@ async def send_ticket_reply(
                 FileName(att["filename"]),
                 FileType(att["mime_type"]),
                 Disposition("inline"),
-                ContentId(att["cid"])
+                ContentId(att["cid"]),
             )
             message.add_attachment(sg_attachment)
         except Exception as e:
@@ -307,9 +311,7 @@ async def send_ticket_reply(
     try:
         sg = _get_sendgrid_client()
         response = sg.send(message)
-        logger.info(
-            "Sent ticket reply for %s, status=%s", ticket_id, response.status_code
-        )
+        logger.info("Sent ticket reply for %s, status=%s", ticket_id, response.status_code)
     except Exception as e:
         logger.exception("Failed to send email for ticket %s: %s", ticket_id, e)
         raise
@@ -360,7 +362,9 @@ _QUOTE_SEPARATORS = [
     re.compile(r"^From:\s+.+", re.IGNORECASE | re.MULTILINE),
     re.compile(r"^--\s*$", re.MULTILINE),  # standard signature separator
     re.compile(r"^_{2,}\s*$", re.MULTILINE),  # alternative separator
-    re.compile(r"^Sent from (my|Apple|Yahoo|Mail).*", re.IGNORECASE | re.MULTILINE),  # mobile signature
+    re.compile(
+        r"^Sent from (my|Apple|Yahoo|Mail).*", re.IGNORECASE | re.MULTILINE
+    ),  # mobile signature
     re.compile(r"^>{1,}\s*", re.MULTILINE),  # standard "> " quote prefix lines
 ]
 
@@ -531,9 +535,7 @@ async def process_inbound_email(payload: dict) -> dict:
         },
     )
 
-    logger.info(
-        "Stored inbound email on ticket %s from %s", ticket_id, sender_email
-    )
+    logger.info("Stored inbound email on ticket %s from %s", ticket_id, sender_email)
     return {"status": "stored", "ticket_id": ticket_id}
 
 
@@ -562,20 +564,18 @@ async def resolve_ticket(token: str) -> dict | None:
 async def get_ticket_with_chat(company_id: str, ticket_id: str) -> dict | None:
     """Fetch a ticket and its attributed chat session (if escalated from a chat)."""
     ticket = await db.email_tickets.find_one(
-        {"company_id": company_id, "id": ticket_id},
-        {"_id": 0}
+        {"company_id": company_id, "id": ticket_id}, {"_id": 0}
     )
     if not ticket:
         return None
-    
+
     # If ticket came from a chat session, fetch and attach it
     chat_session = None
     if ticket.get("chat_session_id"):
         chat_session = await db.widget_conversations.find_one(
-            {"company_id": company_id, "session_id": ticket["chat_session_id"]},
-            {"_id": 0}
+            {"company_id": company_id, "session_id": ticket["chat_session_id"]}, {"_id": 0}
         )
-    
+
     return {
         "ticket": ticket,
         "attributed_chat": chat_session or None,
