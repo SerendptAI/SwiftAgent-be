@@ -18,7 +18,26 @@
         />
         <title>Team member invite</title>
         <style>
-            @import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap");
+            @font-face {
+              font-family: "DM Mono";
+              src: url("{{base_url}}/email-assets/fonts/DMMono-Regular.ttf") format("truetype");
+              font-style: normal;
+              font-weight: 400;
+            }
+
+            @font-face {
+              font-family: "DM Mono";
+              src: url("{{base_url}}/email-assets/fonts/DMMono-Medium.ttf") format("truetype");
+              font-style: normal;
+              font-weight: 500;
+            }
+
+            @font-face {
+              font-family: "Greed Narrow";
+              src: url("{{base_url}}/email-assets/fonts/GreedNarrow-SemiBold.otf") format("opentype");
+              font-style: normal;
+              font-weight: 600;
+            }
 
             :root {
                 color-scheme: light;
@@ -76,7 +95,7 @@
 
             .display-font {
                 font-family:
-                    "Greed Narrow-TRIAL", "Arial Narrow", Impact, sans-serif;
+                    "Greed Narrow", "Arial Narrow", Impact, sans-serif;
                 font-stretch: condensed;
             }
 
@@ -114,6 +133,7 @@
             .heading-text {
                 margin: 0;
                 color: #48543f;
+                background-color: #48543f;
                 background-image: url("{{base_url}}/email-assets/text-bg-2.jpg");
                 background-position: center center;
                 background-size: cover;
