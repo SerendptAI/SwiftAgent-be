@@ -1,342 +1,343 @@
 <!doctype html>
 <html
-  lang="en"
-  xmlns="http://www.w3.org/1999/xhtml"
-  xmlns:v="urn:schemas-microsoft-com:vml"
-  xmlns:o="urn:schemas-microsoft-com:office:office"
+    lang="en"
+    xmlns="http://www.w3.org/1999/xhtml"
+    xmlns:v="urn:schemas-microsoft-com:vml"
+    xmlns:o="urn:schemas-microsoft-com:office:office"
 >
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light" />
-    <meta name="supported-color-schemes" content="light" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="x-apple-disable-message-reformatting" />
-    <meta
-      name="format-detection"
-      content="telephone=no,address=no,email=no,date=no,url=no"
-    />
-    <title>Welcome to SwiftAgent</title>
-    <!--[if mso]>
-      <noscript>
-        <xml>
-          <o:OfficeDocumentSettings>
-            <o:AllowPNG />
-            <o:PixelsPerInch>96</o:PixelsPerInch>
-          </o:OfficeDocumentSettings>
-        </xml>
-      </noscript>
-    <![endif]-->
-    <style>
-      @font-face {
-        font-family: "DM Mono";
-        src: url("{{base_url}}/email-fonts/DMMono-Regular.ttf") format("truetype");
-        font-style: normal;
-        font-weight: 400;
-      }
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="color-scheme" content="light" />
+        <meta name="supported-color-schemes" content="light" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="x-apple-disable-message-reformatting" />
+        <meta
+            name="format-detection"
+            content="telephone=no,address=no,email=no,date=no,url=no"
+        />
+        <title>Welcome to SwiftAgent</title>
+        <!--[if mso]>
+            <noscript>
+                <xml>
+                    <o:OfficeDocumentSettings>
+                        <o:AllowPNG />
+                        <o:PixelsPerInch>96</o:PixelsPerInch>
+                    </o:OfficeDocumentSettings>
+                </xml>
+            </noscript>
+        <![endif]-->
+        <style>
+            @font-face {
+                font-family: "DM Mono";
+                src: url("{{base_url}}/email-fonts/DMMono-Regular.ttf")
+                    format("truetype");
+                font-style: normal;
+                font-weight: 400;
+            }
 
-      @font-face {
-        font-family: "DM Mono";
-        src: url("{{base_url}}/email-fonts/DMMono-Medium.ttf") format("truetype");
-        font-style: normal;
-        font-weight: 500;
-      }
+            @font-face {
+                font-family: "DM Mono";
+                src: url("{{base_url}}/email-fonts/DMMono-Medium.ttf")
+                    format("truetype");
+                font-style: normal;
+                font-weight: 500;
+            }
 
-      @font-face {
-        font-family: "Greed Narrow";
-        src: url("{{base_url}}/email-fonts/GreedNarrow-SemiBold.otf") format("opentype");
-        font-style: normal;
-        font-weight: 600;
-      }
+            @font-face {
+                font-family: "Greed Narrow";
+                src: url("{{base_url}}/email-fonts/GreedNarrow-SemiBold.otf")
+                font-style: normal;
+                font-weight: 600;
+            }
 
-      :root {
-        color-scheme: light;
-        supported-color-schemes: light;
-      }
+            :root {
+                color-scheme: light;
+                supported-color-schemes: light;
+            }
 
-      body,
-      table,
-      td,
-      a {
-        -webkit-text-size-adjust: 100%;
-        -ms-text-size-adjust: 100%;
-      }
-      table,
-      td {
-        mso-table-lspace: 0pt;
-        mso-table-rspace: 0pt;
-      }
-      img {
-        -ms-interpolation-mode: bicubic;
-        border: 0;
-        height: auto;
-        line-height: 100%;
-        outline: none;
-        text-decoration: none;
-      }
-      body {
-        margin: 0;
-        padding: 0;
-        width: 100% !important;
-        height: 100% !important;
-      }
-      table {
-        border-collapse: collapse !important;
-      }
-      *,
-      *::before,
-      *::after {
-        box-sizing: border-box;
-      }
-      a[x-apple-data-detectors] {
-        color: inherit !important;
-        text-decoration: none !important;
-        font-size: inherit !important;
-        font-family: inherit !important;
-        font-weight: inherit !important;
-        line-height: inherit !important;
-      }
+            body,
+            table,
+            td,
+            a {
+                -webkit-text-size-adjust: 100%;
+                -ms-text-size-adjust: 100%;
+            }
+            table,
+            td {
+                mso-table-lspace: 0pt;
+                mso-table-rspace: 0pt;
+            }
+            img {
+                -ms-interpolation-mode: bicubic;
+                border: 0;
+                height: auto;
+                line-height: 100%;
+                outline: none;
+                text-decoration: none;
+            }
+            body {
+                margin: 0;
+                padding: 0;
+                width: 100% !important;
+                height: 100% !important;
+            }
+            table {
+                border-collapse: collapse !important;
+            }
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+            }
+            a[x-apple-data-detectors] {
+                color: inherit !important;
+                text-decoration: none !important;
+                font-size: inherit !important;
+                font-family: inherit !important;
+                font-weight: inherit !important;
+                line-height: inherit !important;
+            }
 
-      body {
-        background-color: #f5f5f4;
-        color: #c9c3c7;
-        font-family: "DM Mono", "Courier New", Courier, monospace;
-        overflow-x: hidden;
-      }
+            body {
+                background-color: #f5f5f4;
+                color: #c9c3c7;
+                font-family: "DM Mono", "Courier New", Courier, monospace;
+                overflow-x: hidden;
+            }
 
-      .email-container {
-        width: 100%;
-        max-width: 600px;
-        margin: 0 auto;
-        background-color: #f5f5f4;
-      }
+            .email-container {
+                width: 100%;
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: #f5f5f4;
+            }
 
-      .display-font {
-        font-family: "Greed Narrow", "Arial Narrow", Impact, sans-serif;
-        font-stretch: condensed;
-      }
+            .display-font {
+                font-family: "Greed Narrow", "Arial Narrow", Impact, sans-serif;
+                font-stretch: condensed;
+            }
 
-      .logo-mark {
-        display: block;
-        width: 72px;
-        height: 70px;
-        margin: 0 auto;
-      }
+            .logo-mark {
+                display: block;
+                width: 72px;
+                height: 70px;
+                margin: 0 auto;
+            }
 
-      .heading-text {
-        margin: 0;
-        color: #c9c3c7;
-        font-size: 58px;
-        line-height: 1.24;
-        font-weight: 600;
-        letter-spacing: -1.16px;
-        text-align: center;
-        vertical-align: middle;
-      }
+            .heading-text {
+                margin: 0;
+                color: #65724a;
+                background-color: #65724a;
+                background-image: url("./images/text-bg-2.jpg");
+                /*background-image: url("{{base_url}}/email-images/text-bg-2.jpg");*/
+                background-position: center 58%;
+                background-size: 100% 100%;
+                background-repeat: no-repeat;
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: rgba(0, 0, 0, 0);
+                font-size: 58px;
+                line-height: 1.24;
+                font-weight: 600;
+                letter-spacing: -1.16px;
+                text-align: center;
+                vertical-align: middle;
+            }
 
-      .heading-fill {
-        display: inline-block;
-        color: #65724a;
-        background-color: #65724a;
-        background-image: url('{{base_url}}/email-images/text-bg-2.jpg');
-        background-position: center 58%;
-        background-size: cover;
-        background-repeat: no-repeat;
-        -webkit-background-clip: text;
-        background-clip: text;
-        -webkit-text-fill-color: rgba(0, 0, 0, 0);
-      }
+            .hero-frame {
+                width: 100%;
+            }
 
-      .hero-frame {
-        width: 100%;
-      }
+            .hero-image {
+                display: block;
+                width: 100%;
+                height: auto;
+            }
 
-      .hero-image {
-        display: block;
-        width: 100%;
-        height: auto;
-      }
+            .cta-button {
+                display: block;
+                padding: 0 24px;
+                height: 52px;
+                color: #ffffff !important;
+                background-color: #fb492b;
+                border-radius: 8px;
+                box-shadow: -4px 7px 0 #030303;
+                font-family: "DM Mono", "Courier New", Courier, monospace;
+                font-size: 18px;
+                line-height: 52px;
+                font-weight: 500;
+                letter-spacing: 0;
+                text-align: center;
+                text-decoration: none;
+                text-transform: uppercase;
+            }
 
-      .cta-button {
-        display: block;
-        padding: 0 24px;
-        height: 52px;
-        color: #ffffff !important;
-        background-color: #fb492b;
-        border-radius: 8px;
-        box-shadow: -4px 7px 0 #030303;
-        font-family: "DM Mono", "Courier New", Courier, monospace;
-        font-size: 18px;
-        line-height: 52px;
-        font-weight: 500;
-        letter-spacing: 0;
-        text-align: center;
-        text-decoration: none;
-        text-transform: uppercase;
-      }
+            @media only screen and (max-width: 620px) {
+                .email-container {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                }
+                .logo-cell {
+                    padding-top: 78px !important;
+                    padding-bottom: 70px !important;
+                }
+                .heading-cell {
+                    padding: 0 34px 58px !important;
+                }
+                .heading-text {
+                    font-size: 52px !important;
+                    line-height: 1.24 !important;
+                    letter-spacing: -1.04px !important;
+                }
+                .hero-cell {
+                    padding: 0 28px !important;
+                }
+                .cta-cell {
+                    padding: 54px 42px 94px !important;
+                }
+            }
 
-      @media only screen and (max-width: 620px) {
-        .email-container {
-          width: 100% !important;
-          max-width: 100% !important;
-        }
-        .logo-cell {
-          padding-top: 78px !important;
-          padding-bottom: 70px !important;
-        }
-        .heading-cell {
-          padding: 0 34px 58px !important;
-        }
-        .heading-text {
-          font-size: 52px !important;
-          line-height: 1.24 !important;
-          letter-spacing: -1.04px !important;
-        }
-        .hero-cell {
-          padding: 0 28px !important;
-        }
-        .cta-cell {
-          padding: 54px 42px 94px !important;
-        }
-      }
+            @media only screen and (max-width: 480px) {
+                .logo-cell {
+                    padding-top: 59px !important;
+                    padding-bottom: 70px !important;
+                }
+                .logo-mark {
+                    width: 50px !important;
+                    height: 49px !important;
+                }
+                .heading-cell {
+                    padding: 0 18px 40px !important;
+                }
+                .heading-text {
+                    font-size: 35px !important;
+                    line-height: 1.18 !important;
+                    letter-spacing: -0.7px !important;
+                }
+                .hero-cell {
+                    padding: 0 22px !important;
+                }
+                .cta-cell {
+                    padding: 41px 32px 94px !important;
+                }
+                .cta-button {
+                    font-size: 16px !important;
+                    line-height: 52px !important;
+                    letter-spacing: 0 !important;
+                    box-shadow: -3px 5px 0 #030303 !important;
+                }
+            }
 
-      @media only screen and (max-width: 480px) {
-        .logo-cell {
-          padding-top: 59px !important;
-          padding-bottom: 70px !important;
-        }
-        .logo-mark {
-          width: 50px !important;
-          height: 49px !important;
-        }
-        .heading-cell {
-          padding: 0 18px 40px !important;
-        }
-        .heading-text {
-          font-size: 35px !important;
-          line-height: 1.18 !important;
-          letter-spacing: -0.7px !important;
-        }
-        .hero-cell {
-          padding: 0 22px !important;
-        }
-        .cta-cell {
-          padding: 41px 32px 94px !important;
-        }
-        .cta-button {
-          font-size: 16px !important;
-          line-height: 52px !important;
-          letter-spacing: 0 !important;
-          box-shadow: -3px 5px 0 #030303 !important;
-        }
-      }
-
-      @media only screen and (max-width: 375px) {
-        .heading-cell {
-          padding-left: 12px !important;
-          padding-right: 12px !important;
-          padding-bottom: 36px !important;
-        }
-        .heading-text {
-          font-size: 30px !important;
-          line-height: 1.16 !important;
-          letter-spacing: -0.6px !important;
-        }
-        .hero-cell {
-          padding-left: 18px !important;
-          padding-right: 18px !important;
-        }
-        .cta-cell {
-          padding-left: 26px !important;
-          padding-right: 26px !important;
-          padding-bottom: 94px !important;
-        }
-        .cta-button {
-          font-size: 16px !important;
-          line-height: 52px !important;
-          letter-spacing: 0 !important;
-        }
-      }
-    </style>
-  </head>
-  <body style="margin: 0; padding: 0; background-color: #f5f5f4">
-    <center
-      role="article"
-      aria-roledescription="email"
-      lang="en"
-      style="width: 100%; overflow-x: hidden; background-color: #f5f5f4"
-    >
-      <!--[if mso | IE]>
+            @media only screen and (max-width: 375px) {
+                .heading-cell {
+                    padding-left: 12px !important;
+                    padding-right: 12px !important;
+                    padding-bottom: 36px !important;
+                }
+                .heading-text {
+                    font-size: 30px !important;
+                    line-height: 1.16 !important;
+                    letter-spacing: -0.6px !important;
+                }
+                .hero-cell {
+                    padding-left: 18px !important;
+                    padding-right: 18px !important;
+                }
+                .cta-cell {
+                    padding-left: 26px !important;
+                    padding-right: 26px !important;
+                    padding-bottom: 94px !important;
+                }
+                .cta-button {
+                    font-size: 16px !important;
+                    line-height: 52px !important;
+                    letter-spacing: 0 !important;
+                }
+            }
+        </style>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #f5f5f4">
+        <center
+            role="article"
+            aria-roledescription="email"
+            lang="en"
+            style="width: 100%; overflow-x: hidden; background-color: #f5f5f4"
+        >
+            <!--[if mso | IE]>
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" align="center" style="width:600px;">
     <tr>
     <td>
     <![endif]-->
 
-      <table
-        role="presentation"
-        cellspacing="0"
-        cellpadding="0"
-        border="0"
-        align="center"
-        width="100%"
-        style="max-width: 600px; margin: 0 auto"
-        class="email-container"
-      >
-        <tr>
-          <td
-            class="logo-cell"
-            style="padding: 85px 0 70px; text-align: center"
-          >
-            <img
-              src="{{base_url}}/email-images/logo.png"
-              width="72"
-              height="70"
-              alt="SwiftAgent"
-              class="logo-mark"
-            />
-          </td>
-        </tr>
+            <table
+                role="presentation"
+                cellspacing="0"
+                cellpadding="0"
+                border="0"
+                align="center"
+                width="100%"
+                style="max-width: 600px; margin: 0 auto"
+                class="email-container"
+            >
+                <tr>
+                    <td
+                        class="logo-cell"
+                        style="padding: 85px 0 70px; text-align: center"
+                    >
+                        <img
+                            src="{{base_url}}/email-images/logo.png"
+                            width="72"
+                            height="70"
+                            alt="SwiftAgent"
+                            class="logo-mark"
+                        />
+                    </td>
+                </tr>
 
-        <tr>
-          <td
-            class="heading-cell"
-            style="padding: 0 45px 63px; text-align: center"
-          >
-            <h1 class="display-font heading-text">
-              Welcome to <span class="heading-fill">automated customer</span>
-              <span class="heading-fill">service.</span>
-            </h1>
-          </td>
-        </tr>
+                <tr>
+                    <td
+                        class="heading-cell"
+                        style="padding: 0 45px 63px; text-align: center"
+                    >
+                        <h1 class="display-font heading-text">
+                            Welcome to automated customer service.
+                        </h1>
+                    </td>
+                </tr>
 
-        <tr>
-          <td class="hero-cell" style="padding: 0 31px">
-            <div class="hero-frame">
-            <img
-              src="{{base_url}}/email-images/welcome.png"
-              width="538"
-              height="423"
-              alt="SwiftAgent customer service"
-              class="hero-image"
-            />
-            </div>
-          </td>
-        </tr>
+                <tr>
+                    <td class="hero-cell" style="padding: 0 31px">
+                        <div class="hero-frame">
+                            <img
+                                src="{{base_url}}/email-images/welcome.png"
+                                width="538"
+                                height="423"
+                                alt="SwiftAgent customer service"
+                                class="hero-image"
+                            />
+                        </div>
+                    </td>
+                </tr>
 
-        <tr>
-          <td class="cta-cell" style="padding: 58px 46px 94px">
-            <a href="{{dashboardUrl}}" target="_blank" class="cta-button">
-              Head to your dashboard
-            </a>
-          </td>
-        </tr>
-      </table>
+                <tr>
+                    <td class="cta-cell" style="padding: 58px 46px 94px">
+                        <a
+                            href="{{dashboardUrl}}"
+                            target="_blank"
+                            class="cta-button"
+                        >
+                            Head to your dashboard
+                        </a>
+                    </td>
+                </tr>
+            </table>
 
-      <!--[if mso | IE]>
+            <!--[if mso | IE]>
     </td>
     </tr>
     </table>
     <![endif]-->
-    </center>
-  </body>
+        </center>
+    </body>
 </html>
