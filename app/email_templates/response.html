@@ -1,216 +1,367 @@
-<!DOCTYPE html>
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="light" />
-    <meta name="supported-color-schemes" content="light" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="x-apple-disable-message-reformatting">
-  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
-  <title>Response</title>
-  <!--[if mso]>
-  <noscript>
-    <xml>
-      <o:OfficeDocumentSettings>
-        <o:AllowPNG/>
-        <o:PixelsPerInch>96</o:PixelsPerInch>
-      </o:OfficeDocumentSettings>
-    </xml>
-  </noscript>
-  <![endif]-->
-  <style>
-      @import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap");
+<!doctype html>
+<html
+    lang="en"
+    xmlns="http://www.w3.org/1999/xhtml"
+    xmlns:v="urn:schemas-microsoft-com:vml"
+    xmlns:o="urn:schemas-microsoft-com:office:office"
+>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="color-scheme" content="light" />
+        <meta name="supported-color-schemes" content="light" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="x-apple-disable-message-reformatting" />
+        <meta
+            name="format-detection"
+            content="telephone=no,address=no,email=no,date=no,url=no"
+        />
+        <title>Response</title>
+        <!--[if mso]>
+            <noscript>
+                <xml>
+                    <o:OfficeDocumentSettings>
+                        <o:AllowPNG />
+                        <o:PixelsPerInch>96</o:PixelsPerInch>
+                    </o:OfficeDocumentSettings>
+                </xml>
+            </noscript>
+        <![endif]-->
+        <style>
+            @font-face {
+                font-family: "DM Mono";
+                src: url("{{base_url}}/email-assets/fonts/DMMono-Regular.ttf")
+                    format("truetype");
+                font-style: normal;
+                font-weight: 400;
+            }
 
-      :root {
-        color-scheme: light;
-        supported-color-schemes: light;
-      }
+            @font-face {
+                font-family: "DM Mono";
+                src: url("{{base_url}}/email-assets/fonts/DMMono-Medium.ttf")
+                    format("truetype");
+                font-style: normal;
+                font-weight: 500;
+            }
 
-      body,
-      table,
-      td,
-      a {
-        -webkit-text-size-adjust: 100%;
-        -ms-text-size-adjust: 100%;
-      }
-      table,
-      td {
-        mso-table-lspace: 0pt;
-        mso-table-rspace: 0pt;
-      }
-      img {
-        -ms-interpolation-mode: bicubic;
-        border: 0;
-        height: auto;
-        line-height: 100%;
-        outline: none;
-        text-decoration: none;
-      }
-    body { margin: 0; padding: 0; width: 100% !important; height: 100% !important; }
-    table { border-collapse: collapse !important; }
-    *, *::before, *::after { box-sizing: border-box; }
-    a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }
+            @font-face {
+                font-family: "Greed Narrow";
+                src: url("{{base_url}}/email-assets/fonts/GreedNarrow-SemiBold.otf")
+                    format("opentype");
+                font-style: normal;
+                font-weight: 600;
+            }
 
-    body {
-      background-color: #f5f5f4;
-      color: #111111;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      overflow-x: hidden;
-    }
+            :root {
+                color-scheme: light;
+                supported-color-schemes: light;
+            }
 
-    .email-container {
-      width: 100%;
-      max-width: 600px;
-      margin: 0 auto;
-      background-color: #f5f5f4;
-    }
+            body,
+            table,
+            td,
+            a {
+                -webkit-text-size-adjust: 100%;
+                -ms-text-size-adjust: 100%;
+            }
+            table,
+            td {
+                mso-table-lspace: 0pt;
+                mso-table-rspace: 0pt;
+            }
+            img {
+                -ms-interpolation-mode: bicubic;
+                border: 0;
+                height: auto;
+                line-height: 100%;
+                outline: none;
+                text-decoration: none;
+            }
+            body {
+                margin: 0;
+                padding: 0;
+                width: 100% !important;
+                height: 100% !important;
+            }
+            table {
+                border-collapse: collapse !important;
+            }
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+            }
+            a[x-apple-data-detectors] {
+                color: inherit !important;
+                text-decoration: none !important;
+                font-size: inherit !important;
+                font-family: inherit !important;
+                font-weight: inherit !important;
+                line-height: inherit !important;
+            }
 
-    .display-font {
-      font-family: 'Greed Narrow-TRIAL', 'Arial Narrow', Impact, sans-serif;
-      font-stretch: condensed;
-    }
+            body {
+                background-color: #f5f5f4;
+                color: #111111;
+                font-family: "DM Mono", "Courier New", Courier, monospace;
+                overflow-x: hidden;
+            }
 
-    .profile-image {
-      display: block;
-      width: 46px;
-      height: 46px;
-      border-radius: 50%;
-    }
+            .email-container {
+                width: 100%;
+                max-width: 600px;
+                margin: 0 auto;
+                background-color: #f5f5f4;
+            }
 
-    .agent-name,
-    .agent-role {
-      margin: 0;
-      color: #111111;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      font-size: 18px;
-      line-height: 1.45;
-      font-weight: 400;
-      letter-spacing: 0;
-      text-transform: uppercase;
-    }
+            .display-font {
+                font-family: "Greed Narrow", "Arial Narrow", Impact, sans-serif;
+                font-stretch: condensed;
+            }
 
-    .love-icon {
-      display: block;
-      width: 32px;
-      height: 31px;
-    }
+            .profile-image {
+                display: block;
+                width: 46px;
+                height: 46px;
+                border-radius: 50%;
+            }
 
-    .heading-text {
-      margin: 0;
-      color: #697454;
-      background-image: url('{{base_url}}/email-assets/text-bg.jpg');
-      background-position: center center;
-      background-size: cover;
-      background-repeat: no-repeat;
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: rgba(0,0,0,0);
-      font-size: 58px;
-      line-height: 1.24;
-      font-weight: 600;
-      letter-spacing: -1.16px;
-      text-align: center;
-      vertical-align: middle;
-    }
+            .agent-name,
+            .agent-role {
+                margin: 0;
+                color: #111111;
+                font-family: "DM Mono", "Courier New", Courier, monospace;
+                font-size: 18px;
+                line-height: 1.45;
+                font-weight: 400;
+                letter-spacing: 0;
+                text-transform: uppercase;
+            }
 
-    .message-text {
-      margin: 0;
-      color: #111111;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
-      font-size: 18px;
-      line-height: 2.02;
-      font-weight: 400;
-      letter-spacing: 0;
-      text-align: left;
-      text-transform: uppercase;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
+            .love-icon {
+                display: block;
+                width: 32px;
+                height: 31px;
+            }
 
-    @media only screen and (max-width: 620px) {
-      .email-container { width: 100% !important; max-width: 100% !important; }
-      .agent-cell { padding: 88px 85px 86px !important; }
-      .heading-cell { padding: 0 85px 76px !important; }
-      .heading-text { font-size: 52px !important; line-height: 1.24 !important; letter-spacing: -1.04px !important; }
-      .message-cell { padding: 0 85px 112px !important; }
-    }
+            .heading-text {
+                margin: 0;
+                color: #697454;
+                background-color: #697454;
+                background-image: url("{{base_url}}/email-assets/text-bg.jpg");
+                background-position: center center;
+                background-size: cover;
+                background-repeat: no-repeat;
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: rgba(0, 0, 0, 0);
+                font-size: 58px;
+                line-height: 1.24;
+                font-weight: 600;
+                letter-spacing: -1.16px;
+                text-align: center;
+                vertical-align: middle;
+            }
 
-    @media only screen and (max-width: 480px) {
-      .agent-cell { padding: 62px 42px 64px !important; }
-      .profile-image { width: 40px !important; height: 40px !important; }
-      .agent-name, .agent-role { font-size: 16px !important; line-height: 1.45 !important; }
-      .love-icon { width: 30px !important; height: 29px !important; }
-      .heading-cell { padding: 0 42px 56px !important; }
-      .heading-text { font-size: 38px !important; line-height: 1.24 !important; letter-spacing: -0.76px !important; }
-      .message-cell { padding: 0 42px 94px !important; }
-      .message-text { font-size: 16px !important; line-height: 2 !important; }
-    }
+            .message-text {
+                margin: 0;
+                color: #111111;
+                font-family: "DM Mono", "Courier New", Courier, monospace;
+                font-size: 18px;
+                line-height: 2.02;
+                font-weight: 400;
+                letter-spacing: 0;
+                text-align: left;
+                text-transform: uppercase;
+                overflow-wrap: anywhere;
+                word-break: break-word;
+            }
 
-    @media only screen and (max-width: 375px) {
-      .agent-cell { padding-left: 28px !important; padding-right: 28px !important; }
-      .heading-cell { padding-left: 28px !important; padding-right: 28px !important; }
-      .heading-text { font-size: 33px !important; letter-spacing: -0.66px !important; }
-      .message-cell { padding-left: 28px !important; padding-right: 28px !important; }
-      .agent-name, .agent-role, .message-text { font-size: 16px !important; }
-    }
-  </style>
-</head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f4;">
-  <div style="display: none; max-height: 0; overflow: hidden;">
-    Erica Pasos from Romeo Support replied.
-    &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
-  </div>
+            @media only screen and (max-width: 620px) {
+                .email-container {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                }
+                .agent-cell {
+                    padding: 88px 85px 86px !important;
+                }
+                .heading-cell {
+                    padding: 0 85px 76px !important;
+                }
+                .heading-text {
+                    font-size: 52px !important;
+                    line-height: 1.24 !important;
+                    letter-spacing: -1.04px !important;
+                }
+                .message-cell {
+                    padding: 0 85px 112px !important;
+                }
+            }
 
-  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4;">
-    <!--[if mso | IE]>
+            @media only screen and (max-width: 480px) {
+                .agent-cell {
+                    padding: 62px 42px 64px !important;
+                }
+                .profile-image {
+                    width: 40px !important;
+                    height: 40px !important;
+                }
+                .agent-name,
+                .agent-role {
+                    font-size: 16px !important;
+                    line-height: 1.45 !important;
+                }
+                .love-icon {
+                    width: 30px !important;
+                    height: 29px !important;
+                }
+                .heading-cell {
+                    padding: 0 42px 56px !important;
+                }
+                .heading-text {
+                    font-size: 38px !important;
+                    line-height: 1.24 !important;
+                    letter-spacing: -0.76px !important;
+                }
+                .message-cell {
+                    padding: 0 42px 94px !important;
+                }
+                .message-text {
+                    font-size: 16px !important;
+                    line-height: 2 !important;
+                }
+            }
+
+            @media only screen and (max-width: 375px) {
+                .agent-cell {
+                    padding-left: 28px !important;
+                    padding-right: 28px !important;
+                }
+                .heading-cell {
+                    padding-left: 28px !important;
+                    padding-right: 28px !important;
+                }
+                .heading-text {
+                    font-size: 33px !important;
+                    letter-spacing: -0.66px !important;
+                }
+                .message-cell {
+                    padding-left: 28px !important;
+                    padding-right: 28px !important;
+                }
+                .agent-name,
+                .agent-role,
+                .message-text {
+                    font-size: 16px !important;
+                }
+            }
+        </style>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #f5f5f4">
+        <div style="display: none; max-height: 0; overflow: hidden">
+            Erica Pasos from Romeo Support replied. &#847; &#847; &#847; &#847;
+            &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
+            &#847; &#847;
+        </div>
+
+        <center
+            role="article"
+            aria-roledescription="email"
+            lang="en"
+            style="width: 100%; overflow-x: hidden; background-color: #f5f5f4"
+        >
+            <!--[if mso | IE]>
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" align="center" style="width:600px;">
     <tr>
     <td>
     <![endif]-->
 
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
-      <tr>
-        <td class="agent-cell" style="padding: 88px 85px 86px;">
-          <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
-            <tr>
-              <td rowspan="2" style="padding: 0 18px 0 0; vertical-align: top;">
-                <img src="{{base_url}}/email-assets/erica-profile.jpg" width="46" height="46" alt="Erica Pasos" class="profile-image">
-              </td>
-              <td style="padding: 0 12px 0 0; vertical-align: middle;">
-                <p class="agent-name">{{agent_name}}</p>
-              </td>
-              <td style="padding: 0; vertical-align: middle;">
-                <img src="{{base_url}}/email-assets/smily-love.svg" width="32" height="31" alt="" class="love-icon">
-              </td>
-            </tr>
-            <tr>
-              <td colspan="2" style="padding: 0; vertical-align: middle;">
-                <p class="agent-role">({{support_team}})</p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
+            <table
+                role="presentation"
+                cellspacing="0"
+                cellpadding="0"
+                border="0"
+                align="center"
+                width="100%"
+                style="max-width: 600px; margin: 0 auto"
+                class="email-container"
+            >
+                <tr>
+                    <td class="agent-cell" style="padding: 88px 85px 86px">
+                        <table
+                            role="presentation"
+                            cellspacing="0"
+                            cellpadding="0"
+                            border="0"
+                            align="center"
+                        >
+                            <tr>
+                                <td
+                                    rowspan="2"
+                                    style="
+                                        padding: 0 18px 0 0;
+                                        vertical-align: top;
+                                    "
+                                >
+                                    <img
+                                        src="{{base_url}}/email-assets/erica-profile.jpg"
+                                        width="46"
+                                        height="46"
+                                        alt="Erica Pasos"
+                                        class="profile-image"
+                                    />
+                                </td>
+                                <td
+                                    style="
+                                        padding: 0 12px 0 0;
+                                        vertical-align: middle;
+                                    "
+                                >
+                                    <p class="agent-name">{{agent_name}}</p>
+                                </td>
+                                <td style="padding: 0; vertical-align: middle">
+                                    <img
+                                        src="{{base_url}}/email-assets/logo 2.png"
+                                        width="32"
+                                        height="31"
+                                        alt=""
+                                        class="love-icon"
+                                    />
+                                </td>
+                            </tr>
+                            <tr>
+                                <td
+                                    colspan="2"
+                                    style="padding: 0; vertical-align: middle"
+                                >
+                                    <p class="agent-role">({{support_team}})</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
 
-      <tr>
-        <td class="heading-cell" style="padding: 0 85px 76px; text-align: center;">
-          <h1 class="display-font heading-text">Hey there</h1>
-        </td>
-      </tr>
+                <tr>
+                    <td
+                        class="heading-cell"
+                        style="padding: 0 85px 76px; text-align: center"
+                    >
+                        <h1 class="display-font heading-text">Hey there</h1>
+                    </td>
+                </tr>
 
-      <tr>
-        <td class="message-cell" style="padding: 0 85px 94px;">
-          <p class="message-text">{{response_message}}</p>
-        </td>
-      </tr>
-    </table>
+                <tr>
+                    <td class="message-cell" style="padding: 0 85px 94px">
+                        <p class="message-text">{{response_message}}</p>
+                    </td>
+                </tr>
+            </table>
 
-    <!--[if mso | IE]>
+            <!--[if mso | IE]>
     </td>
     </tr>
     </table>
     <![endif]-->
-  </center>
-</body>
+        </center>
+    </body>
 </html>
