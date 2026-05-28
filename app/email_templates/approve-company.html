@@ -27,21 +27,21 @@
   <style>
     @font-face {
       font-family: "DM Mono";
-      src: url("{{base_url}}/email-assets/fonts/DMMono-Regular.ttf") format("truetype");
+      src: url("{{base_url}}/email-fonts/DMMono-Regular.ttf") format("truetype");
       font-style: normal;
       font-weight: 400;
     }
 
     @font-face {
       font-family: "DM Mono";
-      src: url("{{base_url}}/email-assets/fonts/DMMono-Medium.ttf") format("truetype");
+      src: url("{{base_url}}/email-fonts/DMMono-Medium.ttf") format("truetype");
       font-style: normal;
       font-weight: 500;
     }
 
     @font-face {
       font-family: "Greed Narrow";
-      src: url("{{base_url}}/email-assets/fonts/GreedNarrow-SemiBold.otf") format("opentype");
+      src: url("{{base_url}}/email-fonts/GreedNarrow-SemiBold.otf") format("opentype");
       font-style: normal;
       font-weight: 600;
     }
@@ -87,26 +87,21 @@
 
     .heading-text {
       margin: 0;
-      color: #c9c3c7;
+      color: #697454;
+      background-color: #697454;
+      background-image: url('{{base_url}}/email-images/text-bg-2.jpg');
+      background-position: center center;
+      background-size: 100% 100%;
+      background-repeat: no-repeat;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: rgba(0, 0, 0, 0);
       font-size: 58px;
       line-height: 1.33;
       font-weight: 600;
       letter-spacing: -1.16px;
       text-align: center;
       vertical-align: middle;
-    }
-
-    .heading-fill {
-      display: inline-block;
-      color: #697454;
-      background-color: #697454;
-      background-image: url('{{base_url}}/email-assets/text-bg-2.jpg');
-      background-position: center center;
-      background-size: cover;
-      background-repeat: no-repeat;
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: rgba(0, 0, 0, 0);
     }
 
     .body-text {
@@ -214,15 +209,15 @@
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
         <td class="logo-cell" style="padding: 72px 0 16px; text-align: center;">
-          <img src="{{base_url}}/email-assets/logo.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
+          <img src="{{base_url}}/email-images/logo.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
         </td>
       </tr>
 
       <tr>
         <td class="heading-cell" style="padding: 0 70px 26px; text-align: center;">
           <h1 class="display-font heading-text">
-            <span class="heading-fill">There's a new</span><br>
-            <span class="heading-fill">company!</span>
+            There's a new<br>
+            company!
           </h1>
         </td>
       </tr>
@@ -250,7 +245,7 @@
       <tr>
         <td class="image-cell" style="padding: 0 58px 51px;">
           <div class="hero-frame">
-            <img src="{{base_url}}/email-assets/approve-company.png" width="474" height="373" alt="New kids on the block" class="hero-image">
+            <img src="{{base_url}}/email-images/approve-company.png" width="474" height="373" alt="New kids on the block" class="hero-image">
           </div>
         </td>
       </tr>
