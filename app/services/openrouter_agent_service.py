@@ -31,6 +31,7 @@ from app.services.stroll_index_service import extract_navigation_steps, reconstr
 from app.services.blockchain import detect, evm, bitcoin, prices
 from app.services import memory_service
 from app.models.memory_models import WorkingMemory
+from app.services.attachment_service import format_for_openrouter, extract_attachment_content, build_persistable_attachments
 
 logger = logging.getLogger(__name__)
 
@@ -489,6 +490,8 @@ or navigation question in the dashboard.
 - Use lookup_transaction for transaction hashes; lookup_wallet for wallet addresses.
 - After getting transaction data, use diagnose_problem to analyze what went wrong.
 - Do NOT use any tools for simple greetings or small talk.
+- If the customer includes a URL or link in their message, you MUST use the `read_website_page` \
+tool to read its contents and use the information to inform your response. Do NOT ignore links.
 
 NAVIGATION GUIDE FORMAT:
 When you receive a navigation report from get_dashboard_navigation, respond with:
@@ -854,7 +857,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
 # Streaming chat (SSE)
 
 
-async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None):
+async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None, attachments: list = None):
     """
     Async generator yielding dicts with a "type" key:
         thinking  – status update for the frontend loader
@@ -888,8 +891,27 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
     integration_count = await integration_service.get_active_integration_count(company_id)
     system_prompt = _build_system_prompt(company, memory_str, page_url, integration_count)
     messages = [{"role": "system", "content": system_prompt}]
-    messages += _history_to_openai(history)
-    messages.append({"role": "user", "content": user_message})
+
+    # Rebuild history with persisted attachment context
+    for msg in history[-10:]:
+        role = "user" if msg["role"] == "user" else "assistant"
+        msg_attachments = msg.get("attachments", [])
+        if role == "user" and msg_attachments:
+            att_parts = format_for_openrouter(msg_attachments)
+            content = [{"type": "text", "text": msg["content"]}] + att_parts
+        else:
+            content = msg["content"]
+        messages.append({"role": role, "content": content})
+
+    # Process current message attachments
+    enriched_attachments = []
+    if attachments:
+        enriched_attachments = await extract_attachment_content(attachments)
+        att_parts = format_for_openrouter(enriched_attachments)
+        user_content = [{"type": "text", "text": user_message}] + att_parts
+        messages.append({"role": "user", "content": user_content})
+    else:
+        messages.append({"role": "user", "content": user_message})
 
     client = _get_client()
     blockchain_data = None
@@ -980,7 +1002,10 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
         reply = "I'm sorry, I'm experiencing a temporary issue. Please try again in a moment."
 
     # persist conversation
-    history.append({"role": "user", "content": user_message, "timestamp": datetime.now(tz=timezone.utc).isoformat()})
+    user_msg_doc = {"role": "user", "content": user_message, "timestamp": datetime.now(tz=timezone.utc).isoformat()}
+    if enriched_attachments:
+        user_msg_doc["attachments"] = build_persistable_attachments(enriched_attachments)
+    history.append(user_msg_doc)
     assistant_msg = {"role": "assistant", "content": reply, "timestamp": datetime.now(tz=timezone.utc).isoformat()}
     if guide:
         assistant_msg["navigation_guide"] = guide.model_dump()

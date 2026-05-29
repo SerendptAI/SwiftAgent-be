@@ -7,8 +7,13 @@ POST /{company_id}/chat
     "message": "...",
     "user_id": null,
     "agent": "anthropic" | "openrouter"   # optional, defaults to company setting or "anthropic"
+    "attachments": [...]                  # optional, from POST /{company_id}/chat/upload
   }
   Returns: text/event-stream
+
+POST /{company_id}/chat/upload
+  Body: multipart/form-data with files
+  Returns: { "attachments": [...] }
 
 SSE event format:
   event: message
@@ -27,19 +32,45 @@ Stages:
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator, Field
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from app.core.database import db
-from app.services import anthropic_agent_service, openrouter_agent_service, gemini_agent_service, memory_service
+from app.services import (
+    anthropic_agent_service,
+    openrouter_agent_service,
+    gemini_agent_service,
+    memory_service,
+    cloudinary_service,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Chat"])
 
 AgentType = Literal["anthropic", "openrouter", "gemini"]
+
+
+# Request / response schemas
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+ALLOWED_DOC_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+    "text/csv",
+}
+ALLOWED_DOC_EXTENSIONS = {"pdf", "docx", "txt", "csv"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+class ChatAttachment(BaseModel):
+    url: str = Field(..., description="Cloudinary URL of the uploaded file.")
+    type: str = Field(..., description="'image' or 'document'.")
+    mime_type: Optional[str] = Field(None, description="MIME type of the file.")
+    filename: Optional[str] = Field(None, description="Original filename.")
 
 
 class ChatRequest(BaseModel):
@@ -52,6 +83,11 @@ class ChatRequest(BaseModel):
         description="Select the AI provider to use. Provide 'openrouter' to route through the OpenRouter service, or 'anthropic' for Claude. If omitted, falls back to the company's ai_provider setting or the platform default."
     )
     page_url: Optional[str] = Field(None, description="The URL the user is currently viewing.")
+    attachments: Optional[List[ChatAttachment]] = Field(
+        None,
+        description="Optional list of file attachments from the upload endpoint. Maximum 5.",
+        max_length=5,
+    )
 
     @field_validator("message")
     @classmethod
@@ -109,12 +145,18 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
             stream_fns_to_try.append(_AGENT_MAP["gemini"])
             stream_fns_to_try.append(_AGENT_MAP["openrouter"])
 
+        # Serialize attachments for agent services
+        attachments_raw = [a.model_dump() for a in req.attachments] if req.attachments else []
+
         response_text = ""
 
         for idx, stream_fn in enumerate(stream_fns_to_try):
             try:
                 response_text = ""
-                async for event in stream_fn(company_id, req.session_id, req.message, req.user_id, req.page_url):
+                async for event in stream_fn(
+                    company_id, req.session_id, req.message,
+                    req.user_id, req.page_url, attachments_raw,
+                ):
                     event_type = event.get("type")
 
                     if event_type == "thinking":
@@ -188,6 +230,76 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
         yield _sse("error", message="Something went wrong on our end. Please refresh and try again.")
         yield _sse("done")
 
+# Endpoints
+
+@router.post(
+    "/{company_id}/chat/upload",
+    summary="Upload Files for Chat",
+    description=(
+        "Upload one or more files (images or documents) for use in a chat message. "
+        "Files are stored temporarily in Cloudinary (auto-deleted after 2 hours). "
+        "Returns attachment metadata to include in the chat request body.\n\n"
+        "**Supported image types:** JPEG, PNG, GIF, WebP\n"
+        "**Supported document types:** PDF, DOCX, TXT, CSV\n"
+        "**Max file size:** 10 MB per file"
+    ),
+)
+async def upload_chat_files(
+    company_id: str,
+    files: List[UploadFile] = File(..., description="One or more files to upload."),
+):
+    """Upload files for chat — returns attachment metadata."""
+    company = await db.companies.find_one({"id": company_id})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    if len(files) > 5:
+        raise HTTPException(status_code=400, detail="Maximum of 5 files can be uploaded at once.")
+
+    attachments = []
+    for file in files:
+        contents = await file.read()
+        if len(contents) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File '{file.filename}' exceeds the 10 MB size limit.",
+            )
+
+        content_type = file.content_type or ""
+        ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else ""
+
+        if content_type in ALLOWED_IMAGE_TYPES:
+            await file.seek(0)
+            result = await cloudinary_service.upload_chat_image(
+                file, folder=f"chat/{company_id}"
+            )
+            attachments.append({
+                "url": result["secure_url"],
+                "type": "image",
+                "mime_type": content_type,
+                "filename": file.filename,
+            })
+
+        elif content_type in ALLOWED_DOC_TYPES or ext in ALLOWED_DOC_EXTENSIONS:
+            result = await cloudinary_service.upload_chat_document(
+                contents, file.filename, folder=f"chat/{company_id}"
+            )
+            attachments.append({
+                "url": result["secure_url"],
+                "type": "document",
+                "mime_type": content_type or "application/octet-stream",
+                "filename": file.filename,
+            })
+
+        else:
+            raise HTTPException(
+                status_code=415,
+                detail=f"Unsupported file type: '{content_type}' for file '{file.filename}'. "
+                       f"Supported: images (JPEG, PNG, GIF, WebP) and documents (PDF, DOCX, TXT, CSV).",
+            )
+
+    return {"attachments": attachments}
+
 
 @router.post(
     "/{company_id}/chat",
@@ -196,7 +308,10 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
         "Stream agent chat responses as Server-Sent Events (SSE).\n\n"
         "**Using OpenRouter:**\n"
         "To explicitly use the **OpenRouter** model (e.g., Llama 3.3 70B), include `\"agent\": \"openrouter\"` in the request body. "
-        "If the `agent` field is omitted, it will fall back to the company's configured `ai_provider` or the platform default."
+        "If the `agent` field is omitted, it will fall back to the company's configured `ai_provider` or the platform default.\n\n"
+        "**File Attachments:**\n"
+        "Upload files first via `POST /{company_id}/chat/upload`, then include the returned "
+        "`attachments` array in this request body."
     )
 )
 async def chat_endpoint(company_id: str, req: ChatRequest):

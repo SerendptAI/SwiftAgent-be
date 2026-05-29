@@ -20,18 +20,11 @@ from app.core.config import settings
 from app.core.database import db
 from app.core.validators import validate_email
 from app.core.utils import get_random_avatar
-from app.services import (
-    knowledge_service,
-    chain_service,
-    stroll_index_service,
-    company_email_service,
-    page_reader_service,
-    integration_service,
-)
+from app.services import knowledge_service, chain_service, stroll_index_service, memory_service, company_email_service, page_reader_service, integration_service
 from app.services.stroll_index_service import extract_navigation_steps, reconstruct_navigation_guide
 from app.services.blockchain import detect, evm, bitcoin, prices
-from app.services import memory_service
 from app.models.memory_models import WorkingMemory
+from app.services.attachment_service import format_for_anthropic, extract_attachment_content, build_persistable_attachments
 
 logger = logging.getLogger(__name__)
 
@@ -503,6 +496,8 @@ use lookup_wallet.
 to run the data through the diagnosis engine.
 - You can chain tools: first lookup, then diagnose.
 - Do NOT use any tools for simple greetings or small talk.
+- If the customer includes a URL or link in their message, you MUST use the `read_website_page` \
+tool to read its contents and use the information to inform your response. Do NOT ignore links.
 
 NAVIGATION GUIDE FORMAT:
 When you receive a navigation report from the get_dashboard_navigation tool, identify the \
@@ -1003,7 +998,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
 # streaming chat (SSE)
 
 
-async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None):
+async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None, attachments: list = None):
     """
     Async generator that streams the agent chat flow as events.
 
@@ -1047,9 +1042,24 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
     claude_messages = []
     for msg in history[-10:]:
         role = "user" if msg["role"] == "user" else "assistant"
-        claude_messages.append({"role": role, "content": msg["content"]})
+        # Rebuild multimodal content from persisted attachments if present
+        msg_attachments = msg.get("attachments", [])
+        if role == "user" and msg_attachments:
+            att_blocks = format_for_anthropic(msg_attachments)
+            content = [{"type": "text", "text": msg["content"]}] + att_blocks
+        else:
+            content = msg["content"]
+        claude_messages.append({"role": role, "content": content})
 
-    claude_messages.append({"role": "user", "content": user_message})
+    # Process current message attachments
+    enriched_attachments = []
+    if attachments:
+        enriched_attachments = await extract_attachment_content(attachments)
+        att_blocks = format_for_anthropic(enriched_attachments)
+        user_content = [{"type": "text", "text": user_message}] + att_blocks
+    else:
+        user_content = user_message
+    claude_messages.append({"role": "user", "content": user_content})
 
     client = _get_client()
     blockchain_data = None
@@ -1161,13 +1171,14 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
         raise e
 
     # save conversation
-    history.append(
-        {
-            "role": "user",
-            "content": user_message,
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        }
-    )
+    user_msg_doc = {
+        "role": "user",
+        "content": user_message,
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+    }
+    if enriched_attachments:
+        user_msg_doc["attachments"] = build_persistable_attachments(enriched_attachments)
+    history.append(user_msg_doc)
 
     assistant_msg = {
         "role": "assistant",
