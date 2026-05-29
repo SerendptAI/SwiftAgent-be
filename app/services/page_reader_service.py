@@ -1,5 +1,6 @@
 import logging
 from playwright.async_api import async_playwright
+from app.core.config import settings
 from urllib.parse import urljoin, urlparse
 
 logger = logging.getLogger(__name__)
@@ -12,7 +13,14 @@ async def read_website_page(url: str) -> dict:
     try:
         logger.info(f"Dynamically reading website page: {url}")
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            if settings.PLAYWRIGHT_WS_ENDPOINT:
+                try:
+                    browser = await p.chromium.connect_over_cdp(settings.PLAYWRIGHT_WS_ENDPOINT)
+                except Exception as e:
+                    logger.warning(f"Failed to connect to WS endpoint: {e}. Falling back to local Chromium.")
+                    browser = await p.chromium.launch(headless=True)
+            else:
+                browser = await p.chromium.launch(headless=True)
             context = await browser.new_context()
             page = await context.new_page()
             

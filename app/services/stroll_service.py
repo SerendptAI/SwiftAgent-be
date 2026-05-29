@@ -54,7 +54,14 @@ async def init_browser():
     """Initialize Playwright browser. Call once at app startup."""
     global _browser
     pw = await async_playwright().start()
-    _browser = await pw.chromium.launch(headless=True)
+    if settings.PLAYWRIGHT_WS_ENDPOINT:
+        try:
+            _browser = await pw.chromium.connect_over_cdp(settings.PLAYWRIGHT_WS_ENDPOINT)
+        except Exception as e:
+            logger.warning(f"Failed to connect to WS endpoint {settings.PLAYWRIGHT_WS_ENDPOINT}: {e}. Falling back to local Chromium.")
+            _browser = await pw.chromium.launch(headless=True)
+    else:
+        _browser = await pw.chromium.launch(headless=True)
     logger.info("Playwright browser initialized")
 
 

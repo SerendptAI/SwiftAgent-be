@@ -1,6 +1,7 @@
 import logging
 from uuid import uuid4
 from playwright.async_api import async_playwright
+from app.core.config import settings
 from app.services import knowledge_service
 
 logger = logging.getLogger(__name__)
@@ -12,7 +13,14 @@ async def scrape_and_ingest_docs(url: str, company_id: str, user_id: str) -> boo
     try:
         logger.info(f"Scraping documentation from {url} for company {company_id}")
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            if settings.PLAYWRIGHT_WS_ENDPOINT:
+                try:
+                    browser = await p.chromium.connect_over_cdp(settings.PLAYWRIGHT_WS_ENDPOINT)
+                except Exception as e:
+                    logger.warning(f"Failed to connect to WS endpoint: {e}. Falling back to local Chromium.")
+                    browser = await p.chromium.launch(headless=True)
+            else:
+                browser = await p.chromium.launch(headless=True)
             context = await browser.new_context()
             page = await context.new_page()
             

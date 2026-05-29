@@ -25,8 +25,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Install Playwright's Chromium + its system dependencies
-RUN playwright install --with-deps chromium
+# We no longer install chromium here. 
+# A separate browserless container should be used in production.
+# RUN playwright install --with-deps chromium
 
 # Reset the entrypoint, don't invoke `uv`
 ENTRYPOINT []
