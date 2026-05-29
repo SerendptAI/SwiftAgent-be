@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -145,10 +146,15 @@ async def get_ticket(
 async def reply_to_ticket(
     company_id: str,
     ticket_id: str,
-    req: EmailReplyRequest,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
-    """Send a reply to a ticket, emailed from company@swfty.email."""
+    """Send a reply to a ticket, emailed from company@swfty.email.
+
+    Accepts either:
+    - application/json: { "body_text": "...", "body_html": "..." }  (legacy, no attachments)
+    - multipart/form-data: body_text + body_html + attachments[]     (new, with file attachments)
+    """
     user_id = current_user["user_id"]
     company = await company_service.get_company(company_id, user_id)
     if not company:
@@ -160,9 +166,52 @@ async def reply_to_ticket(
             detail="Company email not configured. Set up your email slug first.",
         )
 
+    content_type = request.headers.get("content-type", "")
+    attachment_data = []
+
+    if "multipart/form-data" in content_type:
+        # New path: form data with optional file attachments
+        form = await request.form()
+        body_text = form.get("body_text", "")
+        body_html = form.get("body_html")
+
+        MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB per file
+        MAX_ATTACHMENTS = 5
+
+        files = form.getlist("attachments")
+        if len(files) > MAX_ATTACHMENTS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Maximum {MAX_ATTACHMENTS} attachments allowed"
+            )
+
+        for file in files:
+            if not hasattr(file, "read"):
+                continue  # skip non-file fields
+            content = await file.read()
+            if len(content) > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"File '{file.filename}' exceeds the 10MB size limit"
+                )
+            attachment_data.append({
+                "filename": file.filename or "attachment",
+                "content_type": file.content_type or "application/octet-stream",
+                "content": content,
+            })
+    else:
+        # Legacy path: JSON body (no attachments)
+        body = await request.json()
+        body_text = body.get("body_text", "")
+        body_html = body.get("body_html")
+
+    if not body_text or not body_text.strip():
+        raise HTTPException(status_code=422, detail="Reply body cannot be empty")
+
     try:
         result = await company_email_service.send_ticket_reply(
-            company_id, ticket_id, req.body_text, req.body_html
+            company_id, ticket_id, body_text.strip(), body_html,
+            attachments=attachment_data if attachment_data else None,
         )
         return result
     except ValueError as e:

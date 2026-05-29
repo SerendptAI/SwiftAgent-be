@@ -210,8 +210,12 @@ async def send_ticket_reply(
     ticket_id: str,
     body_text: str,
     body_html: str | None = None,
+    attachments: list[dict] | None = None,
 ) -> dict:
-    """Send a reply from the company to the customer via SendGrid."""
+    """Send a reply from the company to the customer via SendGrid.
+    
+    attachments: list of dicts with keys: filename, content_type, content (bytes)
+    """
     ticket = await get_ticket(company_id, ticket_id)
     if not ticket:
         raise ValueError(f"Ticket {ticket_id} not found")
@@ -309,6 +313,24 @@ async def send_ticket_reply(
         message.add_header(Header("References", last_message_id))
     message.add_header(Header("X-Swift-Ticket-ID", ticket_id))
 
+    # Attach user-uploaded files as regular (non-inline) attachments
+    attachment_meta = []
+    if attachments:
+        for att in attachments:
+            encoded = base64.b64encode(att["content"]).decode("utf-8")
+            sg_attachment = Attachment(
+                FileContent(encoded),
+                FileName(att["filename"]),
+                FileType(att["content_type"]),
+                Disposition("attachment"),
+            )
+            message.add_attachment(sg_attachment)
+            attachment_meta.append({
+                "filename": att["filename"],
+                "content_type": att["content_type"],
+                "size": len(att["content"]),
+            })
+
     try:
         sg = _get_sendgrid_client()
         response = sg.send(message)
@@ -326,6 +348,7 @@ async def send_ticket_reply(
         "message_id": outbound_message_id,
         "timestamp": now,
         "seen": True,
+        "attachments": attachment_meta,
     }
 
     await db.email_tickets.update_one(

@@ -4,6 +4,13 @@ from datetime import datetime
 import re
 
 
+class AttachmentMeta(BaseModel):
+    """Metadata for a file attachment (stored in DB, not the file itself)."""
+    filename: str
+    content_type: str
+    size: int  # bytes
+
+
 class TicketMessage(BaseModel):
     direction: str  # "inbound" (customer) | "outbound" (company)
     body_text: str
@@ -12,6 +19,7 @@ class TicketMessage(BaseModel):
     message_id: Optional[str] = None  # SMTP Message-ID for threading
     timestamp: Optional[datetime] = None
     seen: bool = False
+    attachments: List[AttachmentMeta] = []
 
 
 class EmailTicket(BaseModel):
