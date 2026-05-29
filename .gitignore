@@ -16,3 +16,7 @@ scripts/
 
 # Local task notes
 TODO.md
+
+# VAPID keys
+private_key.pem
+public_key.pem

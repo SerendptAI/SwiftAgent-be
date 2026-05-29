@@ -39,7 +39,7 @@ class RegisterDeviceRequest(BaseModel):
     """Mobile app request to register a push notification token."""
     device_token: str
     device_name: str = ""
-    platform: str = Field(default="android", pattern="^(android|ios)$")
+    platform: str = Field(default="android", pattern="^(android|ios|web)$")
 
 
 class ChallengeResponseRequest(BaseModel):

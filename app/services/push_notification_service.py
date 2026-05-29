@@ -14,11 +14,15 @@ Gracefully degrades to a no-op when the device has no Expo push token
 import logging
 from datetime import datetime, timezone
 from typing import Optional
+import json
+import asyncio
 
 import httpx
+from pywebpush import webpush, WebPushException
 
 from app.core.config import settings
 from app.core.database import db
+from app.services import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -61,16 +65,19 @@ async def unregister_device(user_id: str, device_token: str) -> bool:
     return False
 
 
-async def _get_user_device_tokens(user_id: str) -> list[str]:
-    """Get all Expo push tokens for a user."""
+async def _get_user_devices(user_id: str) -> list[dict]:
+    """Get all registered devices (tokens + platform) for a user."""
     cursor = db.device_tokens.find(
         {"user_id": user_id},
-        {"device_token": 1, "_id": 0},
+        {"device_token": 1, "platform": 1, "_id": 0},
     )
-    tokens = []
+    devices = []
     async for doc in cursor:
-        tokens.append(doc["device_token"])
-    return tokens
+        devices.append({
+            "device_token": doc["device_token"],
+            "platform": doc.get("platform", "android")
+        })
+    return devices
 
 
 async def send_otp_challenge_push(
@@ -85,14 +92,27 @@ async def send_otp_challenge_push(
 
     Returns True if at least one notification was sent successfully.
     """
-    tokens = await _get_user_device_tokens(user_id)
-    if not tokens:
+    devices = await _get_user_devices(user_id)
+    if not devices:
         logger.warning(
             f"No device tokens found for user {user_id} — cannot push OTP challenge"
         )
         return False
 
-    # Build Expo push messages (one per token)
+    # Create history notification for the challenge
+    await notification_service.create_notification(
+        user_id=user_id,
+        title="🔐 OTP Required",
+        body="Your agent needs an OTP to log into a dashboard. Tap to enter the code.",
+        data={
+            "type": "otp_challenge",
+            "challenge_id": challenge_id,
+            "login_url": login_url,
+            "screenshot_url": screenshot_url
+        }
+    )
+
+    # Build push messages
     data_payload = {
         "type": "otp_challenge",
         "challenge_id": challenge_id,
@@ -101,21 +121,29 @@ async def send_otp_challenge_push(
     if screenshot_url:
         data_payload["screenshot_url"] = screenshot_url
 
-    messages = []
-    for token in tokens:
-        messages.append(
-            {
-                "to": token,
-                "title": "🔐 OTP Required",
-                "body": "Your agent needs an OTP to log into a dashboard. Tap to enter the code.",
-                "data": data_payload,
-                "sound": "default",
-                "priority": "high",
-                "channelId": "otp_challenge",
-            }
-        )
+    expo_messages = []
+    expo_tokens = []
+    web_tokens = []
 
-    # Build request headers
+    for device in devices:
+        token = device["device_token"]
+        if device["platform"] == "web":
+            web_tokens.append(token)
+        else:
+            expo_tokens.append(token)
+            expo_messages.append(
+                {
+                    "to": token,
+                    "title": "🔐 OTP Required",
+                    "body": "Your agent needs an OTP to log into a dashboard. Tap to enter the code.",
+                    "data": data_payload,
+                    "sound": "default",
+                    "priority": "high",
+                    "channelId": "otp_challenge",
+                }
+            )
+
+    # Build request headers for Expo
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
@@ -129,7 +157,7 @@ async def send_otp_challenge_push(
     stale_tokens = []
 
     async with httpx.AsyncClient(timeout=15.0) as client:
-        for token, message in zip(tokens, messages):
+        for token, message in zip(expo_tokens, expo_messages):
             try:
                 response = await client.post(
                     EXPO_PUSH_URL,
@@ -163,6 +191,32 @@ async def send_otp_challenge_push(
             except Exception as e:
                 logger.error(f"Failed to send Expo push notification: {e}")
 
+    # Send Web Push Notifications
+    if settings.VAPID_PRIVATE_KEY and settings.VAPID_CLAIMS_EMAIL:
+        for web_token in web_tokens:
+            try:
+                subscription_info = json.loads(web_token)
+                def _send():
+                    webpush(
+                        subscription_info=subscription_info,
+                        data=json.dumps({
+                            "title": "🔐 OTP Required",
+                            "body": "Your agent needs an OTP to log into a dashboard. Tap to enter the code.",
+                            "data": data_payload,
+                        }),
+                        vapid_private_key=settings.VAPID_PRIVATE_KEY,
+                        vapid_claims={"sub": settings.VAPID_CLAIMS_EMAIL},
+                        ttl=300
+                    )
+                await asyncio.to_thread(_send)
+                success_count += 1
+            except WebPushException as ex:
+                logger.warning(f"Web Push exception: {ex}")
+                if ex.response is not None and ex.response.status_code in (404, 410):
+                    stale_tokens.append(web_token)
+            except Exception as e:
+                logger.error(f"Failed to send Web Push notification: {e}")
+
     # Clean up stale tokens
     if stale_tokens:
         for stale in stale_tokens:
@@ -174,7 +228,7 @@ async def send_otp_challenge_push(
         )
 
     logger.info(
-        f"OTP challenge push sent to {success_count}/{len(tokens)} device(s) "
+        f"OTP challenge push sent to {success_count}/{len(devices)} device(s) "
         f"for user {user_id}"
     )
     return success_count > 0
@@ -193,8 +247,8 @@ async def send_test_push(
       - total_devices: total number of registered devices
       - stale_tokens_removed: number of stale tokens cleaned up
     """
-    tokens = await _get_user_device_tokens(user_id)
-    if not tokens:
+    devices = await _get_user_devices(user_id)
+    if not devices:
         logger.warning(f"No device tokens found for user {user_id}")
         return {
             "success_count": 0,
@@ -203,19 +257,27 @@ async def send_test_push(
         }
 
     # Build Expo push messages
-    messages = []
-    for token in tokens:
-        messages.append(
-            {
-                "to": token,
-                "title": title,
-                "body": body,
-                "data": {"type": "test_otp_notification"},
-                "sound": "default",
-                "priority": "high",
-                "channelId": "otp_challenge",
-            }
-        )
+    expo_messages = []
+    expo_tokens = []
+    web_tokens = []
+
+    for device in devices:
+        token = device["device_token"]
+        if device["platform"] == "web":
+            web_tokens.append(token)
+        else:
+            expo_tokens.append(token)
+            expo_messages.append(
+                {
+                    "to": token,
+                    "title": title,
+                    "body": body,
+                    "data": {"type": "test_otp_notification"},
+                    "sound": "default",
+                    "priority": "high",
+                    "channelId": "otp_challenge",
+                }
+            )
 
     # Build request headers
     headers = {
@@ -231,7 +293,7 @@ async def send_test_push(
     stale_tokens = []
 
     async with httpx.AsyncClient(timeout=15.0) as client:
-        for token, message in zip(tokens, messages):
+        for token, message in zip(expo_tokens, expo_messages):
             try:
                 response = await client.post(
                     EXPO_PUSH_URL,
@@ -264,6 +326,32 @@ async def send_test_push(
             except Exception as e:
                 logger.error(f"Failed to send test push notification: {e}")
 
+    # Send Web Push Notifications
+    if settings.VAPID_PRIVATE_KEY and settings.VAPID_CLAIMS_EMAIL:
+        for web_token in web_tokens:
+            try:
+                subscription_info = json.loads(web_token)
+                def _send():
+                    webpush(
+                        subscription_info=subscription_info,
+                        data=json.dumps({
+                            "title": title,
+                            "body": body,
+                            "data": {"type": "test_otp_notification"},
+                        }),
+                        vapid_private_key=settings.VAPID_PRIVATE_KEY,
+                        vapid_claims={"sub": settings.VAPID_CLAIMS_EMAIL},
+                        ttl=300
+                    )
+                await asyncio.to_thread(_send)
+                success_count += 1
+            except WebPushException as ex:
+                logger.warning(f"Web Push exception: {ex}")
+                if ex.response is not None and ex.response.status_code in (404, 410):
+                    stale_tokens.append(web_token)
+            except Exception as e:
+                logger.error(f"Failed to send Web Push notification: {e}")
+
     # Clean up stale tokens
     stale_count = 0
     if stale_tokens:
@@ -274,10 +362,10 @@ async def send_test_push(
         stale_count = len(stale_tokens)
         logger.info(f"Removed {stale_count} stale Expo push token(s) for user {user_id}")
 
-    logger.info(f"Test push sent to {success_count}/{len(tokens)} device(s) for user {user_id}")
+    logger.info(f"Test push sent to {success_count}/{len(devices)} device(s) for user {user_id}")
     
     return {
         "success_count": success_count,
-        "total_devices": len(tokens),
+        "total_devices": len(devices),
         "stale_tokens_removed": stale_count,
     }

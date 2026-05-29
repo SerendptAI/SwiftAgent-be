@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     # Expo Push Notifications (optional — push works without it but recommended)
     EXPO_ACCESS_TOKEN: str = ""
 
+    # Web Push Notifications (VAPID)
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_PUBLIC_KEY: str = ""
+    VAPID_CLAIMS_EMAIL: str = "mailto:team@swiftagents.org"
+
     # OTP challenge (stroll 2FA relay)
     OTP_CHALLENGE_TIMEOUT_SECONDS: int = 120
     OTP_CHALLENGE_EXPIRY_SECONDS: int = 300

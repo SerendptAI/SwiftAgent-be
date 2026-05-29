@@ -31,6 +31,7 @@ from app.api.routers import (
     forms,
     forms_public,
     integrations,
+    notifications,
 )
 from app.core.config import settings
 from app.core.database import create_indexes
@@ -266,6 +267,7 @@ app.include_router(
     prefix="/api/v1/companies/{company_id}/integrations",
     tags=["API Integrations"],
 )
+app.include_router(notifications.router, prefix="/api/v1/notifications")
 
 # global exception handler
 @app.exception_handler(Exception)
