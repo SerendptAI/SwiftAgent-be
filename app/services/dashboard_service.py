@@ -166,7 +166,15 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
 
     # 3. Merge and sort by updated_at descending
     merged = chats + tickets
-    merged.sort(key=lambda x: x.get("updated_at", datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
+
+    def _normalize_dt(dt):
+        if not dt:
+            return datetime.min.replace(tzinfo=timezone.utc)
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    merged.sort(key=lambda x: _normalize_dt(x.get("updated_at")), reverse=True)
 
     # 4. Apply pagination
     return merged[skip : skip + limit]

@@ -124,47 +124,44 @@ async def send_otp_challenge_push(
     if access_token:
         headers["Authorization"] = f"Bearer {access_token}"
 
-    # Send to Expo Push API
+    # Send to Expo Push API individually to avoid project mismatch errors
     success_count = 0
     stale_tokens = []
 
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                EXPO_PUSH_URL,
-                json=messages,
-                headers=headers,
-            )
-            response.raise_for_status()
-            result = response.json()
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for token, message in zip(tokens, messages):
+            try:
+                response = await client.post(
+                    EXPO_PUSH_URL,
+                    json=[message],
+                    headers=headers,
+                )
+                response.raise_for_status()
+                result = response.json()
 
-            # Expo returns {"data": [{ "status": "ok"|"error", ... }, ...]}
-            ticket_data = result.get("data", [])
+                ticket_data = result.get("data", [])
+                for ticket in ticket_data:
+                    if ticket.get("status") == "ok":
+                        success_count += 1
+                    elif ticket.get("status") == "error":
+                        error_detail = ticket.get("details", {})
+                        error_type = error_detail.get("error", "")
 
-            for i, ticket in enumerate(ticket_data):
-                token = tokens[i] if i < len(tokens) else "unknown"
+                        if error_type == "DeviceNotRegistered":
+                            stale_tokens.append(token)
+                            logger.info(
+                                f"Expo push token {token[:30]}... is no longer registered"
+                            )
+                        else:
+                            logger.warning(
+                                f"Expo push error for token {token[:30]}...: "
+                                f"{ticket.get('message', 'unknown error')}"
+                            )
 
-                if ticket.get("status") == "ok":
-                    success_count += 1
-                elif ticket.get("status") == "error":
-                    error_detail = ticket.get("details", {})
-                    error_type = error_detail.get("error", "")
-
-                    if error_type == "DeviceNotRegistered":
-                        stale_tokens.append(token)
-                        logger.info(
-                            f"Expo push token {token[:30]}... is no longer registered"
-                        )
-                    else:
-                        logger.warning(
-                            f"Expo push error for token {token[:30]}...: "
-                            f"{ticket.get('message', 'unknown error')}"
-                        )
-
-    except httpx.HTTPStatusError as e:
-        logger.error(f"Expo Push API returned HTTP {e.response.status_code}: {e}")
-    except Exception as e:
-        logger.error(f"Failed to send Expo push notification: {e}")
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Expo Push API returned HTTP {e.response.status_code}: {e}")
+            except Exception as e:
+                logger.error(f"Failed to send Expo push notification: {e}")
 
     # Clean up stale tokens
     if stale_tokens:
@@ -229,44 +226,43 @@ async def send_test_push(
     if access_token:
         headers["Authorization"] = f"Bearer {access_token}"
 
-    # Send to Expo Push API
+    # Send to Expo Push API individually
     success_count = 0
     stale_tokens = []
 
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                EXPO_PUSH_URL,
-                json=messages,
-                headers=headers,
-            )
-            response.raise_for_status()
-            result = response.json()
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for token, message in zip(tokens, messages):
+            try:
+                response = await client.post(
+                    EXPO_PUSH_URL,
+                    json=[message],
+                    headers=headers,
+                )
+                response.raise_for_status()
+                result = response.json()
 
-            ticket_data = result.get("data", [])
+                ticket_data = result.get("data", [])
 
-            for i, ticket in enumerate(ticket_data):
-                token = tokens[i] if i < len(tokens) else "unknown"
+                for ticket in ticket_data:
+                    if ticket.get("status") == "ok":
+                        success_count += 1
+                    elif ticket.get("status") == "error":
+                        error_detail = ticket.get("details", {})
+                        error_type = error_detail.get("error", "")
 
-                if ticket.get("status") == "ok":
-                    success_count += 1
-                elif ticket.get("status") == "error":
-                    error_detail = ticket.get("details", {})
-                    error_type = error_detail.get("error", "")
+                        if error_type == "DeviceNotRegistered":
+                            stale_tokens.append(token)
+                            logger.info(f"Expo push token {token[:30]}... is stale")
+                        else:
+                            logger.warning(
+                                f"Expo push error for token {token[:30]}...: "
+                                f"{ticket.get('message', 'unknown error')}"
+                            )
 
-                    if error_type == "DeviceNotRegistered":
-                        stale_tokens.append(token)
-                        logger.info(f"Expo push token {token[:30]}... is stale")
-                    else:
-                        logger.warning(
-                            f"Expo push error for token {token[:30]}...: "
-                            f"{ticket.get('message', 'unknown error')}"
-                        )
-
-    except httpx.HTTPStatusError as e:
-        logger.error(f"Expo Push API returned HTTP {e.response.status_code}: {e}")
-    except Exception as e:
-        logger.error(f"Failed to send test push notification: {e}")
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Expo Push API returned HTTP {e.response.status_code}: {e}")
+            except Exception as e:
+                logger.error(f"Failed to send test push notification: {e}")
 
     # Clean up stale tokens
     stale_count = 0
