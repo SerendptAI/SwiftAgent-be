@@ -43,6 +43,7 @@ class SdkInitRequest(BaseModel):
 class SdkInitCompany(BaseModel):
     name: str
     logo_url: Optional[str] = None
+    suggested_ai_prompts: List[str] = []
 
 
 class SdkInitUser(BaseModel):
