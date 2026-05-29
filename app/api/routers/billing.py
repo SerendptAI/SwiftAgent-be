@@ -22,6 +22,11 @@ async def get_billing_plans(timezone: str = Query("", description="User timezone
     plans = {}
     for tier_key, limits in TIER_LIMITS.items():
         plan = {k: v for k, v in limits.items()}
+        
+        # Add companies_limit (translating -1 to None for unlimited)
+        cpu = limits.get("companies_per_user")
+        plan["companies_limit"] = None if cpu == -1 else cpu
+
         plan["price_usd"] = limits["price_usd_af"] if is_af else limits.get("price_usd_intl_discounted", limits["price_usd_intl"])
         if not is_af and "price_usd_intl_discounted" in limits:
             plan["price_usd_original"] = limits["price_usd_intl"]

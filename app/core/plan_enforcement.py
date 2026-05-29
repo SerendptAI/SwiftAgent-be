@@ -117,8 +117,11 @@ async def enforce_company_limit(user_id: str) -> None:
 
     if len(owned) >= max_companies:
         raise HTTPException(
-            status_code=402,
-            detail=_upgrade_message(best_tier, "companies", max_companies),
+            status_code=403,
+            detail={
+                "code": "company_limit_reached",
+                "message": _upgrade_message(best_tier, "companies", max_companies)
+            },
         )
 
 
