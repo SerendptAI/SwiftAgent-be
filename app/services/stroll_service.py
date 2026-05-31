@@ -977,7 +977,7 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
     6. Upload screenshots to Cloudinary
     """
     global _browser
-    if not _browser:
+    if not _browser or not _browser.is_connected():
         await init_browser()
 
     context = await _browser.new_context(

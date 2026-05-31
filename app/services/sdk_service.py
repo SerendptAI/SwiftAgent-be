@@ -9,6 +9,20 @@ from typing import Any, Dict, List, Optional
 
 from app.core.database import db
 
+def _ensure_dt(val: Any) -> datetime:
+    if isinstance(val, datetime):
+        # Ensure it's timezone-aware (assume UTC if naive)
+        if val.tzinfo is None:
+            return val.replace(tzinfo=timezone.utc)
+        return val
+    if isinstance(val, str):
+        try:
+            return datetime.fromisoformat(val.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    # fallback
+    return datetime.min.replace(tzinfo=timezone.utc)
+
 async def init_sdk_user(company_id: str, email: str) -> dict:
     """
     Find or create an SDK user record.
@@ -77,7 +91,7 @@ async def get_conversation_history(
 
     for c in raw_chats:
         messages = c.get("messages", [])
-        last_msg = messages[-1]["content"] if messages else None
+        last_msg = messages[-1].get("content") if messages and isinstance(messages[-1], dict) else None
         
         # Determine resolved status.
         # An escalated chat itself isn't "resolved" in this context; its corresponding ticket might be.
@@ -90,13 +104,13 @@ async def get_conversation_history(
             "last_message": last_msg,
             "resolved": resolved,
             "message_count": len(messages),
-            "created_at": c.get("created_at"),
-            "updated_at": c.get("updated_at"),
+            "created_at": _ensure_dt(c.get("created_at")),
+            "updated_at": _ensure_dt(c.get("updated_at")),
         })
 
     for t in raw_tickets:
         messages = t.get("messages", [])
-        last_msg = messages[-1]["body_text"] if messages else None
+        last_msg = messages[-1].get("body_text") if messages and isinstance(messages[-1], dict) else None
         
         items.append({
             "id": t.get("id"),
@@ -105,8 +119,8 @@ async def get_conversation_history(
             "last_message": last_msg,
             "resolved": t.get("status") == "resolved",
             "message_count": len(messages),
-            "created_at": t.get("created_at"),
-            "updated_at": t.get("updated_at"),
+            "created_at": _ensure_dt(t.get("created_at")),
+            "updated_at": _ensure_dt(t.get("updated_at")),
         })
 
     # Sort merged list descending by updated_at
