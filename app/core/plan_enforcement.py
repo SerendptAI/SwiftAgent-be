@@ -187,6 +187,8 @@ async def enforce_member_limit(company: dict) -> None:
     active_invites = 0
     for inv in company.get("pending_invites", []):
         invited_at = inv.get("invited_at", now)
+        if invited_at.tzinfo is None:
+            invited_at = invited_at.replace(tzinfo=timezone.utc)
         if (now - invited_at).days < 10:
             active_invites += 1
 
@@ -262,10 +264,13 @@ async def get_usage_summary(company: dict) -> dict:
     # members
     active_members = len(company.get("members", []))
     now = datetime.now(tz=timezone.utc)
-    active_invites = sum(
-        1 for inv in company.get("pending_invites", [])
-        if (now - inv.get("invited_at", now)).days < 10
-    )
+    active_invites = 0
+    for inv in company.get("pending_invites", []):
+        invited_at = inv.get("invited_at", now)
+        if invited_at.tzinfo is None:
+            invited_at = invited_at.replace(tzinfo=timezone.utc)
+        if (now - invited_at).days < 10:
+            active_invites += 1
     members_count = active_members + active_invites
 
     # voice minutes this month

@@ -221,7 +221,10 @@ async def create_invite(company_id: str, admin_user_id: str, email: str) -> dict
     for inv in pending:
         if inv.get("email") == email:
             # check age
-            age = now - inv.get("invited_at", now)
+            invited_at = inv.get("invited_at", now)
+            if invited_at.tzinfo is None:
+                invited_at = invited_at.replace(tzinfo=timezone.utc)
+            age = now - invited_at
             if age.days < 10:
                 raise ValueError("An active invite already exists for this email")
         else:
@@ -359,7 +362,10 @@ async def get_unified_members(company_id: str, admin_user_id: str) -> list:
     for i in company.get("pending_invites", []):
         email = i.get("email")
         user = user_docs.get(email, {})
-        age = now - i.get("invited_at", now)
+        invited_at = i.get("invited_at", now)
+        if invited_at.tzinfo is None:
+            invited_at = invited_at.replace(tzinfo=timezone.utc)
+        age = now - invited_at
         status = "Pending" if age.days < 10 else "Expired"
         unified.append({
             "email": email,
