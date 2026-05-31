@@ -59,10 +59,11 @@ async def lifespan(app: FastAPI):
             "Playwright browser init failed — stroll feature unavailable"
         )
 
-    try:
-        await init_scheduler()
-    except Exception as e:
-        logging.getLogger(__name__).error(f"Scheduler init failed: {e}")
+    # Temporarily stop all stroll schedules
+    # try:
+    #     await init_scheduler()
+    # except Exception as e:
+    #     logging.getLogger(__name__).error(f"Scheduler init failed: {e}")
 
     yield
     # shutdown: close Playwright browser and scheduler
