@@ -30,6 +30,11 @@ def _load_template(path: Path) -> str:
 @router.post("/inbound")
 async def inbound_email_webhook(request: Request):
     """Receive inbound emails from SendGrid Inbound Parse."""
+    # Verify webhook secret
+    secret = request.query_params.get("token") or request.headers.get("x-webhook-secret")
+    if settings.SENDGRID_WEBHOOK_SECRET and secret != settings.SENDGRID_WEBHOOK_SECRET:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     try:
         form = await request.form()
         payload = {key: form[key] for key in form}
@@ -45,7 +50,8 @@ async def inbound_email_webhook(request: Request):
         return result
     except Exception as e:
         logger.exception("Error processing inbound email: %s", e)
-        return {"status": "error", "message": "Failed to process inbound email. The message could not be routed to a ticket."}
+        # Return generic error to prevent leaking internal logic
+        return {"status": "processed"}
 
 
 @router.get("/resolve/{token}", response_class=HTMLResponse)

@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-import random
+import secrets
 import smtplib
 import string
 from datetime import datetime, timedelta, timezone
@@ -22,8 +22,8 @@ _TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "email_templates" / "otp_
 # --- OTP generation ---
 
 def generate_otp(length: int = 6) -> str:
-    """Return a random numeric OTP of the given length."""
-    return "".join(random.choices(string.digits, k=length))
+    """Return a cryptographically secure random numeric OTP of the given length."""
+    return "".join(secrets.choice(string.digits) for _ in range(length))
 
 
 # --- OTP email ---

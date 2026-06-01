@@ -113,6 +113,7 @@ class Settings(BaseSettings):
     # SendGrid (company email ticketing)
     SENDGRID_API_KEY: str = ""
     EMAIL_DOMAIN: str = "swfty.email"
+    SENDGRID_WEBHOOK_SECRET: str = ""
 
     # otp / credential auth
     OTP_TTL_SIGNUP_MINUTES: int = 15
