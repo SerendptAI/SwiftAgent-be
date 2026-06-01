@@ -81,10 +81,11 @@
                 background-color: #f5f5f4;
             }
 
-            .display-font {
-                font-family:
-                    "Greed Narrow", "Arial Narrow", Impact, sans-serif;
-                font-stretch: condensed;
+            .heading-svg {
+                display: block;
+                max-width: 100%;
+                height: auto;
+                margin: 0 auto;
             }
 
             .brand-row {
@@ -116,25 +117,6 @@
                 font-size: 44px;
                 line-height: 1;
                 font-weight: 700;
-            }
-
-            .heading-text {
-                margin: 0;
-                color: #48543f;
-                background-color: #48543f;
-                background-image: url("{{base_url}}/email-images/text-bg-2.jpg");
-                background-position: center center;
-                background-size: 100% 100%;
-                background-repeat: no-repeat;
-                -webkit-background-clip: text;
-                background-clip: text;
-                -webkit-text-fill-color: rgba(0, 0, 0, 0);
-                font-size: 58px;
-                line-height: 1.24;
-                font-weight: 600;
-                letter-spacing: -2.32px;
-                text-align: center;
-                vertical-align: middle;
             }
 
             .body-text {
@@ -190,11 +172,6 @@
                 .heading-cell {
                     padding: 0 70px 20px !important;
                 }
-                .heading-text {
-                    font-size: 52px !important;
-                    line-height: 1.24 !important;
-                    letter-spacing: -2.08px !important;
-                }
                 .copy-cell {
                     padding: 0 58px 114px !important;
                 }
@@ -222,11 +199,6 @@
                 }
                 .heading-cell {
                     padding: 0 34px 20px !important;
-                }
-                .heading-text {
-                    font-size: 38px !important;
-                    line-height: 1.24 !important;
-                    letter-spacing: -1.52px !important;
                 }
                 .copy-cell {
                     padding: 0 38px 80px !important;
@@ -267,10 +239,6 @@
                 .heading-cell {
                     padding-left: 20px !important;
                     padding-right: 20px !important;
-                }
-                .heading-text {
-                    font-size: 33px !important;
-                    letter-spacing: -1.32px !important;
                 }
                 .copy-cell {
                     padding-left: 24px !important;
@@ -337,9 +305,13 @@
                         class="heading-cell"
                         style="padding: 0 70px 20px; text-align: center"
                     >
-                        <h1 class="display-font heading-text">
-                            You've been invited
-                        </h1>
+                        <img
+                            class="heading-svg"
+                            src="{{base_url}}/email-images/headings/team_member_invite_heading.svg"
+                            width="463"
+                            height="46"
+                            alt="You've been invited"
+                        />
                     </td>
                 </tr>
 

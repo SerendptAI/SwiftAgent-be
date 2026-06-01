@@ -73,9 +73,11 @@
       background-color: #f5f5f4;
     }
 
-    .display-font {
-      font-family: 'Greed Narrow', 'Arial Narrow', Impact, sans-serif;
-      font-stretch: condensed;
+    .heading-svg {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 0 auto;
     }
 
     .logo-mark {
@@ -83,25 +85,6 @@
       width: 72px;
       height: 70px;
       margin: 0 auto;
-    }
-
-    .heading-text {
-      margin: 0;
-      color: #697454;
-      background-color: #697454;
-      background-image: url('{{base_url}}/email-images/text-bg-2.jpg');
-      background-position: center center;
-      background-size: 100% 100%;
-      background-repeat: no-repeat;
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: rgba(0,0,0,0);
-      font-size: 58px;
-      line-height: 1.24;
-      font-weight: 600;
-      letter-spacing: -1.16px;
-      text-align: center;
-      vertical-align: middle;
     }
 
     .body-text {
@@ -158,7 +141,6 @@
       .email-container { width: 100% !important; max-width: 100% !important; }
       .logo-cell { padding-top: 82px !important; padding-bottom: 80px !important; }
       .heading-cell { padding: 0 58px 32px !important; }
-      .heading-text { font-size: 52px !important; line-height: 1.24 !important; letter-spacing: -1.04px !important; }
       .copy-cell { padding: 0 90px 62px !important; }
       .code-cell { padding: 0 49px 88px !important; }
       .image-cell { padding: 0 58px 94px !important; }
@@ -168,7 +150,6 @@
       .logo-cell { padding-top: 59px !important; padding-bottom: 78px !important; }
       .logo-mark { width: 50px !important; height: 49px !important; }
       .heading-cell { padding: 0 34px 32px !important; }
-      .heading-text { font-size: 38px !important; line-height: 1.24 !important; letter-spacing: -0.76px !important; }
       .copy-cell { padding: 0 34px 62px !important; }
       .body-text { font-size: 16px !important; line-height: 2 !important; }
       .code-cell { padding: 0 22px 88px !important; }
@@ -179,7 +160,6 @@
 
     @media only screen and (max-width: 375px) {
       .heading-cell { padding-left: 24px !important; padding-right: 24px !important; }
-      .heading-text { font-size: 33px !important; letter-spacing: -0.66px !important; }
       .copy-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 62px !important; }
       .code-cell { padding-left: 12px !important; padding-right: 12px !important; padding-bottom: 88px !important; }
       .code-box { width: 15% !important; height: 52px !important; font-size: 30px !important; line-height: 52px !important; }
@@ -220,7 +200,13 @@
 
       <tr>
         <td class="heading-cell" style="padding: 0 58px 32px; text-align: center;">
-          <h1 class="display-font heading-text">Here's your OTP</h1>
+          <img
+            class="heading-svg"
+            src="{{base_url}}/email-images/headings/otp_email_heading.svg"
+            width="381"
+            height="58"
+            alt="Here's your OTP"
+          />
         </td>
       </tr>
 
