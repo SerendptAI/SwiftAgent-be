@@ -212,6 +212,7 @@ async def reply_to_ticket(
         result = await company_email_service.send_ticket_reply(
             company_id, ticket_id, body_text.strip(), body_html,
             attachments=attachment_data if attachment_data else None,
+            agent_name=current_user.get("name"),
         )
         return result
     except ValueError as e:
