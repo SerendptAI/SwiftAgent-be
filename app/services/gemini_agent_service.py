@@ -39,6 +39,28 @@ def _get_client():
     return _client
 
 
+async def generate_chat_title(first_message: str) -> str:
+    """Intelligently generate a short title for a chat based on the first message."""
+    try:
+        client = _get_client()
+        response = await client.aio.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=f"Generate a very short, concise title (max 5 words) summarizing this user query: '{first_message}'. Return ONLY the raw title text, nothing else, no quotes or prefixes.",
+            config=types.GenerateContentConfig(
+                temperature=0.7,
+                max_output_tokens=15,
+            )
+        )
+        title = response.text.strip(' "\'')
+        if not title:
+            return "New Chat"
+        if len(title) > 60:
+            title = title[:57] + "..."
+        return title
+    except Exception as e:
+        logger.error(f"Failed to generate chat title: {e}")
+        return "New Chat"
+
 TOOLS = [
     types.Tool(
         function_declarations=[

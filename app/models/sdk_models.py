@@ -59,9 +59,16 @@ class SdkInitResponse(BaseModel):
 
 # ── SDK Chat ───────────────────────────────────────────────────────────
 
+class SdkAttachmentMeta(BaseModel):
+    url: str
+    type: str
+    mime_type: str
+    filename: str
+
 class SdkChatRequest(BaseModel):
     session_id: str = Field(..., description="Client-generated session ID for this chat.")
     message: str = Field(..., min_length=1, description="The user's message.")
+    attachments: Optional[List[SdkAttachmentMeta]] = None
 
 
 # ── Conversation History (unified list) ────────────────────────────────

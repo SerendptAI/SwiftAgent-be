@@ -112,6 +112,12 @@ _AGENT_MAP = {
     "gemini": gemini_agent_service.chat_stream,
 }
 
+_TITLE_MAP = {
+    "openrouter": openrouter_agent_service.generate_chat_title,
+    "anthropic": anthropic_agent_service.generate_chat_title,
+    "gemini": gemini_agent_service.generate_chat_title,
+}
+
 
 def _resolve_agent(req: ChatRequest, company: dict):
     """
@@ -140,10 +146,35 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
         agent_key = req.agent or company.get("ai_provider") or _DEFAULT_AGENT
         
         # Build a list of fallback agents to try
-        stream_fns_to_try = [_AGENT_MAP.get(agent_key, _AGENT_MAP[_DEFAULT_AGENT])]
+        agents_to_try = [agent_key]
         if agent_key == "anthropic" or (not req.agent and not company.get("ai_provider") and _DEFAULT_AGENT == "anthropic"):
-            stream_fns_to_try.append(_AGENT_MAP["gemini"])
-            stream_fns_to_try.append(_AGENT_MAP["openrouter"])
+            agents_to_try.append("openrouter")
+            agents_to_try.append("gemini")
+
+        # Handle AI generated chat subject
+        conversation = await db.widget_conversations.find_one({"company_id": company_id, "session_id": req.session_id})
+        subject = conversation.get("subject") if conversation else None
+        
+        if not subject:
+            for ak in agents_to_try:
+                title_fn = _TITLE_MAP.get(ak, _TITLE_MAP[_DEFAULT_AGENT])
+                subject = await title_fn(req.message)
+                if subject and subject != "New Chat":
+                    break
+            
+            if not subject:
+                subject = "New Chat"
+
+            yield _sse("subject", subject=subject)
+            await db.widget_conversations.update_one(
+                {"company_id": company_id, "session_id": req.session_id},
+                {"$set": {"subject": subject}},
+                upsert=True
+            )
+        else:
+            yield _sse("subject", subject=subject)
+
+        stream_fns_to_try = [_AGENT_MAP.get(ak, _AGENT_MAP[_DEFAULT_AGENT]) for ak in agents_to_try]
 
         # Serialize attachments for agent services
         attachments_raw = [a.model_dump() for a in req.attachments] if req.attachments else []

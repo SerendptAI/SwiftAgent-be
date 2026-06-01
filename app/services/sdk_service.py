@@ -23,6 +23,29 @@ def _ensure_dt(val: Any) -> datetime:
     # fallback
     return datetime.min.replace(tzinfo=timezone.utc)
 
+def format_chat_session_dict(c: dict) -> dict:
+    """Format a chat session document into the SdkConversationItem dictionary format."""
+    messages = c.get("messages", [])
+    last_msg = messages[-1].get("content") if messages and isinstance(messages[-1], dict) else None
+    
+    subject = c.get("subject")
+    if not subject:
+        first_user_msg = next((m.get("content") for m in messages if m.get("role") == "user"), "")
+        subject = (first_user_msg[:50] + "...") if len(first_user_msg) > 50 else first_user_msg
+    if not subject:
+        subject = "New Chat"
+
+    return {
+        "id": c.get("session_id"),
+        "type": "chat",
+        "subject": subject,
+        "last_message": last_msg,
+        "resolved": False,
+        "message_count": len(messages),
+        "created_at": _ensure_dt(c.get("created_at")),
+        "updated_at": _ensure_dt(c.get("updated_at")),
+    }
+
 async def init_sdk_user(company_id: str, email: str) -> dict:
     """
     Find or create an SDK user record.
@@ -90,23 +113,7 @@ async def get_conversation_history(
     items: List[Dict[str, Any]] = []
 
     for c in raw_chats:
-        messages = c.get("messages", [])
-        last_msg = messages[-1].get("content") if messages and isinstance(messages[-1], dict) else None
-        
-        # Determine resolved status.
-        # An escalated chat itself isn't "resolved" in this context; its corresponding ticket might be.
-        resolved = False 
-
-        items.append({
-            "id": c.get("session_id"),
-            "type": "chat",
-            "subject": None,
-            "last_message": last_msg,
-            "resolved": resolved,
-            "message_count": len(messages),
-            "created_at": _ensure_dt(c.get("created_at")),
-            "updated_at": _ensure_dt(c.get("updated_at")),
-        })
+        items.append(format_chat_session_dict(c))
 
     for t in raw_tickets:
         messages = t.get("messages", [])
@@ -167,10 +174,17 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
             for m in messages
         ]
         
+        subject = chat.get("subject")
+        if not subject:
+            first_user_msg = next((m.get("content") for m in messages if m.get("role") == "user"), "")
+            subject = (first_user_msg[:50] + "...") if len(first_user_msg) > 50 else first_user_msg
+        if not subject:
+            subject = "New Chat"
+
         return {
             "id": chat.get("session_id"),
             "type": "chat",
-            "subject": None,
+            "subject": subject,
             "resolved": False,
             "messages": formatted_messages,
             "created_at": chat.get("created_at"),

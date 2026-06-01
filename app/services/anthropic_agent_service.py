@@ -42,6 +42,32 @@ def _get_client() -> anthropic.AsyncAnthropic:
 MODEL = settings.ANTHROPIC_MODEL
 
 
+async def generate_chat_title(first_message: str) -> str:
+    """Intelligently generate a short title for a chat based on the first message."""
+    try:
+        client = _get_client()
+        response = await client.messages.create(
+            model="claude-3-haiku-20240307",
+            max_tokens=15,
+            temperature=0.7,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Generate a very short, concise title (max 5 words) summarizing this user query: '{first_message}'. Return ONLY the raw title text, nothing else, no quotes or prefixes."
+                }
+            ]
+        )
+        title = response.content[0].text.strip(' "\'')
+        if not title:
+            return "New Chat"
+        if len(title) > 60:
+            title = title[:57] + "..."
+        return title
+    except Exception as e:
+        logger.error(f"Failed to generate chat title: {e}")
+        return "New Chat"
+
+
 # tool definitions (anthropic tool-use format)
 
 TOOLS = [
