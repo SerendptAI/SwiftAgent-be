@@ -190,12 +190,14 @@ def _build_reply_html(
     support_team: str,
     agent_avatar: str,
     resolve_url: str,
+    company_logo: str,
 ) -> str:
     html = _load_template(TICKET_REPLY_TEMPLATE)
     html = html.replace("{{agent_name}}", agent_name)
     html = html.replace("{{support_team}}", support_team)
     html = html.replace("{{agent_avatar}}", agent_avatar)
     html = html.replace("{{resolve_url}}", resolve_url)
+    html = html.replace("{{company_logo}}", company_logo)
     html = html.replace("{{response_message}}", response_message)
     return html
 
@@ -241,9 +243,19 @@ async def send_ticket_reply(
         else avatar_path
     )
 
+    # Company logo (next to the agent name). Render nothing if the company has
+    # no logo so we never ship a broken image.
+    logo_url = company.get("logo_url")
+    company_logo = (
+        f'<img src="{logo_url}" alt="{company_name}" height="31" '
+        f'style="display:block;border:0;max-height:31px;width:auto" />'
+        if logo_url
+        else ""
+    )
+
     html_body = body_html or f"<p>{body_text}</p>"
     full_html = _build_reply_html(
-        html_body, agent_display, support_team, agent_avatar, resolve_url
+        html_body, agent_display, support_team, agent_avatar, resolve_url, company_logo
     )
 
     full_html, attachments_map = process_html_for_inline_images(full_html)
