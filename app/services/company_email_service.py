@@ -185,23 +185,18 @@ async def mark_ticket_seen(company_id: str, ticket_id: str) -> bool:
 
 
 def _build_reply_html(
-    body_html: str,
-    company_name: str,
+    response_message: str,
+    agent_name: str,
+    support_team: str,
+    agent_avatar: str,
     resolve_url: str,
-    logo_url: str | None = None,
 ) -> str:
-    logo_block = ""
-    if logo_url:
-        logo_block = (
-            f'<img src="{logo_url}" alt="{company_name}" '
-            f'style="max-height:40px;margin-bottom:16px;" />'
-        )
-
     html = _load_template(TICKET_REPLY_TEMPLATE)
-    html = html.replace("{{logo_block}}", logo_block)
-    html = html.replace("{{body_html}}", body_html)
+    html = html.replace("{{agent_name}}", agent_name)
+    html = html.replace("{{support_team}}", support_team)
+    html = html.replace("{{agent_avatar}}", agent_avatar)
     html = html.replace("{{resolve_url}}", resolve_url)
-    html = html.replace("{{company_name}}", company_name)
+    html = html.replace("{{response_message}}", response_message)
     return html
 
 
@@ -211,9 +206,10 @@ async def send_ticket_reply(
     body_text: str,
     body_html: str | None = None,
     attachments: list[dict] | None = None,
+    agent_name: str | None = None,
 ) -> dict:
     """Send a reply from the company to the customer via SendGrid.
-    
+
     attachments: list of dicts with keys: filename, content_type, content (bytes)
     """
     ticket = await get_ticket(company_id, ticket_id)
@@ -231,10 +227,24 @@ async def send_ticket_reply(
     company_name = company.get("name", "Support")
     from_email = f"{email_slug}@{settings.EMAIL_DOMAIN}"
     resolve_url = f"{settings.API_BASE_URL}/api/v1/email/resolve/{ticket['resolve_token']}"
-    logo_url = company.get("logo_url")
+
+    # Agent identity for the email header. Fall back to the company name so we
+    # never ship an empty name, and the team line reads as a support role.
+    agent_display = (agent_name or "").strip() or company_name
+    support_team = "Support Team"
+
+    # Resolve the ticket's avatar to an absolute URL the email client can load.
+    avatar_path = ticket.get("avatar") or get_random_avatar()
+    agent_avatar = (
+        f"{settings.API_BASE_URL}{avatar_path}"
+        if avatar_path.startswith("/")
+        else avatar_path
+    )
 
     html_body = body_html or f"<p>{body_text}</p>"
-    full_html = _build_reply_html(html_body, company_name, resolve_url, logo_url)
+    full_html = _build_reply_html(
+        html_body, agent_display, support_team, agent_avatar, resolve_url
+    )
 
     full_html, attachments_map = process_html_for_inline_images(full_html)
 
