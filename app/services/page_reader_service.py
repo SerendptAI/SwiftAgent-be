@@ -1,9 +1,44 @@
+import ipaddress
 import logging
+import socket
 from playwright.async_api import async_playwright
 from app.core.config import settings
 from urllib.parse import urljoin, urlparse
 
 logger = logging.getLogger(__name__)
+
+
+def _is_url_safe(url: str) -> tuple[bool, str]:
+    """
+    Resolve the URL's hostname and reject if it points to a private,
+    loopback, link-local, or reserved IP address (SSRF protection).
+
+    Returns (is_safe, reason).
+    """
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return False, "URL has no hostname"
+
+        # Resolve all IPs for the hostname
+        addr_infos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        if not addr_infos:
+            return False, "Could not resolve hostname"
+
+        for info in addr_infos:
+            ip_str = info[4][0]
+            ip = ipaddress.ip_address(ip_str)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                logger.warning(
+                    "SSRF blocked: %s resolved to restricted IP %s", hostname, ip_str
+                )
+                return False, "URL targets a restricted network address"
+
+        return True, ""
+    except Exception as e:
+        return False, f"URL validation failed: {e}"
+
 
 async def read_website_page(url: str) -> dict:
     """
@@ -11,6 +46,12 @@ async def read_website_page(url: str) -> dict:
     Optimized for speed (quick lookup) to provide agent context.
     """
     try:
+        # SSRF protection: block private/internal IPs
+        is_safe, reason = _is_url_safe(url)
+        if not is_safe:
+            logger.warning(f"SSRF protection blocked URL: {url} — {reason}")
+            return {"error": reason}
+
         logger.info(f"Dynamically reading website page: {url}")
         async with async_playwright() as p:
             if settings.PLAYWRIGHT_WS_ENDPOINT:

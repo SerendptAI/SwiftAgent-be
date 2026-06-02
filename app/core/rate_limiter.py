@@ -81,9 +81,60 @@ def get_auth_limiter() -> RateLimiter:
     return auth_limiter
 
 
+def _make_chat_limiter():
+    # 20 requests per minute for chat/upload
+    return RateLimiter(rate=20 / 60.0, capacity=20)
+
+
+chat_limiter = None
+
+
+def get_chat_limiter() -> RateLimiter:
+    global chat_limiter
+    if chat_limiter is None:
+        chat_limiter = _make_chat_limiter()
+    return chat_limiter
+
+
 async def rate_limit_auth(request: Request):
     """Rate limiting dependency for auth endpoints."""
     limiter = get_auth_limiter()
+    client_ip = request.client.host if request.client else "unknown"
+    allowed = await limiter.acquire(client_ip)
+    if not allowed:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please try again later."
+        )
+
+async def rate_limit_chat(request: Request):
+    """Rate limiting dependency for chat/upload endpoints."""
+    limiter = get_chat_limiter()
+    client_ip = request.client.host if request.client else "unknown"
+    allowed = await limiter.acquire(client_ip)
+    if not allowed:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please try again later."
+        )
+
+def _make_registration_limiter():
+    # 5 requests per hour (3600 seconds) for registration
+    return RateLimiter(rate=5 / 3600.0, capacity=5)
+
+registration_limiter = None
+
+def get_registration_limiter() -> RateLimiter:
+    global registration_limiter
+    if registration_limiter is None:
+        registration_limiter = _make_registration_limiter()
+    return registration_limiter
+
+async def rate_limit_registration(request: Request):
+    """Rate limiting dependency for registration endpoints."""
+    limiter = get_registration_limiter()
     client_ip = request.client.host if request.client else "unknown"
     allowed = await limiter.acquire(client_ip)
     if not allowed:

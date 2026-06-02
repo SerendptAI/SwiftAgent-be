@@ -156,9 +156,8 @@ class RequestIdMiddleware:
 
 class WidgetCorsBypassMiddleware:
     """
-    Middleware to bypass CORS for public widget endpoints.
-    Allows all origins for the specified paths instead of stripping the origin header,
-    which breaks browsers' preflight verification.
+    Middleware to dynamically handle CORS for public widget endpoints
+    based on the company's configured allowed origins.
     """
 
     BYPASS_PREFIXES = (
@@ -183,22 +182,50 @@ class WidgetCorsBypassMiddleware:
             if any(path.startswith(p) for p in self.BYPASS_PREFIXES) or any(
                 path.endswith(s) for s in self.BYPASS_SUFFIXES
             ):
+                # Extract origin from headers
+                headers = dict(scope.get("headers", []))
+                origin = headers.get(b"origin", b"").decode("utf-8")
+                
+                # Extract company_id from path if present (e.g. /api/v1/chat/{company_id}/...)
+                parts = path.strip("/").split("/")
+                company_id = parts[3] if len(parts) >= 4 else None
+
+                allowed_origin = None
+                if company_id:
+                    from app.services.company_service import get_company
+                    company = await get_company(company_id)
+                    if company:
+                        allowed_origins = company.get("allowed_origins", [])
+                        # Allow if wildcard is configured, or if origin matches exactly
+                        if "*" in allowed_origins or origin in allowed_origins:
+                            allowed_origin = origin if origin else "*"
+                
+                # If no specific company rule allowed it, check global allowlist
+                if not allowed_origin:
+                    from app.core.config import settings
+                    if origin in settings.allowed_hosts_list:
+                        allowed_origin = origin
+
                 if is_http and scope["method"] == "OPTIONS":
                     from starlette.responses import Response
-                    response = Response(status_code=200, headers={
-                        "Access-Control-Allow-Origin": "*",
+                    cors_headers = {
                         "Access-Control-Allow-Methods": "*",
                         "Access-Control-Allow-Headers": "*",
-                    })
+                    }
+                    if allowed_origin:
+                        cors_headers["Access-Control-Allow-Origin"] = allowed_origin
+                    
+                    response = Response(status_code=200, headers=cors_headers)
                     await response(scope, receive, send)
                     return
                 else:
                     async def custom_send(message):
                         if getattr(message, "get", None) and message.get("type") in ("http.response.start", "websocket.accept"):
-                            headers = message.get("headers", [])
-                            headers = [(k, v) for k, v in headers if k.lower() != b"access-control-allow-origin"]
-                            headers.append((b"access-control-allow-origin", b"*"))
-                            message["headers"] = headers
+                            res_headers = message.get("headers", [])
+                            res_headers = [(k, v) for k, v in res_headers if k.lower() != b"access-control-allow-origin"]
+                            if allowed_origin:
+                                res_headers.append((b"access-control-allow-origin", allowed_origin.encode("utf-8")))
+                            message["headers"] = res_headers
                         await send(message)
                     await self.app(scope, receive, custom_send)
                     return

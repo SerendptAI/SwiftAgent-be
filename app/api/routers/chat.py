@@ -31,13 +31,16 @@ Stages:
 
 import json
 import logging
+import magic
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator, Field
 from typing import List, Literal, Optional
 
 from app.core.database import db
+from app.core.sdk_auth import verify_api_key
+from app.core.rate_limiter import rate_limit_chat
 from app.services import (
     anthropic_agent_service,
     openrouter_agent_service,
@@ -277,12 +280,14 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
 )
 async def upload_chat_files(
     company_id: str,
+    request: Request,
     files: List[UploadFile] = File(..., description="One or more files to upload."),
+    company: dict = Depends(verify_api_key),
 ):
     """Upload files for chat — returns attachment metadata."""
-    company = await db.companies.find_one({"id": company_id})
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+    await rate_limit_chat(request)
+    if company["id"] != company_id:
+        raise HTTPException(status_code=403, detail="API key does not belong to the requested company_id")
 
     if len(files) > 5:
         raise HTTPException(status_code=400, detail="Maximum of 5 files can be uploaded at once.")
@@ -299,7 +304,16 @@ async def upload_chat_files(
         content_type = file.content_type or ""
         ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else ""
 
-        if content_type in ALLOWED_IMAGE_TYPES:
+        # Validate magic bytes
+        detected_mime = magic.from_buffer(contents, mime=True)
+        if detected_mime not in ALLOWED_IMAGE_TYPES and detected_mime not in ALLOWED_DOC_TYPES:
+            raise HTTPException(
+                status_code=415,
+                detail=f"Unsupported or malformed file: '{file.filename}'. "
+                       f"Detected type '{detected_mime}' is not allowed.",
+            )
+
+        if detected_mime in ALLOWED_IMAGE_TYPES:
             await file.seek(0)
             result = await cloudinary_service.upload_chat_image(
                 file, folder=f"chat/{company_id}"
@@ -307,25 +321,25 @@ async def upload_chat_files(
             attachments.append({
                 "url": result["secure_url"],
                 "type": "image",
-                "mime_type": content_type,
+                "mime_type": detected_mime,
                 "filename": file.filename,
             })
 
-        elif content_type in ALLOWED_DOC_TYPES or ext in ALLOWED_DOC_EXTENSIONS:
+        elif detected_mime in ALLOWED_DOC_TYPES or ext in ALLOWED_DOC_EXTENSIONS:
             result = await cloudinary_service.upload_chat_document(
                 contents, file.filename, folder=f"chat/{company_id}"
             )
             attachments.append({
                 "url": result["secure_url"],
                 "type": "document",
-                "mime_type": content_type or "application/octet-stream",
+                "mime_type": detected_mime,
                 "filename": file.filename,
             })
 
         else:
             raise HTTPException(
                 status_code=415,
-                detail=f"Unsupported file type: '{content_type}' for file '{file.filename}'. "
+                detail=f"Unsupported file type: '{detected_mime}' for file '{file.filename}'. "
                        f"Supported: images (JPEG, PNG, GIF, WebP) and documents (PDF, DOCX, TXT, CSV).",
             )
 
@@ -345,8 +359,16 @@ async def upload_chat_files(
         "`attachments` array in this request body."
     )
 )
-async def chat_endpoint(company_id: str, req: ChatRequest):
+async def chat_endpoint(
+    company_id: str,
+    req: ChatRequest,
+    request: Request,
+    company: dict = Depends(verify_api_key),
+):
     """Stream agent chat responses as Server-Sent Events."""
+    await rate_limit_chat(request)
+    if company["id"] != company_id:
+        raise HTTPException(status_code=403, detail="API key does not belong to the requested company_id")
     if not company_id or not company_id.strip():
         raise HTTPException(status_code=400, detail="company_id is required")
     return StreamingResponse(

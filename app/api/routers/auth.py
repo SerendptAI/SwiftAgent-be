@@ -30,7 +30,7 @@ from app.core.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_database
 from app.core.security import create_access_token, create_refresh_token, decode_refresh_token
-from app.core.rate_limiter import rate_limit_auth
+from app.core.rate_limiter import rate_limit_auth, rate_limit_registration
 from app.models.auth_models import (
     LoginResponse,
     OTPSendRequest,
@@ -156,8 +156,9 @@ async def _upsert_google_user(db, google_id: str, email: str, name: str, picture
 # --- registration ---
 
 @router.post("/register-interest", response_model=RegistrationInterestResponse)
-async def register_interest(data: RegistrationInterestRequest):
+async def register_interest(request: Request, data: RegistrationInterestRequest):
     """Submit a form to express interest in creating a company."""
+    await rate_limit_registration(request)
     return await registration_service.submit_registration(data)
 
 @router.get("/registrations/approve/{token}", response_class=HTMLResponse)
@@ -413,6 +414,8 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
     Unified entrypoint for passwordless login and signup.
     If the user exists and is within the grace period, returns tokens immediately.
     Otherwise sends an OTP. If the email is completely new, creates an unverified user record.
+
+    Returns a uniform response regardless of email status to prevent user enumeration.
     """
     await rate_limit_auth(request)
     _smtp_guard()
@@ -422,9 +425,23 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
     user = await db.users.find_one({"$or": [{"email": email}, {"backup_email": email}]})
     is_new = getattr(body, "is_signup", False)
 
+    # Uniform response message — same for all outcomes to prevent enumeration
+    _UNIFORM_MSG = "If this email is registered, a verification code has been sent."
+
     if not user:
         # Check if they are allowed to register before proceeding
-        await _assert_email_approved(db, email)
+        try:
+            await _assert_email_approved(db, email)
+        except HTTPException:
+            # Email not approved / unknown — return the same message as success
+            # to prevent attackers from distinguishing registered vs unregistered emails
+            logger.info("OTP request for unapproved email %s — returning uniform response", email)
+            return LoginResponse(
+                message=_UNIFORM_MSG,
+                email=email,
+                otp_required=True,
+                is_new_user=False,
+            )
         
         # brand new user -> unverified document placeholder
         otp_code = generate_otp()
@@ -453,7 +470,7 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
         raise HTTPException(status_code=503, detail="We couldn't deliver the verification email. Please check the email address and try again.")
 
     return LoginResponse(
-        message="A verification code has been sent to your email.",
+        message=_UNIFORM_MSG,
         email=email,
         otp_required=True,
         is_new_user=is_new,
