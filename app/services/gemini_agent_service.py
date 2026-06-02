@@ -44,7 +44,7 @@ async def generate_chat_title(first_message: str) -> str:
     try:
         client = _get_client()
         response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash",
+            model=settings.GEMINI_MODEL,
             contents=f"Generate a very short, concise title (max 5 words) summarizing this user query: '{first_message}'. Return ONLY the raw title text, nothing else, no quotes or prefixes.",
             config=types.GenerateContentConfig(
                 temperature=0.7,

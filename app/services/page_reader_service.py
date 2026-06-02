@@ -32,9 +32,9 @@ async def read_website_page(url: str) -> dict:
             
             # 1. Extract visible text
             try:
-                content = await page.inner_text("main", timeout=2000)
+                content = await page.inner_text("main", timeout=5000)
             except Exception:
-                content = await page.inner_text("body", timeout=2000)
+                content = await page.inner_text("body", timeout=5000)
                 
             # Clean up text to save tokens
             lines = [line.strip() for line in content.split('\n') if line.strip()]

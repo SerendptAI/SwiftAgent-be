@@ -47,7 +47,7 @@ async def generate_chat_title(first_message: str) -> str:
     try:
         client = _get_client()
         response = await client.messages.create(
-            model="claude-3-haiku-20240307",
+            model=MODEL,
             max_tokens=15,
             temperature=0.7,
             messages=[

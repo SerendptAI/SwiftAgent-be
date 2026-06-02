@@ -61,7 +61,7 @@ async def generate_chat_title(first_message: str) -> str:
     try:
         client = _get_client()
         response = await client.chat.completions.create(
-            model="meta-llama/llama-3-8b-instruct",
+            model=MODEL,
             max_tokens=15,
             temperature=0.7,
             messages=[
