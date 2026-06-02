@@ -28,6 +28,7 @@ from app.core.database import db
 from app.core.utils import get_random_avatar
 from app.services import company_service
 from app.services.email_utils import get_image_data, process_html_for_inline_images
+from app.services import notification_service
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,18 @@ async def create_ticket(
 
     await db.email_tickets.insert_one(doc)
     logger.info("Created ticket %s for company %s", ticket_id, company_id)
+    
+    # Notify dashboard users about the new ticket
+    import asyncio
+    asyncio.create_task(
+        notification_service.notify_company(
+            company_id=company_id,
+            title="🎫 New Ticket Opened",
+            body=f"Ticket #{ticket_id} opened by {customer_email}: {subject}",
+            type="ticket_open",
+            data={"ticket_id": ticket_id}
+        )
+    )
 
     # Mark the originating chat as escalated so it's excluded from the resolved list
     if chat_session_id:
@@ -582,6 +595,19 @@ async def process_inbound_email(payload: dict) -> dict:
     )
 
     logger.info("Stored inbound email on ticket %s from %s", ticket_id, sender_email)
+    
+    # Notify dashboard users about the reply
+    import asyncio
+    asyncio.create_task(
+        notification_service.notify_company(
+            company_id=company_id,
+            title="💬 New Ticket Reply",
+            body=f"Customer {sender_email} replied to Ticket #{ticket_id}",
+            type="ticket_reply",
+            data={"ticket_id": ticket_id}
+        )
+    )
+    
     return {"status": "stored", "ticket_id": ticket_id}
 
 
@@ -604,6 +630,17 @@ async def resolve_ticket(token: str) -> dict | None:
 
     if result:
         logger.info("Ticket %s resolved via token", result["id"])
+        # Notify dashboard users about the ticket being closed
+        import asyncio
+        asyncio.create_task(
+            notification_service.notify_company(
+                company_id=result["company_id"],
+                title="✅ Ticket Closed",
+                body=f"Ticket #{result['id']} was marked as resolved.",
+                type="ticket_close",
+                data={"ticket_id": result["id"]}
+            )
+        )
     return result
 
 

@@ -58,6 +58,7 @@ async def send_test_push_notification(
         user_id=user["user_id"],
         title=body.title,
         body=body.body,
+        type="test_otp_notification",
         data={"type": "test_otp_notification"}
     )
     

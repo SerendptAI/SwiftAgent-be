@@ -6,6 +6,7 @@ class NotificationResponse(BaseModel):
     """A notification shown to a user (web or mobile)."""
     id: str
     user_id: str
+    type: str  # e.g., 'ticket_reply', 'ticket_open', 'ticket_close', 'system_notification', 'plan_upgrade'
     title: str
     body: str
     data: Optional[dict[str, Any]] = None

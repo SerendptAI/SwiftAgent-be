@@ -140,6 +140,20 @@ class BillingService:
                     await company_cache.delete(key)
 
                 logger.info(f"Polar success for company {company_id}, upgraded to {tier}. Sub: {sub_id}")
+                
+                # Notify dashboard users about the upgrade
+                import asyncio
+                from app.services import notification_service
+                asyncio.create_task(
+                    notification_service.notify_company(
+                        company_id=company_id,
+                        title="🎉 Plan Upgraded!",
+                        body=f"Congratulations! Your company plan has been upgraded to {tier.capitalize()}.",
+                        type="plan_upgrade",
+                        data={"tier": tier, "subscription_id": sub_id}
+                    )
+                )
+                
                 return True
                 
         elif event == "subscription.canceled":

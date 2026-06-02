@@ -104,6 +104,7 @@ async def send_otp_challenge_push(
         user_id=user_id,
         title="🔐 OTP Required",
         body="Your agent needs an OTP to log into a dashboard. Tap to enter the code.",
+        type="otp_challenge",
         data={
             "type": "otp_challenge",
             "challenge_id": challenge_id,

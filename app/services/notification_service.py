@@ -14,6 +14,7 @@ def _serialize_notification(doc: dict) -> dict:
     return {
         "id": str(doc["_id"]),
         "user_id": str(doc["user_id"]),
+        "type": doc.get("type", "system_notification"),
         "title": doc["title"],
         "body": doc["body"],
         "data": doc.get("data"),
@@ -25,12 +26,14 @@ async def create_notification(
     user_id: str,
     title: str,
     body: str,
+    type: str = "system_notification",
     data: Optional[dict] = None
 ) -> dict:
     """Create a new notification record in the database."""
     now = datetime.now(tz=timezone.utc)
     doc = {
         "user_id": user_id,
+        "type": type,
         "title": title,
         "body": body,
         "data": data,
@@ -84,3 +87,32 @@ async def delete_notification(user_id: str, notification_id: str) -> bool:
         {"_id": ObjectId(notification_id), "user_id": user_id}
     )
     return result.deleted_count > 0
+
+async def notify_company(
+    company_id: str,
+    title: str,
+    body: str,
+    type: str = "system_notification",
+    data: Optional[dict] = None
+):
+    """Send a notification to all members of a company."""
+    company = await db.companies.find_one({"id": company_id})
+    if not company:
+        return
+        
+    user_ids = [company.get("user_id")]
+    for member in company.get("members", []):
+        if member.get("user_id"):
+            user_ids.append(member["user_id"])
+            
+    # Remove duplicates and None values
+    user_ids = list(set([uid for uid in user_ids if uid]))
+    
+    for uid in user_ids:
+        await create_notification(
+            user_id=uid,
+            title=title,
+            body=body,
+            type=type,
+            data=data
+        )
