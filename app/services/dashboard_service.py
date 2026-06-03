@@ -268,7 +268,7 @@ async def mark_chat_seen(company_id: str, chat_id: str) -> bool:
         {"company_id": company_id, "id": chat_id},
         {"$set": {"seen": True}},
     )
-    return result.modified_count > 0
+    return result.matched_count > 0
 
 
 async def log_visitor(company_id: str, ip_address: str) -> dict:

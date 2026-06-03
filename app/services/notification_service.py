@@ -85,7 +85,7 @@ async def mark_as_read(user_id: str, notification_id: str) -> bool:
         {"_id": ObjectId(notification_id), "user_id": user_id},
         {"$set": {"read": True}}
     )
-    return result.modified_count > 0
+    return result.matched_count > 0
 
 async def mark_all_as_read(user_id: str) -> int:
     """Mark all unread notifications for a user as read."""

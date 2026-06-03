@@ -194,7 +194,7 @@ async def mark_ticket_seen(company_id: str, ticket_id: str) -> bool:
             }
         },
     )
-    return result.modified_count > 0
+    return result.matched_count > 0
 
 
 def _build_reply_html(
