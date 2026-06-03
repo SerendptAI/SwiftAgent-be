@@ -184,51 +184,24 @@ class WidgetCorsBypassMiddleware:
             if any(path.startswith(p) for p in self.BYPASS_PREFIXES) or any(
                 path.endswith(s) for s in self.BYPASS_SUFFIXES
             ):
-                # Extract origin from headers
-                headers = dict(scope.get("headers", []))
-                origin = headers.get(b"origin", b"").decode("utf-8")
-                
-                # Extract company_id from path if present (e.g. /api/v1/chat/{company_id}/...)
-                parts = path.strip("/").split("/")
-                company_id = parts[3] if len(parts) >= 4 else None
-
-                allowed_origin = None
-                if company_id and self._UUID_RE.match(company_id):
-                    from app.services.company_service import get_company
-                    company = await get_company(company_id)
-                    if company:
-                        allowed_origins = company.get("allowed_origins", [])
-                        # Allow if wildcard is configured, or if origin matches exactly
-                        if "*" in allowed_origins:
-                            allowed_origin = origin if origin else None
-                        elif origin and origin in allowed_origins:
-                            allowed_origin = origin
-                
-                # If no specific company rule allowed it, check global allowlist
-                if not allowed_origin:
-                    from app.core.config import settings
-                    if origin and origin in settings.allowed_hosts_list:
-                        allowed_origin = origin
-
+                # These are public widget endpoints embedded on arbitrary customer
+                # websites — allow any origin. Auth is enforced at the endpoint level
+                # via API key, not CORS. Note: * is incompatible with credentials=true,
+                # which is correct here since widget auth uses API keys, not cookies.
                 if is_http and scope["method"] == "OPTIONS":
                     from starlette.responses import Response
-                    if allowed_origin:
-                        cors_headers = {
-                            "Access-Control-Allow-Origin": allowed_origin,
-                            "Access-Control-Allow-Credentials": "true",
+                    response = Response(
+                        status_code=200,
+                        headers={
+                            "Access-Control-Allow-Origin": "*",
                             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
                             "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
                             "Access-Control-Max-Age": "86400",
-                        }
-                        response = Response(status_code=200, headers=cors_headers)
-                    else:
-                        # Unrecognised origin — return 204 with no CORS headers so browser blocks it
-                        response = Response(status_code=204)
+                        },
+                    )
                     await response(scope, receive, send)
                     return
                 else:
-                    _allowed_origin = allowed_origin  # capture in closure
-
                     async def custom_send(message):
                         if message.get("type") in ("http.response.start", "websocket.accept"):
                             res_headers = [
@@ -240,10 +213,7 @@ class WidgetCorsBypassMiddleware:
                                     b"access-control-allow-headers",
                                 )
                             ]
-                            # Only inject header for recognised origins — no wildcard fallback
-                            if _allowed_origin:
-                                res_headers.append((b"access-control-allow-origin", _allowed_origin.encode()))
-                                res_headers.append((b"access-control-allow-credentials", b"true"))
+                            res_headers.append((b"access-control-allow-origin", b"*"))
                             message["headers"] = res_headers
                         await send(message)
 
