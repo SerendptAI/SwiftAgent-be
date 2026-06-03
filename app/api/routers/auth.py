@@ -430,18 +430,7 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
 
     if not user:
         # Check if they are allowed to register before proceeding
-        try:
-            await _assert_email_approved(db, email)
-        except HTTPException:
-            # Email not approved / unknown — return the same message as success
-            # to prevent attackers from distinguishing registered vs unregistered emails
-            logger.info("OTP request for unapproved email %s — returning uniform response", email)
-            return LoginResponse(
-                message=_UNIFORM_MSG,
-                email=email,
-                otp_required=True,
-                is_new_user=False,
-            )
+        await _assert_email_approved(db, email)
         
         # brand new user -> unverified document placeholder
         otp_code = generate_otp()
