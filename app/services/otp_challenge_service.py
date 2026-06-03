@@ -70,6 +70,7 @@ async def create_challenge(
         login_url=login_url,
         screenshot_url=screenshot_url,
     )
+    logger.info(f"sent push (challenge_id: {challenge.id}, user_id: {user_id})")
 
     return challenge
 

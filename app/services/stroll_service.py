@@ -521,7 +521,7 @@ def _select_auth_strategy(config: StrollConfig) -> str:
     if creds.pre_auth_url:
         return "pre_auth"
 
-    if creds.username and creds.password:
+    if creds.username:
         return "form_login"
 
     return "none"
@@ -863,6 +863,8 @@ async def _handle_otp_challenge(
 
     # Block until the admin responds (or timeout)
     otp_value = await otp_challenge_service.wait_for_challenge_response(challenge.id)
+    if otp_value:
+        logger.info(f"otp from push received: {otp_value}")
     return otp_value
 
 
@@ -962,6 +964,7 @@ async def _fill_and_submit_otp(
             logger.warning(f"Post-OTP auto-submit wait timed out: {e}")
 
     logger.info("OTP submitted successfully")
+    logger.info("otp passed")
     return True
 
 
