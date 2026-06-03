@@ -54,5 +54,3 @@ class ChatSession(ChatSessionSummary):
     updated_at: datetime
     messages: List[ChatMessage] = []
 
-class VisitorEventCreate(BaseModel):
-    ip_address: str

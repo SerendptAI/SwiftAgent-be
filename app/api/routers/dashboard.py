@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 from app.core.auth import get_current_user
 from app.core.database import db
@@ -8,7 +8,6 @@ from app.models.dashboard_models import (
     VisitorRecord,
     ChatSession,
     ChatSessionSummary,
-    VisitorEventCreate,
 )
 from app.services import dashboard_service, company_service
 from app.core.config import settings
@@ -118,12 +117,24 @@ async def mark_chat_seen(
 @router.post("/{company_id}/visitors/log")
 async def log_visitor(
     company_id: str,
-    payload: VisitorEventCreate,
+    request: Request,
 ):
-    """Log a unique visitor by IP address (unprotected public endpoint)."""
+    """Log a unique visitor by real IP address (unprotected public endpoint).
+
+    The IP is extracted server-side from X-Forwarded-For (set by the reverse
+    proxy) and is NOT accepted from the request body to prevent spoofing.
+    """
     company = await db.companies.find_one({"id": company_id})
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    result = await dashboard_service.log_visitor(company_id, payload.ip_address)
+    # Prefer X-Forwarded-For set by nginx/proxy; fall back to direct socket IP.
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # Header may be a comma-separated list; the leftmost is the original client.
+        ip_address = forwarded_for.split(",")[0].strip()
+    else:
+        ip_address = request.client.host if request.client else "unknown"
+
+    result = await dashboard_service.log_visitor(company_id, ip_address)
     return result

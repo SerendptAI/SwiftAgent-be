@@ -85,14 +85,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — origins from config
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.allowed_hosts_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS middleware is added below alongside other middlewares to enforce ordering.
+# See the middleware registration block near the bottom of this file.
 
 
 @app.middleware("http")
@@ -154,18 +148,26 @@ class RequestIdMiddleware:
             await self.app(scope, receive, send)
 
 
+import re
+
 class WidgetCorsBypassMiddleware:
     """
     Middleware to dynamically handle CORS for public widget endpoints
     based on the company's configured allowed origins.
     """
 
+    _UUID_RE = re.compile(
+        r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+        re.IGNORECASE,
+    )
+
     BYPASS_PREFIXES = (
         "/api/v1/sdk",
         "/api/v1/voice",
         "/api/v1/chat",
         "/api/v1/public/stroll",
-        "/api/v1/stroll",
+        # NOTE: /api/v1/stroll is intentionally excluded — all routes are JWT-protected
+        # admin endpoints. Widget origins should not receive CORS access to them.
         "/api/v1/email/inbound",
         "/api/v1/email/resolve",
     )
@@ -191,42 +193,60 @@ class WidgetCorsBypassMiddleware:
                 company_id = parts[3] if len(parts) >= 4 else None
 
                 allowed_origin = None
-                if company_id:
+                if company_id and self._UUID_RE.match(company_id):
                     from app.services.company_service import get_company
                     company = await get_company(company_id)
                     if company:
                         allowed_origins = company.get("allowed_origins", [])
                         # Allow if wildcard is configured, or if origin matches exactly
-                        if "*" in allowed_origins or origin in allowed_origins:
-                            allowed_origin = origin if origin else "*"
+                        if "*" in allowed_origins:
+                            allowed_origin = origin if origin else None
+                        elif origin and origin in allowed_origins:
+                            allowed_origin = origin
                 
                 # If no specific company rule allowed it, check global allowlist
                 if not allowed_origin:
                     from app.core.config import settings
-                    if origin in settings.allowed_hosts_list:
+                    if origin and origin in settings.allowed_hosts_list:
                         allowed_origin = origin
 
                 if is_http and scope["method"] == "OPTIONS":
                     from starlette.responses import Response
-                    cors_headers = {
-                        "Access-Control-Allow-Methods": "*",
-                        "Access-Control-Allow-Headers": "*",
-                    }
                     if allowed_origin:
-                        cors_headers["Access-Control-Allow-Origin"] = allowed_origin
-                    
-                    response = Response(status_code=200, headers=cors_headers)
+                        cors_headers = {
+                            "Access-Control-Allow-Origin": allowed_origin,
+                            "Access-Control-Allow-Credentials": "true",
+                            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+                            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+                            "Access-Control-Max-Age": "86400",
+                        }
+                        response = Response(status_code=200, headers=cors_headers)
+                    else:
+                        # Unrecognised origin — return 204 with no CORS headers so browser blocks it
+                        response = Response(status_code=204)
                     await response(scope, receive, send)
                     return
                 else:
+                    _allowed_origin = allowed_origin  # capture in closure
+
                     async def custom_send(message):
-                        if getattr(message, "get", None) and message.get("type") in ("http.response.start", "websocket.accept"):
-                            res_headers = message.get("headers", [])
-                            res_headers = [(k, v) for k, v in res_headers if k.lower() != b"access-control-allow-origin"]
-                            if allowed_origin:
-                                res_headers.append((b"access-control-allow-origin", allowed_origin.encode("utf-8")))
+                        if message.get("type") in ("http.response.start", "websocket.accept"):
+                            res_headers = [
+                                (k, v) for k, v in message.get("headers", [])
+                                if k.lower() not in (
+                                    b"access-control-allow-origin",
+                                    b"access-control-allow-credentials",
+                                    b"access-control-allow-methods",
+                                    b"access-control-allow-headers",
+                                )
+                            ]
+                            # Only inject header for recognised origins — no wildcard fallback
+                            if _allowed_origin:
+                                res_headers.append((b"access-control-allow-origin", _allowed_origin.encode()))
+                                res_headers.append((b"access-control-allow-credentials", b"true"))
                             message["headers"] = res_headers
                         await send(message)
+
                     await self.app(scope, receive, custom_send)
                     return
 
@@ -264,9 +284,18 @@ class LoggingMiddleware:
         self.logger.info("%s %s %d %.1fms", method, path, response_status, duration_ms)
 
 
-# middleware order matters — request_id first, then logging, then cors bypass
+# Middleware execution order (Starlette reverses registration order):
+# WidgetCorsBypassMiddleware → LoggingMiddleware → RequestIdMiddleware → CORSMiddleware → app
+# WidgetCorsBypassMiddleware is registered last so it executes FIRST (outermost),
+# allowing it to overwrite CORS headers AFTER CORSMiddleware has already run.
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(LoggingMiddleware)
+app.add_middleware(CORSMiddleware,
+    allow_origins=settings.allowed_hosts_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.add_middleware(WidgetCorsBypassMiddleware)
 
 # routers
