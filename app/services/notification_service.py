@@ -42,6 +42,20 @@ async def create_notification(
     }
     result = await db.notifications.insert_one(doc)
     doc["_id"] = result.inserted_id
+    
+    # Send a push notification to registered devices in the background
+    from app.services.push_notification_service import send_generic_push
+    import asyncio
+    asyncio.create_task(
+        send_generic_push(
+            user_id=user_id,
+            title=title,
+            body=body,
+            notification_type=type,
+            data=data
+        )
+    )
+    
     return _serialize_notification(doc)
 
 async def get_user_notifications(

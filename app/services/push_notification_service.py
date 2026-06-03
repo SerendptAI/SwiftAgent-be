@@ -370,3 +370,93 @@ async def send_test_push(
         "total_devices": len(devices),
         "stale_tokens_removed": stale_count,
     }
+
+
+async def send_generic_push(
+    user_id: str,
+    title: str,
+    body: str,
+    notification_type: str = "system_notification",
+    data: Optional[dict] = None,
+) -> bool:
+    """
+    Send a generic push notification to all of a user's registered devices.
+    The type and data are included in the push payload so the mobile app
+    can identify and group them (e.g. 'announcement', 'ticket_resolved').
+    """
+    devices = await _get_user_devices(user_id)
+    if not devices:
+        return False
+
+    payload_data = data or {}
+    payload_data["type"] = notification_type
+
+    expo_messages = []
+    expo_tokens = []
+    web_tokens = []
+
+    for device in devices:
+        token = device["device_token"]
+        if device["platform"] == "web":
+            web_tokens.append(token)
+        else:
+            expo_tokens.append(token)
+            expo_messages.append(
+                {
+                    "to": token,
+                    "title": title,
+                    "body": body,
+                    "data": payload_data,
+                    "sound": "default",
+                    "priority": "normal",
+                    "channelId": "default",
+                }
+            )
+
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    if settings.EXPO_ACCESS_TOKEN:
+        headers["Authorization"] = f"Bearer {settings.EXPO_ACCESS_TOKEN}"
+
+    success_count = 0
+    stale_tokens = []
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for token, message in zip(expo_tokens, expo_messages):
+            try:
+                response = await client.post(EXPO_PUSH_URL, json=[message], headers=headers)
+                response.raise_for_status()
+                for ticket in response.json().get("data", []):
+                    if ticket.get("status") == "ok":
+                        success_count += 1
+                    elif ticket.get("status") == "error":
+                        if ticket.get("details", {}).get("error") == "DeviceNotRegistered":
+                            stale_tokens.append(token)
+            except Exception as e:
+                logger.error(f"Failed to send generic Expo push: {e}")
+
+    if settings.VAPID_PRIVATE_KEY and settings.VAPID_CLAIMS_EMAIL:
+        for web_token in web_tokens:
+            try:
+                sub_info = json.loads(web_token)
+                def _send():
+                    webpush(
+                        subscription_info=sub_info,
+                        data=json.dumps({"title": title, "body": body, "data": payload_data}),
+                        vapid_private_key=settings.VAPID_PRIVATE_KEY,
+                        vapid_claims={"sub": settings.VAPID_CLAIMS_EMAIL},
+                        ttl=300
+                    )
+                await asyncio.to_thread(_send)
+                success_count += 1
+            except Exception as e:
+                logger.error(f"Failed to send generic Web push: {e}")
+
+    if stale_tokens:
+        for stale in stale_tokens:
+            await db.device_tokens.delete_one({"user_id": user_id, "device_token": stale})
+
+    return success_count > 0
+
