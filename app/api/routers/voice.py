@@ -19,7 +19,7 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.core.database import db
 from app.services import anthropic_agent_service, openrouter_agent_service, gemini_agent_service
-from app.core.plan_enforcement import enforce_voice_minutes
+from app.core.plan_enforcement import enforce_chat_limit
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +51,9 @@ async def voice_call(websocket: WebSocket, company_id: str):
             msg_type = msg.get("type")
 
             if msg_type == "start":
-                # Plan enforcement: check voice minutes
+                # Plan enforcement: check chat limit instead of voice minutes
                 try:
-                    await enforce_voice_minutes(company)
+                    await enforce_chat_limit(company)
                 except Exception as e:
                     await websocket.send_json({"type": "error", "message": getattr(e, "detail", str(e))})
                     await websocket.close()

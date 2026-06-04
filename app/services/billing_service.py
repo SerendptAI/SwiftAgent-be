@@ -21,6 +21,8 @@ class BillingService:
         """Create a Polar checkout session with region-aware pricing."""
         if tier not in TIER_LIMITS:
             raise ValueError("Invalid tier selected.")
+        if tier == "none":
+            raise ValueError("Cannot checkout to the 'none' tier.")
 
         is_african = is_african_timezone(user_timezone)
 

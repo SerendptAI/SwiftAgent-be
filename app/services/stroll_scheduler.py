@@ -11,6 +11,8 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.core.database import db
 from app.services import stroll_service
+from app.core.plan_enforcement import enforce_stroll_limit
+from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,14 @@ async def _scheduled_stroll_task(company_id: str):
 
     logger.info(f"Starting scheduled stroll for company {company_id}")
     try:
+        company = await db.companies.find_one({"id": company_id})
+        if company:
+            try:
+                await enforce_stroll_limit(company)
+            except HTTPException as e:
+                logger.warning(f"Stroll limit reached for company {company_id}, skipping scheduled run")
+                return
+
         config = await stroll_service.get_stroll_config(company_id)
         if not config:
             logger.warning(f"Config not found for scheduled stroll (company: {company_id})")

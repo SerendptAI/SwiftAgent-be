@@ -8,6 +8,21 @@ def is_african_timezone(tz: str | None) -> bool:
     return tz.startswith(AFRICAN_TIMEZONE_PREFIX)
 
 TIER_LIMITS = {
+    "none": {
+        "price_usd_af": 0,
+        "price_usd_intl": 0,
+        "display_name": "None",
+        "agents_limit": 0,
+        "documents_limit": 0,
+        "languages_limit": 0,
+        "answer_boundaries": "none",
+        "analytics": "none",
+        "agent_chats_per_month": 0,
+        "strolls_per_month": 0,
+        "compute_tier": "none",
+        "members_per_company": 1,
+        "companies_per_user": 1,
+    },
     "basic": {
         "price_usd_af": 18,
         "price_usd_intl": 200,
@@ -19,7 +34,8 @@ TIER_LIMITS = {
         "languages_limit": 1,
         "answer_boundaries": "basic",
         "analytics": "basic",
-        "voice_minutes_per_month": 800,
+        "agent_chats_per_month": 500,
+        "strolls_per_month": 10,
         "compute_tier": "standard_shared",
         "members_per_company": 3,
         "companies_per_user": 1,
@@ -33,7 +49,8 @@ TIER_LIMITS = {
         "languages_limit": 3,
         "answer_boundaries": "advanced",
         "analytics": "advanced",
-        "voice_minutes_per_month": 3000,
+        "agent_chats_per_month": 2500,
+        "strolls_per_month": 30,
         "compute_tier": "priority",
         "members_per_company": 10,
         "companies_per_user": 3,
@@ -47,7 +64,8 @@ TIER_LIMITS = {
         "languages_limit": -1,
         "answer_boundaries": "custom",
         "analytics": "custom",
-        "voice_minutes_per_month": -1, 
+        "agent_chats_per_month": -1, 
+        "strolls_per_month": 50,
         "compute_tier": "dedicated",
         "members_per_company": -1,
         "companies_per_user": -1,
@@ -59,13 +77,13 @@ SUBSCRIPTION_DURATION_DAYS = 30
 
 
 def get_tier_limits(tier: str) -> dict:
-    """Get limits for a given tier, defaulting to basic."""
-    return TIER_LIMITS.get(tier, TIER_LIMITS["basic"])
+    """Get limits for a given tier, defaulting to none."""
+    return TIER_LIMITS.get(tier, TIER_LIMITS["none"])
 
 
 def get_display_name(tier: str) -> str:
     """Get the frontend-facing display name for a tier."""
-    limits = TIER_LIMITS.get(tier, TIER_LIMITS["basic"])
+    limits = TIER_LIMITS.get(tier, TIER_LIMITS["none"])
     return limits["display_name"]
 
 

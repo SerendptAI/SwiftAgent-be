@@ -41,6 +41,7 @@ from typing import List, Literal, Optional
 from app.core.database import db
 from app.core.sdk_auth import verify_api_key
 from app.core.rate_limiter import rate_limit_chat
+from app.core.plan_enforcement import enforce_chat_limit
 from app.services import (
     anthropic_agent_service,
     openrouter_agent_service,
@@ -371,6 +372,9 @@ async def chat_endpoint(
         raise HTTPException(status_code=403, detail="API key does not belong to the requested company_id")
     if not company_id or not company_id.strip():
         raise HTTPException(status_code=400, detail="company_id is required")
+        
+    await enforce_chat_limit(company)
+        
     return StreamingResponse(
         _chat_sse_generator(company_id, req),
         media_type="text/event-stream",

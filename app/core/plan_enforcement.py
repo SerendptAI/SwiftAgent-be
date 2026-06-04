@@ -54,11 +54,11 @@ def _is_subscription_active(company: dict) -> bool:
 
 
 def get_active_tier(company: dict) -> str:
-    """Return the effective tier for a company, falling back to basic if expired."""
+    """Return the effective tier for a company, falling back to none if expired."""
     if _is_subscription_active(company):
-        return company.get("subscription_tier", "basic") or "basic"
-    # Expired subscription — treat as basic
-    return "basic"
+        return company.get("subscription_tier", "none") or "none"
+    # Expired subscription — treat as none
+    return "none"
 
 
 def get_subscription_expiry(company: dict) -> datetime | None:
@@ -80,6 +80,7 @@ def _upgrade_message(tier: str, resource: str, limit: int | float | None = None)
     """Build a user-friendly upgrade prompt."""
     display = get_display_name(tier)
     next_tiers = {
+        "none": "a paid plan",
         "basic": "Pro or Enterprise",
         "pro": "Enterprise",
         "enterprise": "",
@@ -102,8 +103,8 @@ async def enforce_company_limit(user_id: str) -> None:
         return
 
     # Determine the user's effective tier from their highest-tier company
-    tier_order = {"enterprise": 3, "pro": 2, "basic": 1}
-    best_tier = "basic"
+    tier_order = {"enterprise": 3, "pro": 2, "basic": 1, "none": 0}
+    best_tier = "none"
     for c in owned:
         t = get_active_tier(c)
         if tier_order.get(t, 0) > tier_order.get(best_tier, 0):
@@ -201,21 +202,19 @@ async def enforce_member_limit(company: dict) -> None:
         )
 
 
-async def enforce_voice_minutes(company: dict) -> None:
+async def enforce_chat_limit(company: dict) -> None:
     """
-    Ensure the company hasn't exceeded voice_minutes_per_month.
-    Tallies duration_seconds from the calls collection for the current billing month.
+    Ensure the company hasn't exceeded agent_chats_per_month.
+    Counts the total number of messages across all conversations in the current billing month.
     """
     tier = get_active_tier(company)
     limits = get_tier_limits(tier)
-    max_minutes = limits["voice_minutes_per_month"]
+    max_chats = limits.get("agent_chats_per_month", 0)
 
-    if is_unlimited(max_minutes):
+    if is_unlimited(max_chats):
         return
 
     company_id = company["id"]
-
-    # Current billing month window
     now = datetime.now(tz=timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
@@ -223,26 +222,57 @@ async def enforce_voice_minutes(company: dict) -> None:
         {
             "$match": {
                 "company_id": company_id,
-                "timestamp": {"$gte": month_start},
-                "duration_seconds": {"$exists": True},
+                "created_at": {"$gte": month_start}
+            }
+        },
+        {
+            "$project": {
+                "message_count": {"$size": {"$ifNull": ["$messages", []]}}
             }
         },
         {
             "$group": {
                 "_id": None,
-                "total_seconds": {"$sum": "$duration_seconds"},
+                "total_messages": {"$sum": "$message_count"}
             }
-        },
+        }
     ]
 
-    result = await db.calls.aggregate(pipeline).to_list(length=1)
-    total_seconds = result[0]["total_seconds"] if result else 0
-    total_minutes = total_seconds / 60
+    result = await db.widget_conversations.aggregate(pipeline).to_list(length=1)
+    total_chats = result[0]["total_messages"] if result else 0
 
-    if total_minutes >= max_minutes:
+    if total_chats >= max_chats:
         raise HTTPException(
             status_code=402,
-            detail=_upgrade_message(tier, "voice minutes", max_minutes),
+            detail=_upgrade_message(tier, "agent chats", max_chats),
+        )
+
+
+async def enforce_stroll_limit(company: dict) -> None:
+    """
+    Ensure the company hasn't exceeded strolls_per_month.
+    Counts the number of stroll versions executed in the current billing month.
+    """
+    tier = get_active_tier(company)
+    limits = get_tier_limits(tier)
+    max_strolls = limits.get("strolls_per_month", 0)
+
+    if is_unlimited(max_strolls):
+        return
+
+    company_id = company["id"]
+    now = datetime.now(tz=timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    current_count = await db.stroll_versions.count_documents({
+        "company_id": company_id,
+        "timestamp": {"$gte": month_start}
+    })
+
+    if current_count >= max_strolls:
+        raise HTTPException(
+            status_code=402,
+            detail=_upgrade_message(tier, "automated strolls", max_strolls),
         )
 
 
@@ -273,25 +303,35 @@ async def get_usage_summary(company: dict) -> dict:
             active_invites += 1
     members_count = active_members + active_invites
 
-    # voice minutes this month
+    # agent chats this month
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    pipeline = [
+    chat_pipeline = [
         {
             "$match": {
                 "company_id": company_id,
-                "timestamp": {"$gte": month_start},
-                "duration_seconds": {"$exists": True},
+                "created_at": {"$gte": month_start}
+            }
+        },
+        {
+            "$project": {
+                "message_count": {"$size": {"$ifNull": ["$messages", []]}}
             }
         },
         {
             "$group": {
                 "_id": None,
-                "total_seconds": {"$sum": "$duration_seconds"},
+                "total_messages": {"$sum": "$message_count"}
             }
-        },
+        }
     ]
-    result = await db.calls.aggregate(pipeline).to_list(length=1)
-    voice_seconds = result[0]["total_seconds"] if result else 0
+    chat_result = await db.widget_conversations.aggregate(chat_pipeline).to_list(length=1)
+    chats_used = chat_result[0]["total_messages"] if chat_result else 0
+
+    # strolls this month
+    strolls_used = await db.stroll_versions.count_documents({
+        "company_id": company_id,
+        "timestamp": {"$gte": month_start}
+    })
 
     return {
         "tier": tier,
@@ -303,9 +343,13 @@ async def get_usage_summary(company: dict) -> dict:
             "agents": {"used": agents_count, "limit": limits["agents_limit"]},
             "documents": {"used": docs_count, "limit": limits["documents_limit"]},
             "members": {"used": members_count, "limit": limits["members_per_company"]},
-            "voice_minutes": {
-                "used": round(voice_seconds / 60, 1),
-                "limit": limits["voice_minutes_per_month"],
+            "agent_chats": {
+                "used": chats_used,
+                "limit": limits.get("agent_chats_per_month", 0),
+            },
+            "strolls": {
+                "used": strolls_used,
+                "limit": limits.get("strolls_per_month", 0),
             },
         },
         "features": {

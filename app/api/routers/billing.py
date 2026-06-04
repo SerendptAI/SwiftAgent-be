@@ -21,6 +21,8 @@ async def get_billing_plans(timezone: str = Query("", description="User timezone
     is_af = is_african_timezone(timezone)
     plans = {}
     for tier_key, limits in TIER_LIMITS.items():
+        if tier_key == "none":
+            continue
         plan = {k: v for k, v in limits.items()}
         
         # Add companies_limit (translating -1 to None for unlimited)
