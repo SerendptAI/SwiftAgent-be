@@ -83,10 +83,10 @@ async def create_company(user_id: str, data: dict) -> dict:
         "enabled_sources": [],
         "custom_info": [],
         "voice_style": "professional",
-        # subscription — default to basic active
-        "subscription_tier": "basic",
-        "subscription_status": "active",
-        "subscription_started_at": datetime.now(tz=timezone.utc),
+        # subscription — default to none inactive
+        "subscription_tier": "none",
+        "subscription_status": "inactive",
+        "subscription_started_at": None,
         "billing_provider": None,
         "subscription_id": None,
         "customer_id": None,
