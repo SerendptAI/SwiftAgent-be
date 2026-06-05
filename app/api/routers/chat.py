@@ -32,6 +32,7 @@ Stages:
 import json
 import logging
 import magic
+import uuid
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -71,6 +72,7 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 class ChatAttachment(BaseModel):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, description="Unique identifier for the attachment.")
     url: str = Field(..., description="Cloudinary URL of the uploaded file.")
     type: str = Field(..., description="'image' or 'document'.")
     mime_type: Optional[str] = Field(None, description="MIME type of the file.")
@@ -320,6 +322,7 @@ async def upload_chat_files(
                 file, folder=f"chat/{company_id}"
             )
             attachments.append({
+                "id": uuid.uuid4().hex,
                 "url": result["secure_url"],
                 "type": "image",
                 "mime_type": detected_mime,
@@ -331,6 +334,7 @@ async def upload_chat_files(
                 contents, file.filename, folder=f"chat/{company_id}"
             )
             attachments.append({
+                "id": uuid.uuid4().hex,
                 "url": result["secure_url"],
                 "type": "document",
                 "mime_type": detected_mime,
