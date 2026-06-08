@@ -3,6 +3,32 @@ from uuid import uuid4
 from app.core.database import db
 
 
+def _parse_ts(value):
+    """Parse a message timestamp (ISO string or datetime) into an aware datetime."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str):
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return None
+
+
+def _duration_from_timestamps(timestamps) -> int:
+    """Communication duration in seconds: span between earliest and latest message.
+
+    Returns 0 when there are fewer than two parseable timestamps.
+    """
+    parsed = [p for p in (_parse_ts(t) for t in (timestamps or [])) if p]
+    if len(parsed) < 2:
+        return 0
+    return max(0, int((max(parsed) - min(parsed)).total_seconds()))
+
+
 async def get_stats(company_id: str) -> dict:
     now = datetime.now(tz=timezone.utc)
 
@@ -107,7 +133,33 @@ async def get_visitors(company_id: str, limit: int = 20) -> list:
     cursor = (
         db.visitors.find({"company_id": company_id}, {"_id": 0}).sort("timestamp", -1).limit(limit)
     )
-    return await cursor.to_list(length=limit)
+    visitors = await cursor.to_list(length=limit)
+    if not visitors:
+        return visitors
+
+    # Populate communication duration per visitor: total span of all
+    # conversations linked to that visitor's IP (widget_conversations.visitor_ip).
+    ips = list({v.get("visitor_id") for v in visitors if v.get("visitor_id")})
+    duration_by_ip: dict[str, int] = {}
+    if ips:
+        convo_cursor = db.widget_conversations.find(
+            {"company_id": company_id, "visitor_ip": {"$in": ips}},
+            {"_id": 0, "visitor_ip": 1, "messages.timestamp": 1},
+        )
+        async for convo in convo_cursor:
+            ip = convo.get("visitor_ip")
+            if not ip:
+                continue
+            span = _duration_from_timestamps(
+                [m.get("timestamp") for m in convo.get("messages", [])]
+            )
+            duration_by_ip[ip] = duration_by_ip.get(ip, 0) + span
+
+    for v in visitors:
+        v["duration_seconds"] = duration_by_ip.get(
+            v.get("visitor_id"), v.get("duration_seconds", 0)
+        )
+    return visitors
 
 
 async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
@@ -130,6 +182,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "created_at": 1,
                 "updated_at": 1,
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
+                "message_timestamps": "$messages.timestamp",
                 "seen": {"$ifNull": ["$seen", False]},
                 "avatar": 1,
                 "type": {"$literal": "chat"},
@@ -156,6 +209,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "created_at": 1,
                 "updated_at": 1,
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
+                "message_timestamps": "$messages.timestamp",
                 "seen": {"$literal": True},
                 "avatar": 1,
                 "type": {"$literal": "ticket"},
@@ -177,7 +231,14 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
     merged.sort(key=lambda x: _normalize_dt(x.get("updated_at")), reverse=True)
 
     # 4. Apply pagination
-    return merged[skip : skip + limit]
+    page = merged[skip : skip + limit]
+
+    # 5. Compute communication duration (span of message timestamps) per item
+    for item in page:
+        item["duration_seconds"] = _duration_from_timestamps(
+            item.pop("message_timestamps", [])
+        )
+    return page
 
 
 async def count_resolved_items(company_id: str) -> int:
@@ -243,6 +304,9 @@ async def get_chat_by_id(company_id: str, chat_id: str) -> dict:
         {"company_id": company_id, "id": chat_id}, {"_id": 0}
     )
     if result:
+        result["duration_seconds"] = _duration_from_timestamps(
+            [m.get("timestamp") for m in result.get("messages", [])]
+        )
         return result
 
     # Fall back to resolved ticket
@@ -260,7 +324,11 @@ async def get_chat_by_id(company_id: str, chat_id: str) -> dict:
             {"_id": 0},
         )
 
-    return _normalize_ticket_to_chat_session(ticket, company_id, attributed_chat)
+    session = _normalize_ticket_to_chat_session(ticket, company_id, attributed_chat)
+    session["duration_seconds"] = _duration_from_timestamps(
+        [m.get("timestamp") for m in session.get("messages", [])]
+    )
+    return session
 
 
 async def mark_chat_seen(company_id: str, chat_id: str) -> bool:
