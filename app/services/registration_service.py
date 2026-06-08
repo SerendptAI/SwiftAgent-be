@@ -40,15 +40,51 @@ def _get_admin_email() -> str:
     return ", ".join(recipients)
 
 
+from fastapi import HTTPException
+
 async def submit_registration(data: RegistrationInterestRequest) -> dict:
     """Save registration to DB and send notification email to admin."""
     db = await get_database()
     now = datetime.now(tz=timezone.utc)
     token = str(uuid.uuid4())
     
+    email = data.company_email.lower()
+    
+    # Gate 1: check if they already have a pending/approved registration
+    existing_reg = await db.pending_registrations.find_one({"company_email": email})
+    if existing_reg:
+        if existing_reg.get("status") == "approved":
+            raise HTTPException(
+                status_code=409,
+                detail="Your registration has already been approved. Please log in to continue."
+            )
+        raise HTTPException(
+            status_code=409,
+            detail="You have already registered. Your application is awaiting approval."
+        )
+        
+    # Gate 2: check if they already have a user account with a company
+    existing_user = await db.users.find_one({"email": email})
+    if existing_user:
+        user_id = existing_user.get("user_id")
+        # Check if they own a company
+        owned_company = await db.companies.find_one({"user_id": user_id})
+        if owned_company:
+            raise HTTPException(
+                status_code=409,
+                detail="You already have a registered company. Please log in to access your account."
+            )
+        # Check if they are a member of a company
+        member_company = await db.companies.find_one({"members.user_id": user_id})
+        if member_company:
+            raise HTTPException(
+                status_code=409,
+                detail="You are already a member of a company. Please log in to access your account."
+            )
+            
     doc = {
         "company_name": data.company_name,
-        "company_email": data.company_email.lower(),
+        "company_email": email,
         "company_description": data.company_description,
         "customer_size": data.customer_size,
         "status": "pending",
@@ -60,22 +96,8 @@ async def submit_registration(data: RegistrationInterestRequest) -> dict:
     try:
         await db.pending_registrations.insert_one(doc)
     except DuplicateKeyError:
-        existing = await db.pending_registrations.find_one({"company_email": data.company_email.lower()})
-        if existing and existing.get("status") == "approved":
-            return {"status": "success", "message": "Already approved"}
+        pass # Should be caught by the pre-checks above, but safe to ignore if it happens
         
-        await db.pending_registrations.update_one(
-            {"company_email": data.company_email.lower()},
-            {"$set": {
-                "company_name": data.company_name,
-                "company_description": data.company_description,
-                "customer_size": data.customer_size,
-                "token": token,
-                "updated_at": now,
-                "status": "pending"
-            }}
-        )
-
     # Dispatch email
     asyncio.create_task(_send_notification_email(doc, token))
     return {"status": "success", "message": "Registration submitted for approval"}

@@ -98,9 +98,7 @@ class BillingService:
         if client_ip:
             payload["customer_ip_address"] = client_ip
 
-        # Auto-apply 50% discount for International Basic
-        if not is_african and tier == "basic" and settings.POLAR_DISCOUNT_BASIC_INTL:
-            payload["discount_id"] = settings.POLAR_DISCOUNT_BASIC_INTL
+
 
         async with httpx.AsyncClient() as client:
             response = await client.post(

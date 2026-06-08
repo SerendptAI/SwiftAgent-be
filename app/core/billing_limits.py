@@ -27,7 +27,7 @@ TIER_LIMITS = {
         "price_usd_af": 18,
         "price_usd_intl": 200,
         "price_usd_intl_discounted": 100,
-        "trial_months_af": 6,
+        "trial_months_af": 4,
         "display_name": "Basic",
         "agents_limit": 1,
         "documents_limit": 10,

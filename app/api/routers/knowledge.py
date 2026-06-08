@@ -48,7 +48,8 @@ async def ingest_document(
     if company_id:
         company = await company_service.get_company(company_id, user_id)
         if company:
-            await enforce_document_limit(company)
+            is_onboarding = not company.get("setup_complete", False)
+            await enforce_document_limit(company, is_onboarding=is_onboarding)
 
     doc["user_id"] = user_id
     doc["id"] = str(uuid4())
@@ -152,7 +153,8 @@ async def upload_knowledge_document(
     company = await company_service.get_company(company_id, user_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    await enforce_document_limit(company)
+    is_onboarding = not company.get("setup_complete", False)
+    await enforce_document_limit(company, is_onboarding=is_onboarding)
 
     filename = file.filename or "unknown_file"
 
