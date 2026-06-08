@@ -148,11 +148,15 @@ async def enforce_agent_limit(company: dict) -> None:
         )
 
 
-async def enforce_document_limit(company: dict) -> None:
+async def enforce_document_limit(company: dict, is_onboarding: bool = False) -> None:
     """
     Ensure the company hasn't exceeded documents_limit.
     Counts entries in knowledge_sources for the company.
     """
+    # During onboarding, allow uploads even on the "none" plan
+    if is_onboarding and not company.get("setup_complete", False):
+        return
+
     tier = get_active_tier(company)
     limits = get_tier_limits(tier)
     max_docs = limits["documents_limit"]
