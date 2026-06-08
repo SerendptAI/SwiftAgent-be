@@ -33,6 +33,7 @@ import json
 import logging
 import magic
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -139,8 +140,19 @@ def _resolve_agent(req: ChatRequest, company: dict):
     return _AGENT_MAP.get(agent_key, _AGENT_MAP[_DEFAULT_AGENT])
 
 
-async def _chat_sse_generator(company_id: str, req: ChatRequest, visitor_ip: str | None = None):
-    """SSE generator that wraps the chosen agent's streaming chat."""
+async def _chat_sse_generator(
+    company_id: str,
+    req: ChatRequest,
+    visitor_ip: str | None = None,
+    user_timestamp: str | None = None,
+):
+    """SSE generator that wraps the chosen agent's streaming chat.
+
+    ``user_timestamp`` is the request-arrival time (the moment the visitor sent
+    the message). It is threaded into the agent so the persisted user message
+    reflects true send-time rather than reply-completion time — otherwise a
+    single-turn chat would record a near-zero communication duration.
+    """
     try:
         company = await db.companies.find_one({"id": company_id})
         if not company:
@@ -204,6 +216,7 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest, visitor_ip: str
                 async for event in stream_fn(
                     company_id, req.session_id, req.message,
                     req.user_id, req.page_url, attachments_raw,
+                    user_timestamp=user_timestamp,
                 ):
                     event_type = event.get("type")
 
@@ -390,7 +403,10 @@ async def chat_endpoint(
         
     await enforce_chat_limit(company)
 
+    # Stamp send-time at request arrival so duration reflects real talk-time.
+    received_at = datetime.now(tz=timezone.utc).isoformat()
+
     return StreamingResponse(
-        _chat_sse_generator(company_id, req, get_client_ip(request)),
+        _chat_sse_generator(company_id, req, get_client_ip(request), received_at),
         media_type="text/event-stream",
     )

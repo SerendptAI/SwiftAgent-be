@@ -903,7 +903,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
 # Streaming chat (SSE)
 
 
-async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None, attachments: list = None):
+async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None, attachments: list = None, user_timestamp: str = None):
     """
     Async generator yielding dicts with a "type" key:
         thinking  – status update for the frontend loader
@@ -1048,7 +1048,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
         reply = "I'm sorry, I'm experiencing a temporary issue. Please try again in a moment."
 
     # persist conversation
-    user_msg_doc = {"role": "user", "content": user_message, "timestamp": datetime.now(tz=timezone.utc).isoformat()}
+    user_msg_doc = {"role": "user", "content": user_message, "timestamp": user_timestamp or datetime.now(tz=timezone.utc).isoformat()}
     if enriched_attachments:
         user_msg_doc["attachments"] = build_persistable_attachments(enriched_attachments)
     history.append(user_msg_doc)
