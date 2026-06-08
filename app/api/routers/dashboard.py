@@ -11,6 +11,7 @@ from app.models.dashboard_models import (
 )
 from app.services import dashboard_service, company_service
 from app.core.config import settings
+from app.core.request_utils import get_client_ip
 
 router = APIRouter(tags=["Dashboard"])
 
@@ -128,13 +129,9 @@ async def log_visitor(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    # Prefer X-Forwarded-For set by nginx/proxy; fall back to direct socket IP.
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        # Header may be a comma-separated list; the leftmost is the original client.
-        ip_address = forwarded_for.split(",")[0].strip()
-    else:
-        ip_address = request.client.host if request.client else "unknown"
+    # Shared resolver (X-Forwarded-For → X-Real-IP → socket) so visitor IPs
+    # match the IPs captured on the chat/conversation ingestion path.
+    ip_address = get_client_ip(request)
 
     result = await dashboard_service.log_visitor(company_id, ip_address)
     return result

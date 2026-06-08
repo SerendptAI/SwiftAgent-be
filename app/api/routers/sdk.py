@@ -5,10 +5,11 @@ SDK Router — API endpoints for third-party SDK consumers (mobile/web).
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Request
 from fastapi.responses import StreamingResponse
 
 from app.core.security import create_access_token
+from app.core.request_utils import get_client_ip
 from app.core.sdk_auth import get_sdk_session, verify_api_key
 from app.models.sdk_models import (
     SdkChatRequest,
@@ -66,7 +67,7 @@ async def init_sdk(
     }
 
 
-async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatRequest):
+async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatRequest, visitor_ip: str | None = None):
     """SSE generator for SDK chat, injecting user email into context."""
     try:
         from app.core.database import db
@@ -132,6 +133,16 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                          "source": "sdk",
                      }
                  }
+            )
+
+        # Link this conversation to the visitor (by IP) so the visitors
+        # endpoint can attribute communication duration. Done pre-stream so it
+        # persists even if the client disconnects after "done".
+        if visitor_ip:
+            await db.widget_conversations.update_one(
+                {"company_id": company_id, "session_id": req.session_id},
+                {"$set": {"visitor_ip": visitor_ip}},
+                upsert=True,
             )
 
         # Create a modified user message that reminds the agent of the email address
@@ -218,6 +229,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
 async def sdk_chat_endpoint(
     company_id: str,
     req: SdkChatRequest,
+    request: Request,
     session: dict = Depends(get_sdk_session),
 ):
     """
@@ -229,7 +241,7 @@ async def sdk_chat_endpoint(
 
     email = session["email"]
     return StreamingResponse(
-        _sdk_chat_sse_generator(company_id, email, req),
+        _sdk_chat_sse_generator(company_id, email, req, get_client_ip(request)),
         media_type="text/event-stream",
     )
 
