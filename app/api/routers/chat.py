@@ -40,6 +40,7 @@ from pydantic import BaseModel, field_validator, Field
 from typing import List, Literal, Optional
 
 from app.core.database import db
+from app.core.request_utils import get_client_ip
 from app.core.sdk_auth import verify_api_key
 from app.core.rate_limiter import rate_limit_chat
 from app.core.plan_enforcement import enforce_chat_limit
@@ -136,14 +137,6 @@ def _resolve_agent(req: ChatRequest, company: dict):
     """
     agent_key = req.agent or company.get("ai_provider") or _DEFAULT_AGENT
     return _AGENT_MAP.get(agent_key, _AGENT_MAP[_DEFAULT_AGENT])
-
-
-def _client_ip(request: Request) -> str:
-    """Resolve the real client IP, preferring the proxy-set X-Forwarded-For."""
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
 
 
 async def _chat_sse_generator(company_id: str, req: ChatRequest, visitor_ip: str | None = None):
@@ -398,6 +391,6 @@ async def chat_endpoint(
     await enforce_chat_limit(company)
 
     return StreamingResponse(
-        _chat_sse_generator(company_id, req, _client_ip(request)),
+        _chat_sse_generator(company_id, req, get_client_ip(request)),
         media_type="text/event-stream",
     )
