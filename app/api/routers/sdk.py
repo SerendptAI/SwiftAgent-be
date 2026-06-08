@@ -3,6 +3,7 @@ SDK Router — API endpoints for third-party SDK consumers (mobile/web).
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Request
@@ -67,7 +68,7 @@ async def init_sdk(
     }
 
 
-async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatRequest, visitor_ip: str | None = None):
+async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatRequest, visitor_ip: str | None = None, user_timestamp: str | None = None):
     """SSE generator for SDK chat, injecting user email into context."""
     try:
         from app.core.database import db
@@ -159,7 +160,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
             try:
                 response_text = ""
                 # Call stream_fn with the injected message
-                async for event in stream_fn(company_id, req.session_id, injected_message, user_id=None, attachments=attachments_raw):
+                async for event in stream_fn(company_id, req.session_id, injected_message, user_id=None, attachments=attachments_raw, user_timestamp=user_timestamp):
                     event_type = event.get("type")
 
                     if event_type == "thinking":
@@ -240,8 +241,9 @@ async def sdk_chat_endpoint(
         raise HTTPException(status_code=403, detail="Your session is not authorized for this company. Please re-initialize the SDK.")
 
     email = session["email"]
+    received_at = datetime.now(tz=timezone.utc).isoformat()
     return StreamingResponse(
-        _sdk_chat_sse_generator(company_id, email, req, get_client_ip(request)),
+        _sdk_chat_sse_generator(company_id, email, req, get_client_ip(request), received_at),
         media_type="text/event-stream",
     )
 

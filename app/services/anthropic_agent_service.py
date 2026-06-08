@@ -1044,7 +1044,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
 # streaming chat (SSE)
 
 
-async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None, attachments: list = None):
+async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None, attachments: list = None, user_timestamp: str = None):
     """
     Async generator that streams the agent chat flow as events.
 
@@ -1220,7 +1220,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
     user_msg_doc = {
         "role": "user",
         "content": user_message,
-        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        "timestamp": user_timestamp or datetime.now(tz=timezone.utc).isoformat(),
     }
     if enriched_attachments:
         user_msg_doc["attachments"] = build_persistable_attachments(enriched_attachments)

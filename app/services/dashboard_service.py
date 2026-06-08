@@ -18,15 +18,36 @@ def _parse_ts(value):
     return None
 
 
+# A gap larger than this between consecutive messages is treated as the visitor
+# leaving and coming back — the idle time is excluded from communication duration.
+_IDLE_GAP_SECONDS = 15 * 60
+
+
 def _duration_from_timestamps(timestamps) -> int:
-    """Communication duration in seconds: span between earliest and latest message.
+    """Communication duration in seconds (sessionized).
+
+    Messages are split into sessions whenever the gap between two consecutive
+    messages exceeds ``_IDLE_GAP_SECONDS``; the duration is the sum of each
+    session's span. This excludes long idle gaps (e.g. a visitor leaving for an
+    hour and returning) so the number reflects active talk-time, not wall-clock.
 
     Returns 0 when there are fewer than two parseable timestamps.
     """
-    parsed = [p for p in (_parse_ts(t) for t in (timestamps or [])) if p]
+    parsed = sorted(p for p in (_parse_ts(t) for t in (timestamps or [])) if p)
     if len(parsed) < 2:
         return 0
-    return max(0, int((max(parsed) - min(parsed)).total_seconds()))
+
+    total = 0
+    session_start = parsed[0]
+    prev = parsed[0]
+    for ts in parsed[1:]:
+        if (ts - prev).total_seconds() > _IDLE_GAP_SECONDS:
+            # Idle gap — close the current session, start a new one.
+            total += int((prev - session_start).total_seconds())
+            session_start = ts
+        prev = ts
+    total += int((prev - session_start).total_seconds())
+    return max(0, total)
 
 
 async def get_stats(company_id: str) -> dict:
