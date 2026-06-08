@@ -138,7 +138,15 @@ def _resolve_agent(req: ChatRequest, company: dict):
     return _AGENT_MAP.get(agent_key, _AGENT_MAP[_DEFAULT_AGENT])
 
 
-async def _chat_sse_generator(company_id: str, req: ChatRequest):
+def _client_ip(request: Request) -> str:
+    """Resolve the real client IP, preferring the proxy-set X-Forwarded-For."""
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+async def _chat_sse_generator(company_id: str, req: ChatRequest, visitor_ip: str | None = None):
     """SSE generator that wraps the chosen agent's streaming chat."""
     try:
         company = await db.companies.find_one({"id": company_id})
@@ -179,6 +187,16 @@ async def _chat_sse_generator(company_id: str, req: ChatRequest):
             )
         else:
             yield _sse("subject", subject=subject)
+
+        # Link this conversation to the visitor (by IP) so the visitors
+        # endpoint can attribute communication duration. Done pre-stream so it
+        # runs reliably even if the client disconnects right after "done".
+        if visitor_ip:
+            await db.widget_conversations.update_one(
+                {"company_id": company_id, "session_id": req.session_id},
+                {"$set": {"visitor_ip": visitor_ip}},
+                upsert=True,
+            )
 
         stream_fns_to_try = [_AGENT_MAP.get(ak, _AGENT_MAP[_DEFAULT_AGENT]) for ak in agents_to_try]
 
@@ -378,8 +396,8 @@ async def chat_endpoint(
         raise HTTPException(status_code=400, detail="company_id is required")
         
     await enforce_chat_limit(company)
-        
+
     return StreamingResponse(
-        _chat_sse_generator(company_id, req),
+        _chat_sse_generator(company_id, req, _client_ip(request)),
         media_type="text/event-stream",
     )

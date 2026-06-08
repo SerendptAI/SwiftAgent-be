@@ -29,7 +29,15 @@ def _load_template(path: Path) -> str:
 
 
 def _get_admin_email() -> str:
-    return getattr(settings, "ADMIN_NOTIFICATION_EMAIL", "thelma@swiftagents.org")
+    """Return a comma-separated list of registration notification recipients.
+
+    Override via the ADMIN_NOTIFICATION_EMAIL env var (comma-separated for
+    multiple recipients); otherwise fall back to the default list below.
+    """
+    default = "thelma@swiftagents.org,romeobourne211@gmail.com"
+    raw = getattr(settings, "ADMIN_NOTIFICATION_EMAIL", None) or default
+    recipients = [addr.strip() for addr in raw.split(",") if addr.strip()]
+    return ", ".join(recipients)
 
 
 async def submit_registration(data: RegistrationInterestRequest) -> dict:

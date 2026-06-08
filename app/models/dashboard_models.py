@@ -43,6 +43,7 @@ class ChatSessionSummary(BaseModel):
     updated_at: datetime
     avatar: Optional[str] = None
     message_count: int = 0
+    duration_seconds: int = 0
     seen: bool = False
 
 class ChatSession(ChatSessionSummary):
