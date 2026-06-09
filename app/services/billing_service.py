@@ -218,6 +218,26 @@ class BillingService:
                 )
                 return company_id
 
+            # Strategy 4: Fetch Customer from Polar API to get external_id
+            if settings.POLAR_ACCESS_TOKEN:
+                try:
+                    headers = {"Authorization": f"Bearer {settings.POLAR_ACCESS_TOKEN}"}
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(f"{self.polar_api_url}/customers/{polar_customer_id}", headers=headers)
+                        if resp.status_code == 200:
+                            customer_data = resp.json()
+                            ext_id = customer_data.get("external_id")
+                            if ext_id:
+                                logger.info(f"Resolved company_id from fetched customer external_id: {ext_id}")
+                                # Pre-link the customer to the company
+                                await db.companies.update_one(
+                                    {"id": ext_id},
+                                    {"$set": {"customer_id": polar_customer_id}}
+                                )
+                                return ext_id
+                except Exception as e:
+                    logger.error(f"Failed to fetch customer from Polar API: {e}")
+
         logger.error(
             f"BILLING CRITICAL: Cannot resolve company_id from webhook. "
             f"metadata={data.get('metadata')}, "
@@ -327,6 +347,17 @@ class BillingService:
                 await company_cache.delete(key)
 
             logger.info(f"Polar {event}: company={company_id}")
+            return True
+
+        elif event in ("customer.created", "customer.updated"):
+            ext_id = data.get("external_id")
+            cust_id = data.get("id")
+            if ext_id and cust_id:
+                logger.info(f"Polar {event}: linking customer_id={cust_id} to company={ext_id}")
+                await db.companies.update_one(
+                    {"id": ext_id},
+                    {"$set": {"customer_id": cust_id}}
+                )
             return True
 
         else:

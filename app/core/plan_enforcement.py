@@ -345,7 +345,10 @@ async def get_usage_summary(company: dict) -> dict:
         "subscription_expires_at": get_subscription_expiry(company),
         "usage": {
             "agents": {"used": agents_count, "limit": limits["agents_limit"]},
-            "documents": {"used": docs_count, "limit": limits["documents_limit"]},
+            "documents": {
+                "used": docs_count, 
+                "limit": -1 if not company.get("setup_complete", False) else limits["documents_limit"]
+            },
             "members": {"used": members_count, "limit": limits["members_per_company"]},
             "agent_chats": {
                 "used": chats_used,
