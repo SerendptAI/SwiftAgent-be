@@ -13,7 +13,7 @@ TIER_LIMITS = {
         "price_usd_intl": 0,
         "display_name": "None",
         "agents_limit": 0,
-        "documents_limit": 0,
+        "documents_limit": 5,
         "languages_limit": 0,
         "answer_boundaries": "none",
         "analytics": "none",
