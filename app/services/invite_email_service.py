@@ -29,8 +29,8 @@ async def send_invite_email(to_email: str, company_name: str, accept_link: str) 
     msg = EmailMessage()
     msg["Subject"] = subject
 
-    if settings.ZOHO_EMAIL:
-        msg["From"] = settings.ZOHO_EMAIL
+    if settings.active_sender_email:
+        msg["From"] = settings.active_sender_email
 
     msg["To"] = to_email
     msg.set_content(f"You have been invited to manage {company_name}. Please accept here: {accept_link}")
@@ -38,13 +38,13 @@ async def send_invite_email(to_email: str, company_name: str, accept_link: str) 
     add_html_with_inline_images(msg, html)
 
     def _send() -> None:
-        if not (settings.ZOHO_EMAIL and settings.ZOHO_APP_PASSWORD and settings.ZOHO_SMTP_SERVER):
+        if not (settings.active_sender_email and settings.active_smtp_password and settings.active_smtp_server):
             logger.warning("SMTP not configured. Skipping invite email to %s. Link: %s", to_email, accept_link)
             return
 
         try:
-            with smtplib.SMTP_SSL(settings.ZOHO_SMTP_SERVER, settings.ZOHO_SMTP_PORT) as smtp:
-                smtp.login(settings.ZOHO_EMAIL, settings.ZOHO_APP_PASSWORD)
+            with smtplib.SMTP_SSL(settings.active_smtp_server, settings.active_smtp_port) as smtp:
+                smtp.login(settings.active_smtp_username, settings.active_smtp_password)
                 smtp.send_message(msg)
             logger.info("Sent invite email to %s", to_email)
         except Exception as e:

@@ -104,11 +104,41 @@ class Settings(BaseSettings):
     OTP_CHALLENGE_EXPIRY_SECONDS: int = 300
     STROLL_SCREENSHOT_QUALITY: int = 70
 
-    # Zoho SMTP (welcome emails)
+    # Email Provider toggle: "zoho" or "zepto"
+    EMAIL_PROVIDER: str = "zepto"
+
+    # Zoho SMTP
     ZOHO_APP_PASSWORD: str = ""
     ZOHO_EMAIL: str = ""
     ZOHO_SMTP_PORT: int = 465
     ZOHO_SMTP_SERVER: str = "smtp.zoho.com"
+
+    # ZeptoMail SMTP
+    ZEPTO_SMTP_PASSWORD: str = ""
+    ZEPTO_SMTP_USERNAME: str = "emailapikey"
+    ZEPTO_SENDER_EMAIL: str = "noreply@swiftagents.org"
+    ZEPTO_SMTP_PORT: int = 465
+    ZEPTO_SMTP_SERVER: str = "smtp.zeptomail.com"
+
+    @property
+    def active_smtp_server(self) -> str:
+        return self.ZEPTO_SMTP_SERVER if self.EMAIL_PROVIDER == "zepto" else self.ZOHO_SMTP_SERVER
+
+    @property
+    def active_smtp_port(self) -> int:
+        return self.ZEPTO_SMTP_PORT if self.EMAIL_PROVIDER == "zepto" else self.ZOHO_SMTP_PORT
+
+    @property
+    def active_smtp_username(self) -> str:
+        return self.ZEPTO_SMTP_USERNAME if self.EMAIL_PROVIDER == "zepto" else self.ZOHO_EMAIL
+
+    @property
+    def active_smtp_password(self) -> str:
+        return self.ZEPTO_SMTP_PASSWORD if self.EMAIL_PROVIDER == "zepto" else self.ZOHO_APP_PASSWORD
+
+    @property
+    def active_sender_email(self) -> str:
+        return self.ZEPTO_SENDER_EMAIL if self.EMAIL_PROVIDER == "zepto" else self.ZOHO_EMAIL
 
     # SendGrid (company email ticketing)
     SENDGRID_API_KEY: str = ""

@@ -41,7 +41,7 @@ async def send_welcome_email(to_email: str, name: Optional[str] = None) -> None:
     subject = "Welcome to Swift Agent"
     msg = EmailMessage()
     msg["Subject"] = subject
-    msg["From"] = settings.ZOHO_EMAIL
+    msg["From"] = settings.active_sender_email
     msg["To"] = to_email
     msg.set_content("Welcome to Swift Agent! Please view this email in an HTML-capable client.")
 
@@ -49,8 +49,8 @@ async def send_welcome_email(to_email: str, name: Optional[str] = None) -> None:
 
     def _send() -> None:
         try:
-            with smtplib.SMTP_SSL(settings.ZOHO_SMTP_SERVER, settings.ZOHO_SMTP_PORT) as smtp:
-                smtp.login(settings.ZOHO_EMAIL, settings.ZOHO_APP_PASSWORD)
+            with smtplib.SMTP_SSL(settings.active_smtp_server, settings.active_smtp_port) as smtp:
+                smtp.login(settings.active_smtp_username, settings.active_smtp_password)
                 smtp.send_message(msg)
             logger.info("Sent welcome email to %s", to_email)
         except Exception as e:

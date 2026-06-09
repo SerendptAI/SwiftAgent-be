@@ -81,7 +81,7 @@ def _build_client_config():
 
 def _smtp_guard():
     """Raise 503 if SMTP is not configured."""
-    if not (settings.ZOHO_EMAIL and settings.ZOHO_APP_PASSWORD and settings.ZOHO_SMTP_SERVER):
+    if not (settings.active_sender_email and settings.active_smtp_password and settings.active_smtp_server):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Email service is not configured on the server.",

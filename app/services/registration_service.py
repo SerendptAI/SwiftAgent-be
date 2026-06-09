@@ -121,14 +121,14 @@ async def _send_notification_email(doc: dict, token: str):
         
         msg = EmailMessage()
         msg["Subject"] = subject
-        msg["From"] = settings.ZOHO_EMAIL
+        msg["From"] = settings.active_sender_email
         msg["To"] = admin_email
         msg.set_content(f"New registration request from {doc.get('company_name')}. View in HTML client.")
         add_html_with_inline_images(msg, html)
 
         def _send() -> None:
-            with smtplib.SMTP_SSL(settings.ZOHO_SMTP_SERVER, settings.ZOHO_SMTP_PORT) as smtp:
-                smtp.login(settings.ZOHO_EMAIL, settings.ZOHO_APP_PASSWORD)
+            with smtplib.SMTP_SSL(settings.active_smtp_server, settings.active_smtp_port) as smtp:
+                smtp.login(settings.active_smtp_username, settings.active_smtp_password)
                 smtp.send_message(msg)
                 
         await asyncio.to_thread(_send)

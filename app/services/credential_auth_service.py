@@ -29,7 +29,7 @@ def generate_otp(length: int = 6) -> str:
 # --- OTP email ---
 
 def _is_smtp_ready() -> bool:
-    return bool(settings.ZOHO_EMAIL and settings.ZOHO_APP_PASSWORD and settings.ZOHO_SMTP_SERVER)
+    return bool(settings.active_sender_email and settings.active_smtp_password and settings.active_smtp_server)
 
 
 async def send_otp_email(to_email: str, otp_code: str, ttl_minutes: int, purpose_label: str = "login verification") -> bool:
@@ -65,7 +65,7 @@ async def send_otp_email(to_email: str, otp_code: str, ttl_minutes: int, purpose
 
     msg = EmailMessage()
     msg["Subject"] = f"Swift Agent — your {purpose_label} code"
-    msg["From"] = settings.ZOHO_EMAIL
+    msg["From"] = settings.active_sender_email
     msg["To"] = to_email
     msg.set_content(f"Your Swift Agent {purpose_label} code is: {otp_code}. Expires in {ttl_minutes} minutes.")
 
@@ -73,8 +73,8 @@ async def send_otp_email(to_email: str, otp_code: str, ttl_minutes: int, purpose
 
     def _send() -> bool:
         try:
-            with smtplib.SMTP_SSL(settings.ZOHO_SMTP_SERVER, settings.ZOHO_SMTP_PORT) as smtp:
-                smtp.login(settings.ZOHO_EMAIL, settings.ZOHO_APP_PASSWORD)
+            with smtplib.SMTP_SSL(settings.active_smtp_server, settings.active_smtp_port) as smtp:
+                smtp.login(settings.active_smtp_username, settings.active_smtp_password)
                 smtp.send_message(msg)
             logger.info("OTP email (%s) sent to %s", purpose_label, to_email)
             return True
