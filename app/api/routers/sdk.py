@@ -251,6 +251,7 @@ async def sdk_chat_endpoint(
 @router.post("/{company_id}/chat/upload", summary="Upload Files for SDK Chat")
 async def sdk_upload_chat_files(
     company_id: str,
+    request: Request,
     files: list[UploadFile] = File(..., description="One or more files to upload."),
     session: dict = Depends(get_sdk_session),
 ):
@@ -265,7 +266,12 @@ async def sdk_upload_chat_files(
         )
 
     # Re-use the core upload logic
-    return await upload_chat_files(company_id=company_id, files=files)
+    return await upload_chat_files(
+        company_id=company_id,
+        request=request,
+        files=files,
+        company={"id": company_id}
+    )
 
 
 @router.get("/{company_id}/conversations", response_model=SdkConversationListResponse)
