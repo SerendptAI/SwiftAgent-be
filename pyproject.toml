@@ -36,6 +36,7 @@ dependencies = [
     "cryptography>=44.0.0",
     "pywebpush>=2.3.0",
     "python-magic>=0.4.27",
+    "polar-sdk>=0.31.6",
 ]
 
 [project.optional-dependencies]

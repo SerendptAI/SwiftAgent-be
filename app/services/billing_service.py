@@ -80,7 +80,7 @@ class BillingService:
         product_id = product_map.get(tier, product_map["basic"])
 
         payload = {
-            "products": [product_id],
+            "product_id": product_id,
             "customer_email": email,
             # Link the Polar customer to our internal company_id so that
             # subscription webhooks can always identify the company, even
@@ -198,7 +198,7 @@ class BillingService:
     async def _resolve_company_id_with_db_fallback(
         self, data: Dict[str, Any]
     ) -> Optional[str]:
-        """Full resolution including async DB fallback by customer_id."""
+        """Full resolution including async DB fallback by customer_id and email."""
         company_id = self._resolve_company_id(data)
         if company_id:
             return company_id
@@ -238,6 +238,28 @@ class BillingService:
                 except Exception as e:
                     logger.error(f"Failed to fetch customer from Polar API: {e}")
 
+        # Strategy 5: Fallback to looking up company by the customer's email
+        # This is essential for users paying via direct Polar product links
+        customer_email = data.get("customer", {}).get("email") or data.get("customer_email")
+        if customer_email:
+            # Check contact_email first
+            company = await db.companies.find_one({"contact_email": customer_email}, {"id": 1})
+            if company:
+                logger.info(f"Resolved company_id from DB via contact_email {customer_email}: {company['id']}")
+                if polar_customer_id:
+                    await db.companies.update_one({"id": company["id"]}, {"$set": {"customer_id": polar_customer_id}})
+                return company["id"]
+            
+            # Check owner's user email
+            user = await db.users.find_one({"email": customer_email}, {"user_id": 1})
+            if user:
+                company = await db.companies.find_one({"user_id": user["user_id"]}, {"id": 1})
+                if company:
+                    logger.info(f"Resolved company_id from DB via user email {customer_email}: {company['id']}")
+                    if polar_customer_id:
+                        await db.companies.update_one({"id": company["id"]}, {"$set": {"customer_id": polar_customer_id}})
+                    return company["id"]
+
         logger.error(
             f"BILLING CRITICAL: Cannot resolve company_id from webhook. "
             f"metadata={data.get('metadata')}, "
@@ -253,7 +275,7 @@ class BillingService:
 
         logger.info(f"Processing Polar webhook: type={event}")
 
-        if event in ("subscription.created", "subscription.updated", "subscription.active"):
+        if event in ("subscription.created", "subscription.updated", "subscription.active", "order.created"):
             company_id = await self._resolve_company_id_with_db_fallback(data)
             tier = self._resolve_tier(data)
             sub_id = data.get("id")
