@@ -199,7 +199,12 @@ async def list_tickets(
                                         }
                                     }
                                 },
-                                "in": {"$arrayElemAt": ["$$user_msgs.content", -1]}
+                                "in": {
+                                    "$ifNull": [
+                                        {"$arrayElemAt": ["$$user_msgs.content", -1]},
+                                        "$last_ticket_msg.body_text"
+                                    ]
+                                }
                             }
                         },
                         "else": "$last_ticket_msg.body_text"

@@ -273,7 +273,12 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                                         }
                                     }
                                 },
-                                "in": {"$arrayElemAt": ["$$user_msgs.content", -1]}
+                                "in": {
+                                    "$ifNull": [
+                                        {"$arrayElemAt": ["$$user_msgs.content", -1]},
+                                        "$last_ticket_msg.body_text"
+                                    ]
+                                }
                             }
                         },
                         "else": "$last_ticket_msg.body_text"
