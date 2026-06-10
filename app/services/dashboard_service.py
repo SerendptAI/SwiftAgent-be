@@ -204,7 +204,20 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "updated_at": 1,
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "message_timestamps": "$messages.timestamp",
-                "preview_message": {"$arrayElemAt": ["$messages.content", -1]},
+                "preview_message": {
+                    "$let": {
+                        "vars": {
+                            "user_msgs": {
+                                "$filter": {
+                                    "input": {"$ifNull": ["$messages", []]},
+                                    "as": "msg",
+                                    "cond": {"$eq": ["$$msg.role", "user"]}
+                                }
+                            }
+                        },
+                        "in": {"$arrayElemAt": ["$$user_msgs.content", -1]}
+                    }
+                },
                 "seen": {"$ifNull": ["$seen", False]},
                 "avatar": 1,
                 "type": {"$literal": "chat"},
@@ -248,11 +261,21 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "message_timestamps": "$messages.timestamp",
                 "preview_message": {
                     "$cond": {
-                        "if": {"$and": [
-                            {"$eq": ["$last_ticket_msg.direction", "system"]},
-                            {"$gt": [{"$size": {"$ifNull": ["$attr_chat_doc.messages", []]}}, 0]}
-                        ]},
-                        "then": {"$arrayElemAt": ["$attr_chat_doc.messages.content", -1]},
+                        "if": {"$eq": ["$last_ticket_msg.direction", "system"]},
+                        "then": {
+                            "$let": {
+                                "vars": {
+                                    "user_msgs": {
+                                        "$filter": {
+                                            "input": {"$ifNull": ["$attr_chat_doc.messages", []]},
+                                            "as": "msg",
+                                            "cond": {"$eq": ["$$msg.role", "user"]}
+                                        }
+                                    }
+                                },
+                                "in": {"$arrayElemAt": ["$$user_msgs.content", -1]}
+                            }
+                        },
                         "else": "$last_ticket_msg.body_text"
                     }
                 },

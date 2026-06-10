@@ -187,11 +187,21 @@ async def list_tickets(
                 "updated_at": 1,
                 "preview_message": {
                     "$cond": {
-                        "if": {"$and": [
-                            {"$eq": ["$last_ticket_msg.direction", "system"]},
-                            {"$gt": [{"$size": {"$ifNull": ["$attr_chat_doc.messages", []]}}, 0]}
-                        ]},
-                        "then": {"$arrayElemAt": ["$attr_chat_doc.messages.content", -1]},
+                        "if": {"$eq": ["$last_ticket_msg.direction", "system"]},
+                        "then": {
+                            "$let": {
+                                "vars": {
+                                    "user_msgs": {
+                                        "$filter": {
+                                            "input": {"$ifNull": ["$attr_chat_doc.messages", []]},
+                                            "as": "msg",
+                                            "cond": {"$eq": ["$$msg.role", "user"]}
+                                        }
+                                    }
+                                },
+                                "in": {"$arrayElemAt": ["$$user_msgs.content", -1]}
+                            }
+                        },
                         "else": "$last_ticket_msg.body_text"
                     }
                 }
