@@ -158,6 +158,20 @@ async def list_tickets(
         {"$skip": skip},
         {"$limit": limit},
         {
+            "$lookup": {
+                "from": "widget_conversations",
+                "localField": "chat_session_id",
+                "foreignField": "session_id",
+                "as": "attributed_chat_docs"
+            }
+        },
+        {
+            "$addFields": {
+                "last_ticket_msg": {"$arrayElemAt": ["$messages", -1]},
+                "attr_chat_doc": {"$arrayElemAt": ["$attributed_chat_docs", 0]}
+            }
+        },
+        {
             "$project": {
                 "_id": 0,
                 "id": 1,
@@ -171,6 +185,16 @@ async def list_tickets(
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "created_at": 1,
                 "updated_at": 1,
+                "preview_message": {
+                    "$cond": {
+                        "if": {"$and": [
+                            {"$eq": ["$last_ticket_msg.direction", "system"]},
+                            {"$gt": [{"$size": {"$ifNull": ["$attr_chat_doc.messages", []]}}, 0]}
+                        ]},
+                        "then": {"$arrayElemAt": ["$attr_chat_doc.messages.content", -1]},
+                        "else": "$last_ticket_msg.body_text"
+                    }
+                }
             }
         },
     ]

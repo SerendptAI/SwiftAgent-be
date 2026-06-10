@@ -45,6 +45,7 @@ class ChatSessionSummary(BaseModel):
     message_count: int = 0
     duration_seconds: int = 0
     seen: bool = False
+    preview_message: Optional[str] = None
 
 class ChatSession(ChatSessionSummary):
     messages: List[ChatMessage] = []

@@ -132,3 +132,4 @@ class EmailTicketSummary(BaseModel):
     avatar: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    preview_message: Optional[str] = None

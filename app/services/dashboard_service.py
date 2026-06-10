@@ -204,6 +204,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "updated_at": 1,
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "message_timestamps": "$messages.timestamp",
+                "preview_message": {"$arrayElemAt": ["$messages.content", -1]},
                 "seen": {"$ifNull": ["$seen", False]},
                 "avatar": 1,
                 "type": {"$literal": "chat"},
@@ -216,6 +217,20 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
     ticket_pipeline = [
         {"$match": {"company_id": company_id, "status": "resolved"}},
         {"$sort": {"updated_at": -1}},
+        {
+            "$lookup": {
+                "from": "widget_conversations",
+                "localField": "chat_session_id",
+                "foreignField": "session_id",
+                "as": "attributed_chat_docs"
+            }
+        },
+        {
+            "$addFields": {
+                "last_ticket_msg": {"$arrayElemAt": ["$messages", -1]},
+                "attr_chat_doc": {"$arrayElemAt": ["$attributed_chat_docs", 0]}
+            }
+        },
         {
             "$project": {
                 "_id": 0,
@@ -231,6 +246,16 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "updated_at": 1,
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "message_timestamps": "$messages.timestamp",
+                "preview_message": {
+                    "$cond": {
+                        "if": {"$and": [
+                            {"$eq": ["$last_ticket_msg.direction", "system"]},
+                            {"$gt": [{"$size": {"$ifNull": ["$attr_chat_doc.messages", []]}}, 0]}
+                        ]},
+                        "then": {"$arrayElemAt": ["$attr_chat_doc.messages.content", -1]},
+                        "else": "$last_ticket_msg.body_text"
+                    }
+                },
                 "seen": {"$literal": True},
                 "avatar": 1,
                 "type": {"$literal": "ticket"},
