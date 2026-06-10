@@ -169,7 +169,8 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
             {
                 "role": m.get("role", "user"),
                 "content": m.get("content", ""),
-                "timestamp": m.get("timestamp")
+                "timestamp": m.get("timestamp"),
+                "attachments": m.get("attachments")
             }
             for m in messages
         ]
@@ -204,7 +205,8 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
             {
                 "role": m.get("direction", "user"), # inbound/outbound/system
                 "content": m.get("body_text", ""),
-                "timestamp": m.get("timestamp").isoformat() if isinstance(m.get("timestamp"), datetime) else m.get("timestamp")
+                "timestamp": m.get("timestamp").isoformat() if isinstance(m.get("timestamp"), datetime) else m.get("timestamp"),
+                "attachments": m.get("attachments")
             }
             for m in messages
         ]
@@ -221,7 +223,8 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
                     {
                         "role": m.get("role", "user"),
                         "content": m.get("content", ""),
-                        "timestamp": m.get("timestamp")
+                        "timestamp": m.get("timestamp"),
+                        "attachments": m.get("attachments")
                     }
                     for m in linked_chat.get("messages", [])
                  ]

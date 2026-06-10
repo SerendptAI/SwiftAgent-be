@@ -60,10 +60,12 @@ class SdkInitResponse(BaseModel):
 # ── SDK Chat ───────────────────────────────────────────────────────────
 
 class SdkAttachmentMeta(BaseModel):
-    url: str
-    type: str
-    mime_type: str
+    url: Optional[str] = None
+    type: Optional[str] = None
+    mime_type: Optional[str] = None
+    content_type: Optional[str] = None
     filename: str
+    size: Optional[int] = None
 
 class SdkChatRequest(BaseModel):
     session_id: str = Field(..., description="Client-generated session ID for this chat.")
@@ -97,6 +99,7 @@ class SdkMessageItem(BaseModel):
     role: str  # "user" | "assistant" | "system" | "inbound" | "outbound"
     content: str
     timestamp: Optional[str] = None
+    attachments: Optional[List[SdkAttachmentMeta]] = None
 
 
 class SdkConversationDetail(BaseModel):
