@@ -290,6 +290,22 @@ async def invite_member(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@router.post("/{company_id}/invites/resend", response_model=dict)
+async def resend_member_invite(
+    company_id: str,
+    data: MemberInviteCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Resend a pending invite to a member, even if expired (Admin only)."""
+    user_id = current_user["user_id"]
+
+    try:
+        invite = await company_service.resend_invite(company_id, user_id, data.email)
+        return {"status": "success", "message": "Invite resent successfully", "invite": invite}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.post("/invites/accept", response_model=dict)
 async def accept_invite_post(
     data: AcceptInviteRequest,

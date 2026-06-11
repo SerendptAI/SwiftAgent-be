@@ -249,6 +249,42 @@ async def create_invite(company_id: str, admin_user_id: str, email: str) -> dict
     await invalidate_company_cache(company_id)
     return new_invite
 
+async def resend_invite(company_id: str, admin_user_id: str, email: str) -> dict:
+    company = await db.companies.find_one({"id": company_id, "user_id": admin_user_id})
+    if not company:
+        raise ValueError("Company not found or unauthorized")
+        
+    email = email.lower().strip()
+    
+    pending = company.get("pending_invites", [])
+    invite = next((inv for inv in pending if inv.get("email") == email), None)
+    
+    if not invite:
+        raise ValueError("No pending invite found for this email")
+        
+    now = datetime.now(tz=timezone.utc)
+    
+    filtered_pending = [inv for inv in pending if inv.get("email") != email]
+    
+    token = secrets.token_urlsafe(32)
+    new_invite = {
+        "email": email,
+        "token": token,
+        "invited_at": now
+    }
+    filtered_pending.append(new_invite)
+    
+    await db.companies.update_one(
+        {"id": company_id},
+        {"$set": {"pending_invites": filtered_pending}}
+    )
+    
+    accept_link = f"{settings.API_BASE_URL}/api/v1/companies/invites/accept?token={token}"
+    await invite_email_service.send_invite_email(email, company.get("name", "A Company"), accept_link)
+    
+    await invalidate_company_cache(company_id)
+    return new_invite
+
 async def accept_invite(token: str) -> dict:
     company = await db.companies.find_one({"pending_invites.token": token})
     if not company:
