@@ -134,10 +134,13 @@ class BillingService:
             )
             if response.status_code in (200, 201):
                 data = response.json()
-                return data.get("customer_portal_url", "https://polar.sh/purchases")
-            else:
-                logger.error(f"Polar customer portal failed: {response.text}")
-                return "https://polar.sh/purchases"
+                portal_url = data.get("customer_portal_url")
+                if portal_url:
+                    return portal_url
+                    
+            # Fallthrough for error handling
+            logger.error(f"Polar customer portal failed: {response.text}")
+            raise ValueError(f"Failed to load subscription portal. Polar responded with {response.status_code}")
 
     def _resolve_company_id(self, data: Dict[str, Any]) -> Optional[str]:
         """Extract company_id from webhook data using multiple strategies.
