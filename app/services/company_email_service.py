@@ -182,7 +182,7 @@ async def list_tickets(
                 "subject": 1,
                 "status": 1,
                 "unseen_count": 1,
-                "avatar": 1,
+                "avatar": {"$ifNull": ["$avatar", "/chat-avatars/newimg.svg"]},
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "created_at": 1,
                 "updated_at": 1,

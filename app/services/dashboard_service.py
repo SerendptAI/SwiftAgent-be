@@ -224,7 +224,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                     }
                 },
                 "seen": {"$ifNull": ["$seen", False]},
-                "avatar": 1,
+                "avatar": {"$ifNull": ["$avatar", "/chat-avatars/newimg.svg"]},
                 "type": {"$literal": "chat"},
             }
         },
@@ -254,7 +254,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "_id": 0,
                 "id": 1,
                 "company_id": 1,
-                "session_id": "$id",
+                "session_id": {"$ifNull": ["$customer_name", {"$ifNull": ["$customer_email", "$id"]}]},
                 "customer_email": 1,
                 "customer_name": 1,
                 "subject": 1,
@@ -290,7 +290,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                     }
                 },
                 "seen": {"$literal": True},
-                "avatar": 1,
+                "avatar": {"$ifNull": ["$avatar", "/chat-avatars/newimg.svg"]},
                 "type": {"$literal": "ticket"},
             }
         },
@@ -368,14 +368,14 @@ def _normalize_ticket_to_chat_session(ticket: dict, company_id: str, attributed_
     return {
         "id": ticket["id"],
         "company_id": company_id,
-        "session_id": ticket["id"],
+        "session_id": ticket.get("customer_name") or ticket.get("customer_email") or ticket["id"],
         "customer_name": ticket.get("customer_name"),
         "customer_email": ticket.get("customer_email"),
         "subject": ticket.get("subject"),
         "created_at": ticket.get("created_at", datetime.now(tz=timezone.utc)),
         "updated_at": ticket.get("updated_at", datetime.now(tz=timezone.utc)),
         "messages": messages,
-        "avatar": ticket.get("avatar"),
+        "avatar": ticket.get("avatar") or "/chat-avatars/newimg.svg",
         "seen": True,
     }
 
