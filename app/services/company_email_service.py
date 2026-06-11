@@ -36,6 +36,7 @@ _sg_client = None
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "email_templates"
 TICKET_REPLY_TEMPLATE = TEMPLATES_DIR / "response.html"
+RESOLVED_TEMPLATE = TEMPLATES_DIR / "resolved.html"
 
 _TICKET_ID_RE = re.compile(r"\[Ticket\s*#([A-Z0-9]{8})\]", re.IGNORECASE)
 
@@ -702,3 +703,121 @@ async def get_ticket_with_chat(company_id: str, ticket_id: str) -> dict | None:
         "ticket": ticket,
         "attributed_chat": chat_session or None,
     }
+
+
+async def _send_resolved_email(ticket: dict):
+    try:
+        company = await company_service.get_company(ticket["company_id"])
+        if not company:
+            logger.warning("Company not found for ticket %s, skipping resolved email", ticket["id"])
+            return
+
+        company_name = company.get("name", "Support")
+        email_slug = company.get("email_slug")
+        if not email_slug:
+            logger.warning("Company %s has no email slug, skipping resolved email", company["id"])
+            return
+
+        from_email = f"{email_slug}@{settings.EMAIL_DOMAIN}"
+        to_email = ticket["customer_email"]
+        
+        html = _load_template(RESOLVED_TEMPLATE)
+        logo_url = company.get("logo_url")
+        if logo_url:
+            company_logo = f'<img src="{logo_url}" alt="{company_name}" class="logo-mark">'
+        else:
+            company_logo = f'<img src="{settings.API_BASE_URL}/email-images/logo 2.png" width="72" height="71" alt="{company_name}" class="logo-mark">'
+        
+        html = html.replace("{{company_logo}}", company_logo)
+        html = html.replace("{{company_name}}", company_name)
+        html = html.replace("{{confirmation_message}}", "Your ticket has been closed.")
+        
+        # Inline images using existing util
+        full_html, attachments_map = process_html_for_inline_images(html)
+        
+        subject = f"Re: [Ticket #{ticket['id']}] {ticket['subject']}"
+        outbound_message_id = f"<{uuid4()}@{settings.EMAIL_DOMAIN}>"
+
+        message = Mail(
+            from_email=From(from_email, company_name),
+            to_emails=To(to_email),
+            subject=Subject(subject),
+        )
+        message.add_content(Content(MimeType.text, "Your ticket has been closed. Thank you!"))
+        message.add_content(Content(MimeType.html, full_html))
+
+        # Attach CID images
+        for filename, cid in attachments_map.items():
+            try:
+                data, maintype, subtype = get_image_data(filename)
+                encoded = base64.b64encode(data).decode("utf-8")
+                sg_attachment = Attachment(
+                    FileContent(encoded),
+                    FileName(filename),
+                    FileType(f"{maintype}/{subtype}"),
+                    Disposition("inline"),
+                    ContentId(cid),
+                )
+                message.add_attachment(sg_attachment)
+            except Exception as e:
+                logger.warning(f"Could not attach image {filename} to resolved email: {e}")
+
+        message.add_header(Header("Message-ID", outbound_message_id))
+        message.add_header(Header("X-Swift-Ticket-ID", ticket["id"]))
+
+        sg = _get_sendgrid_client()
+        response = sg.send(message)
+        logger.info("Sent resolved email for ticket %s, status=%s", ticket["id"], response.status_code)
+
+        # Record message in ticket
+        now = datetime.now(tz=timezone.utc)
+        outbound_msg = {
+            "direction": "outbound",
+            "body_text": "Your ticket has been closed. Thank you!",
+            "body_html": full_html,
+            "sender_email": from_email,
+            "message_id": outbound_message_id,
+            "timestamp": now,
+            "seen": True,
+        }
+        await db.email_tickets.update_one(
+            {"id": ticket["id"], "company_id": ticket["company_id"]},
+            {"$push": {"messages": outbound_msg}},
+        )
+
+    except Exception as e:
+        logger.exception("Failed to send resolved email for ticket %s: %s", ticket["id"], e)
+
+
+async def resolve_ticket_by_agent(company_id: str, ticket_id: str) -> dict | None:
+    now = datetime.now(tz=timezone.utc)
+    ticket = await db.email_tickets.find_one_and_update(
+        {"company_id": company_id, "id": ticket_id, "status": {"$ne": "resolved"}},
+        {
+            "$set": {
+                "status": "resolved",
+                "updated_at": now,
+            }
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+
+    if ticket:
+        logger.info("Ticket %s resolved by agent", ticket["id"])
+        
+        # Notify dashboard users about the ticket being closed
+        import asyncio
+        asyncio.create_task(
+            notification_service.notify_company(
+                company_id=company_id,
+                title="✅ Ticket Closed",
+                body=f"Ticket #{ticket['id']} was marked as resolved by an agent.",
+                type="ticket_close",
+                data={"ticket_id": ticket["id"]}
+            )
+        )
+
+        # Trigger customer email asynchronously
+        asyncio.create_task(_send_resolved_email(ticket))
+
+    return ticket

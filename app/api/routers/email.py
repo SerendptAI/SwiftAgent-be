@@ -24,7 +24,8 @@ RESOLVED_TEMPLATE = TEMPLATES_DIR / "resolved.html"
 
 
 def _load_template(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+    html = path.read_text(encoding="utf-8")
+    return html.replace("{{base_url}}", settings.API_BASE_URL)
 
 
 @router.post("/inbound")
@@ -61,15 +62,28 @@ async def resolve_ticket_page(token: str):
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
+    company = await company_service.get_company(ticket["company_id"])
+    company_name = company.get("name", "Support") if company else "Support"
+    logo_url = company.get("logo_url") if company else None
+
+    if logo_url:
+        company_logo = f'<img src="{logo_url}" alt="{company_name}" class="logo-mark">'
+    else:
+        company_logo = f'<img src="{settings.API_BASE_URL}/email-images/logo 2.png" width="72" height="71" alt="{company_name}" class="logo-mark">'
+
     if ticket["status"] == "resolved":
         html = _load_template(RESOLVED_TEMPLATE)
         html = html.replace("{{confirmation_message}}", "This ticket was already resolved.")
+        html = html.replace("{{company_name}}", company_name)
+        html = html.replace("{{company_logo}}", company_logo)
         return HTMLResponse(content=html, status_code=200)
 
     html = _load_template(RESOLVE_CONFIRM_TEMPLATE)
     html = html.replace("{{ticket_id}}", ticket["id"])
     html = html.replace("{{ticket_subject}}", ticket["subject"])
     html = html.replace("{{resolve_token}}", token)
+    html = html.replace("{{company_name}}", company_name)
+    html = html.replace("{{company_logo}}", company_logo)
     return HTMLResponse(content=html, status_code=200)
 
 
@@ -81,14 +95,27 @@ async def confirm_resolve_ticket(token: str):
 
     if result:
         msg = "Your ticket has been confirmed as resolved. Thank you!"
+        company_id = result["company_id"]
     else:
         ticket = await company_email_service.get_ticket_by_resolve_token(token)
         if ticket and ticket["status"] == "resolved":
             msg = "This ticket was already resolved."
+            company_id = ticket["company_id"]
         else:
             raise HTTPException(status_code=404, detail="Ticket not found")
 
+    company = await company_service.get_company(company_id)
+    company_name = company.get("name", "Support") if company else "Support"
+    logo_url = company.get("logo_url") if company else None
+
+    if logo_url:
+        company_logo = f'<img src="{logo_url}" alt="{company_name}" class="logo-mark">'
+    else:
+        company_logo = f'<img src="{settings.API_BASE_URL}/email-images/logo 2.png" width="72" height="71" alt="{company_name}" class="logo-mark">'
+
     html = html.replace("{{confirmation_message}}", msg)
+    html = html.replace("{{company_name}}", company_name)
+    html = html.replace("{{company_logo}}", company_logo)
     return HTMLResponse(content=html, status_code=200)
 
 
@@ -246,3 +273,22 @@ async def mark_ticket_seen(
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
     return {"status": "success"}
+
+
+@router.patch("/{company_id}/tickets/{ticket_id}/resolve")
+async def resolve_ticket_by_agent_endpoint(
+    company_id: str,
+    ticket_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Resolve a ticket manually from the dashboard and trigger an email to the customer."""
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    result = await company_email_service.resolve_ticket_by_agent(company_id, ticket_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Ticket not found or already resolved")
+
+    return {"status": "resolved", "ticket_id": ticket_id}

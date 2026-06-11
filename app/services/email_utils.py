@@ -7,8 +7,8 @@ from pathlib import Path
 
 IMAGES_DIR = Path(__file__).resolve().parent.parent / "email_templates" / "images"
 logger = logging.getLogger(__name__)
-_IMG_SRC_RE = re.compile(r'(<img\b[^>]*\bsrc=)(["\'])images/([^"\']+)\2', re.IGNORECASE)
-_CSS_LOCAL_IMAGE_RE = re.compile(r"url\(\s*(['\"]?)images/[^)'\"\s]+(?: [^)'\"\s]+)*\1\s*\)", re.IGNORECASE)
+_IMG_SRC_RE = re.compile(r'(<img\b[^>]*\bsrc=)(["\'])(?:[^"\']*/)?email-images/([^"\']+)\2', re.IGNORECASE)
+_CSS_LOCAL_IMAGE_RE = re.compile(r"url\(\s*(['\"]?)(?:[^)'\"\s]*/)?email-images/[^)'\"\s]+\1\s*\)", re.IGNORECASE)
 
 
 def get_image_data(filename: str) -> tuple[bytes, str, str]:
