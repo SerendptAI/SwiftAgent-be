@@ -179,12 +179,14 @@ async def tickets_websocket(
         await websocket.close(code=1008)
         return
 
+    from fastapi.encoders import jsonable_encoder
+
     # Initial push of tickets
     try:
         tickets = await company_email_service.list_tickets(company_id, 50, 0)
         total = await company_email_service.count_tickets(company_id)
         await websocket.send_json({
-            "items": tickets,
+            "items": jsonable_encoder(tickets),
             "total": total,
             "limit": 50,
             "skip": 0,
@@ -211,7 +213,7 @@ async def tickets_websocket(
                 tickets = await company_email_service.list_tickets(company_id, 50, 0)
                 total = await company_email_service.count_tickets(company_id)
                 await websocket.send_json({
-                    "items": tickets,
+                    "items": jsonable_encoder(tickets),
                     "total": total,
                     "limit": 50,
                     "skip": 0,
