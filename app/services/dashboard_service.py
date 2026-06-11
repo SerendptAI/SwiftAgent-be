@@ -58,9 +58,13 @@ async def get_stats(company_id: str) -> dict:
     last_7_days_start = now - timedelta(days=7)
     previous_7_days_start = last_7_days_start - timedelta(days=7)
 
-    async def get_stat_group(collection, date_field):
+    async def get_stat_group(collection, date_field, extra_match=None):
+        match_stage = {"company_id": company_id}
+        if extra_match:
+            match_stage.update(extra_match)
+
         pipeline = [
-            {"$match": {"company_id": company_id}},
+            {"$match": match_stage},
             {
                 "$facet": {
                     "today": [
@@ -131,11 +135,12 @@ async def get_stats(company_id: str) -> dict:
     scrapes_stat = await get_stat_group(db.scrapes, "timestamp")
     strolls_stat = await get_stat_group(db.stroll_versions, "timestamp")
 
-    chats_stat = await get_stat_group(db.widget_conversations, "created_at")
+    chats_stat = await get_stat_group(db.widget_conversations, "created_at", extra_match={"messages.0": {"$exists": True}})
     pending_chats = await db.widget_conversations.count_documents(
         {
             "company_id": company_id,
             "seen": {"$ne": True},
+            "messages.0": {"$exists": True},
         }
     )
     chats_stat["pending"] = pending_chats
@@ -192,7 +197,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
     # NOTE: escalated chats excluded intentionally—they now have corresponding tickets
     # 1. Non-escalated chats ONLY
     chat_pipeline = [
-        {"$match": {"company_id": company_id, "escalated": {"$ne": True}}},
+        {"$match": {"company_id": company_id, "escalated": {"$ne": True}, "messages.0": {"$exists": True}}},
         {"$sort": {"updated_at": -1}},
         {
             "$project": {
@@ -318,7 +323,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
 async def count_resolved_items(company_id: str) -> int:
     """Count total resolved items (non-escalated chats + resolved tickets)."""
     chat_count = await db.widget_conversations.count_documents(
-        {"company_id": company_id, "escalated": {"$ne": True}}
+        {"company_id": company_id, "escalated": {"$ne": True}, "messages.0": {"$exists": True}}
     )
     ticket_count = await db.email_tickets.count_documents(
         {"company_id": company_id, "status": "resolved"}
@@ -364,6 +369,9 @@ def _normalize_ticket_to_chat_session(ticket: dict, company_id: str, attributed_
         "id": ticket["id"],
         "company_id": company_id,
         "session_id": ticket["id"],
+        "customer_name": ticket.get("customer_name"),
+        "customer_email": ticket.get("customer_email"),
+        "subject": ticket.get("subject"),
         "created_at": ticket.get("created_at", datetime.now(tz=timezone.utc)),
         "updated_at": ticket.get("updated_at", datetime.now(tz=timezone.utc)),
         "messages": messages,

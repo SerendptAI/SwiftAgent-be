@@ -39,6 +39,11 @@ class ChatSessionSummary(BaseModel):
     id: str
     company_id: str
     session_id: str
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    subject: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     avatar: Optional[str] = None
