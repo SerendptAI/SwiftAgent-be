@@ -2,10 +2,12 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
+import asyncio
 
 from app.core.auth import get_current_user
+from app.core.security import decode_access_token
 from app.core.config import settings
 from app.models.email_models import (
     EmailReplyRequest,
@@ -142,6 +144,87 @@ async def list_tickets(
         "skip": skip,
         "has_next": (skip + len(tickets)) < total,
     }
+
+
+@router.websocket("/{company_id}/tickets/ws")
+async def tickets_websocket(
+    websocket: WebSocket,
+    company_id: str,
+    token: str = Query(...)
+):
+    """Real-time WebSocket for pending tickets.
+    Pushes the full ticket list upon connection, and whenever a ticket changes.
+    Requires a valid JWT token passed as a query parameter (?token=...).
+    """
+    await websocket.accept()
+
+    # Authenticate via query param token
+    try:
+        payload = decode_access_token(token)
+        if not payload or not payload.get("sub"):
+            await websocket.send_json({"type": "error", "message": "Invalid or missing token"})
+            await websocket.close(code=1008)
+            return
+        user_id = payload.get("sub")
+        
+        # Verify the user has access to this company
+        company = await company_service.get_company(company_id, user_id)
+        if not company:
+            await websocket.send_json({"type": "error", "message": "Company not found or unauthorized"})
+            await websocket.close(code=1008)
+            return
+            
+    except Exception as e:
+        logger.error(f"WebSocket auth failed: {e}")
+        await websocket.close(code=1008)
+        return
+
+    # Initial push of tickets
+    try:
+        tickets = await company_email_service.list_tickets(company_id, 50, 0)
+        total = await company_email_service.count_tickets(company_id)
+        await websocket.send_json({
+            "items": tickets,
+            "total": total,
+            "limit": 50,
+            "skip": 0,
+            "has_next": len(tickets) < total
+        })
+    except Exception as e:
+        logger.error(f"Error fetching initial tickets for WS: {e}")
+        await websocket.close()
+        return
+
+    from app.core.database import db
+
+    try:
+        # Watch for changes in email_tickets collection
+        pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace", "delete"]}}}]
+        async with db.email_tickets.watch(pipeline) as stream:
+            async for change in stream:
+                # Optional: Filter by company_id if it's available in the change document
+                full_doc = change.get("fullDocument")
+                if full_doc and full_doc.get("company_id") != company_id:
+                    continue
+
+                # Refetch and push the updated list
+                tickets = await company_email_service.list_tickets(company_id, 50, 0)
+                total = await company_email_service.count_tickets(company_id)
+                await websocket.send_json({
+                    "items": tickets,
+                    "total": total,
+                    "limit": 50,
+                    "skip": 0,
+                    "has_next": len(tickets) < total
+                })
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for company {company_id} tickets")
+    except Exception as e:
+        logger.error(f"WebSocket change stream error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
 
 
 async def _get_ticket_with_context(company_id: str, ticket_id: str) -> dict:
