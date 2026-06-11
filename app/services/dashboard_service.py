@@ -202,7 +202,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
         {
             "$project": {
                 "_id": 0,
-                "id": 1,
+                "id": {"$ifNull": ["$id", "$session_id"]},
                 "company_id": 1,
                 "session_id": 1,
                 "created_at": 1,
@@ -383,7 +383,11 @@ def _normalize_ticket_to_chat_session(ticket: dict, company_id: str, attributed_
 async def get_chat_by_id(company_id: str, chat_id: str) -> dict:
     # Try widget_conversations first
     result = await db.widget_conversations.find_one(
-        {"company_id": company_id, "id": chat_id}, {"_id": 0}
+        {
+            "company_id": company_id,
+            "$or": [{"id": chat_id}, {"session_id": chat_id}]
+        }, 
+        {"_id": 0}
     )
     if result:
         result["duration_seconds"] = _duration_from_timestamps(
