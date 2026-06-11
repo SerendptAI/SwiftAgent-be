@@ -2,6 +2,7 @@ import httpx
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
+from pymongo import ReturnDocument
 
 from app.core.config import settings
 from app.core.billing_limits import TIER_LIMITS, is_african_timezone
@@ -298,7 +299,7 @@ class BillingService:
                 tier = "basic"
 
             now = datetime.now(tz=timezone.utc)
-            result = await db.companies.update_one(
+            old_company = await db.companies.find_one_and_update(
                 {"id": company_id},
                 {"$set": {
                     "subscription_tier": tier,
@@ -307,15 +308,18 @@ class BillingService:
                     "billing_provider": "polar",
                     "subscription_id": sub_id,
                     "customer_id": customer_id,
-                }}
+                }},
+                return_document=ReturnDocument.BEFORE
             )
 
-            if result.matched_count == 0:
+            if not old_company:
                 logger.error(
-                    f"BILLING BUG: update_one matched 0 documents for "
+                    f"BILLING BUG: find_one_and_update matched 0 documents for "
                     f"company_id={company_id}. Company may not exist!"
                 )
                 return False
+
+            old_tier = old_company.get("subscription_tier")
 
             from app.core.cache import company_cache
             keys_to_delete = [
@@ -331,17 +335,18 @@ class BillingService:
             )
 
             # Notify dashboard users about the upgrade
-            import asyncio
-            from app.services import notification_service
-            asyncio.create_task(
-                notification_service.notify_company(
-                    company_id=company_id,
-                    title="🎉 Plan Upgraded!",
-                    body=f"Congratulations! Your company plan has been upgraded to {tier.capitalize()}.",
-                    type="plan_upgrade",
-                    data={"tier": tier, "subscription_id": sub_id}
+            if old_tier != tier:
+                import asyncio
+                from app.services import notification_service
+                asyncio.create_task(
+                    notification_service.notify_company(
+                        company_id=company_id,
+                        title="🎉 Plan Upgraded!",
+                        body=f"Congratulations! Your company plan has been upgraded to {tier.capitalize()}.",
+                        type="plan_upgrade",
+                        data={"tier": tier, "subscription_id": sub_id}
+                    )
                 )
-            )
 
             return True
 
