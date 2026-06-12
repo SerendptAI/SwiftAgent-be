@@ -32,13 +32,13 @@
 
 @font-face {
         font-family: "Greed Narrow";
-        src: url("{{base_url}}/email-fonts/GreedNarrow-SemiBold.otf") format("opentype");
+        src: url("fonts/GreedNarrow-SemiBold.otf") format("opentype");
         font-style: normal;
         font-weight: 600;
       }
 
       :root {
-        color-scheme: light;
+        color-scheme: only light;
         supported-color-schemes: light;
       }
 
@@ -115,7 +115,7 @@
         margin: 0;
         color: #697454;
         background-color: #697454;
-        background-image: url('{{base_url}}/email-images/text-bg.jpg');
+        background-image: url('images/text-bg.jpg');
         background-position: center center;
         background-size: 100% 100%;
         background-repeat: no-repeat;
@@ -316,11 +316,79 @@
           padding-right: 24px !important;
         }
       }
-    </style>
+    
+            /* ── Force light mode ── */
+            /* Prevent dark-mode inversion in Apple Mail, iOS Mail, Samsung Mail */
+            @media (prefers-color-scheme: dark) {
+                body,
+                center,
+                .email-container {
+                    background-color: #f5f5f4 !important;
+                    color: #111111 !important;
+                }
+                body * {
+                    border-color: transparent !important;
+                }
+                /* Keep image colours untouched */
+                img {
+                    filter: none !important;
+                }
+                /* Preserve white-background cards / pills */
+                .coupon-card {
+                    background-color: #ffffff !important;
+                }
+                .preview-pill,
+                .description-box {
+                    background-color: #ededed !important;
+                    color: #111111 !important;
+                }
+                /* Preserve button colours */
+                .invite-button,
+                .resolve-button,
+                .cta-button,
+                .copy-button,
+                .choice-button,
+                .yes-button,
+                .no-button {
+                    color: #ffffff !important;
+                }
+                .copy-button {
+                    color: #111111 !important;
+                }
+                /* Preserve ticket pill */
+                .button-shell {
+                    background-color: #f3b832 !important;
+                }
+                .ticket-label,
+                .ticket-number {
+                    color: #ffffff !important;
+                }
+                /* Daily updates button */
+                .date-button,
+                .view-button {
+                    color: #ffffff !important;
+                }
+            }
+            /* Outlook dark mode (data-ogsc) */
+            [data-ogsc] body,
+            [data-ogsc] center,
+            [data-ogsc] .email-container {
+                background-color: #f5f5f4 !important;
+                color: #111111 !important;
+            }
+            [data-ogsc] .coupon-card {
+                background-color: #ffffff !important;
+            }
+            [data-ogsc] .preview-pill,
+            [data-ogsc] .description-box {
+                background-color: #ededed !important;
+                color: #111111 !important;
+            }
+        </style>
   </head>
-  <body style="margin: 0; padding: 0; background-color: #f5f5f4">
+  <body style="margin: 0; padding: 0; background-color: #f5f5f4 color-scheme: only light;">
     <div style="display: none; max-height: 0; overflow: hidden">
-      New SwiftAgent registration request from {{company_name}}.
+      New SwiftAgent registration request from Romeo Support.
       &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
     </div>
 
@@ -352,7 +420,7 @@
             style="padding: 72px 0 55px; text-align: center"
           >
             <img
-              src="{{base_url}}/email-images/favicon.png"
+              src="images/favicon.png"
               width="72"
               height="70"
               alt="SwiftAgent"
@@ -390,21 +458,21 @@
             >
               <tr class="detail-row">
                 <td class="detail-label">Company</td>
-                <td class="detail-value">{{company_name}}</td>
+                <td class="detail-value">Romeo Support</td>
               </tr>
               <tr class="detail-row">
                 <td class="detail-label">Email</td>
                 <td class="detail-value">
-                  <a href="mailto:{{company_email}}">{{company_email}}</a>
+                  <a href="mailto:hello@romeosupport.com">hello@romeosupport.com</a>
                 </td>
               </tr>
               <tr class="detail-row">
                 <td class="detail-label">Customer size</td>
-                <td class="detail-value">{{customer_size}}</td>
+                <td class="detail-value">11–50</td>
               </tr>
               <tr class="detail-row">
                 <td class="detail-label">Description</td>
-                <td class="detail-value">{{company_description}}</td>
+                <td class="detail-value">AI-powered customer support platform</td>
               </tr>
             </table>
           </td>
@@ -412,7 +480,7 @@
 
         <tr>
           <td class="button-cell" style="padding: 0 42px 28px">
-            <a href="{{approval_url}}" target="_blank" class="cta-button">
+            <a href="#" target="_blank" class="cta-button">
               Review and approve
             </a>
           </td>

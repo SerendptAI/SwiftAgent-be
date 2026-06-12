@@ -8,7 +8,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="x-apple-disable-message-reformatting">
   <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
-  <title>{{app_name}} - Verification Code</title>
+  <title>Swift Agent - Verification Code</title>
   <!--[if mso]>
   <noscript>
     <xml>
@@ -24,13 +24,13 @@
 
 @font-face {
         font-family: "Greed Narrow";
-        src: url("{{base_url}}/email-fonts/GreedNarrow-SemiBold.otf") format("opentype");
+        src: url("fonts/GreedNarrow-SemiBold.otf") format("opentype");
         font-style: normal;
         font-weight: 600;
       }
 
       :root {
-        color-scheme: light;
+        color-scheme: only light;
         supported-color-schemes: light;
       }
 
@@ -176,9 +176,77 @@
       .code-box { width: 15% !important; height: 50px !important; font-size: 26px !important; line-height: 50px !important; letter-spacing: -0.52px !important; }
       .code-gap { width: 2% !important; }
     }
-  </style>
+  
+            /* ── Force light mode ── */
+            /* Prevent dark-mode inversion in Apple Mail, iOS Mail, Samsung Mail */
+            @media (prefers-color-scheme: dark) {
+                body,
+                center,
+                .email-container {
+                    background-color: #f5f5f4 !important;
+                    color: #111111 !important;
+                }
+                body * {
+                    border-color: transparent !important;
+                }
+                /* Keep image colours untouched */
+                img {
+                    filter: none !important;
+                }
+                /* Preserve white-background cards / pills */
+                .coupon-card {
+                    background-color: #ffffff !important;
+                }
+                .preview-pill,
+                .description-box {
+                    background-color: #ededed !important;
+                    color: #111111 !important;
+                }
+                /* Preserve button colours */
+                .invite-button,
+                .resolve-button,
+                .cta-button,
+                .copy-button,
+                .choice-button,
+                .yes-button,
+                .no-button {
+                    color: #ffffff !important;
+                }
+                .copy-button {
+                    color: #111111 !important;
+                }
+                /* Preserve ticket pill */
+                .button-shell {
+                    background-color: #f3b832 !important;
+                }
+                .ticket-label,
+                .ticket-number {
+                    color: #ffffff !important;
+                }
+                /* Daily updates button */
+                .date-button,
+                .view-button {
+                    color: #ffffff !important;
+                }
+            }
+            /* Outlook dark mode (data-ogsc) */
+            [data-ogsc] body,
+            [data-ogsc] center,
+            [data-ogsc] .email-container {
+                background-color: #f5f5f4 !important;
+                color: #111111 !important;
+            }
+            [data-ogsc] .coupon-card {
+                background-color: #ffffff !important;
+            }
+            [data-ogsc] .preview-pill,
+            [data-ogsc] .description-box {
+                background-color: #ededed !important;
+                color: #111111 !important;
+            }
+        </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f4;">
+<body style="margin: 0; padding: 0; background-color: #f5f5f4; color-scheme: only light;">
   <div style="display: none; max-height: 0; overflow: hidden;">
     Here is your one-time password.
     &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
@@ -194,7 +262,7 @@
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
         <td class="logo-cell" style="padding: 82px 0 80px; text-align: center;">
-          <img src="{{base_url}}/email-images/favicon.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
+          <img src="images/favicon.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
         </td>
       </tr>
 
@@ -202,7 +270,7 @@
         <td class="heading-cell" style="padding: 0 58px 32px; text-align: center;">
           <img
             class="heading-svg"
-            src="{{base_url}}/email-images/headings/otp_email_heading.png"
+            src="images/headings/otp_email_heading.png"
             width="381"
             height="58"
             alt="Here's your OTP"
@@ -213,8 +281,8 @@
       <tr>
         <td class="copy-cell" style="padding: 0 90px 62px;">
           <p class="body-text">
-            Here is your {{purpose_label}} code<br class="copy-break">
-            (OTP). It expires in {{ttl_minutes}} minutes.<br class="copy-break">
+            Here is your login verification code<br class="copy-break">
+            (OTP). It expires in 10 minutes.<br class="copy-break">
             If you did not request this,<br class="copy-break">
             please disregard this message.
           </p>
@@ -225,17 +293,17 @@
         <td class="code-cell" style="padding: 0 49px 88px;">
           <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="otp-code">
             <tr>
-              <td class="code-box">{{d0}}</td>
+              <td class="code-box">4</td>
               <td class="code-gap">&nbsp;</td>
-              <td class="code-box">{{d1}}</td>
+              <td class="code-box">8</td>
               <td class="code-gap">&nbsp;</td>
-              <td class="code-box">{{d2}}</td>
+              <td class="code-box">2</td>
               <td class="code-gap">&nbsp;</td>
-              <td class="code-box">{{d3}}</td>
+              <td class="code-box">9</td>
               <td class="code-gap">&nbsp;</td>
-              <td class="code-box">{{d4}}</td>
+              <td class="code-box">1</td>
               <td class="code-gap">&nbsp;</td>
-              <td class="code-box">{{d5}}</td>
+              <td class="code-box">7</td>
             </tr>
           </table>
         </td>
@@ -244,7 +312,7 @@
       <tr>
         <td class="image-cell" style="padding: 0 58px 94px;">
           <div class="hero-frame">
-            <img src="{{base_url}}/email-images/otp.png" width="484" height="381" alt="OTP verification" class="hero-image">
+            <img src="images/otp.png" width="484" height="381" alt="OTP verification" class="hero-image">
           </div>
         </td>
       </tr>

@@ -32,13 +32,13 @@
 
 @font-face {
                 font-family: "Greed Narrow";
-                src: url("{{base_url}}/email-fonts/GreedNarrow-SemiBold.otf")
+                src: url("fonts/GreedNarrow-SemiBold.otf")
                 font-style: normal;
                 font-weight: 600;
             }
 
             :root {
-                color-scheme: light;
+                color-scheme: only light;
                 supported-color-schemes: light;
             }
 
@@ -208,9 +208,77 @@
                     letter-spacing: 0 !important;
                 }
             }
+        
+            /* ── Force light mode ── */
+            /* Prevent dark-mode inversion in Apple Mail, iOS Mail, Samsung Mail */
+            @media (prefers-color-scheme: dark) {
+                body,
+                center,
+                .email-container {
+                    background-color: #f5f5f4 !important;
+                    color: #111111 !important;
+                }
+                body * {
+                    border-color: transparent !important;
+                }
+                /* Keep image colours untouched */
+                img {
+                    filter: none !important;
+                }
+                /* Preserve white-background cards / pills */
+                .coupon-card {
+                    background-color: #ffffff !important;
+                }
+                .preview-pill,
+                .description-box {
+                    background-color: #ededed !important;
+                    color: #111111 !important;
+                }
+                /* Preserve button colours */
+                .invite-button,
+                .resolve-button,
+                .cta-button,
+                .copy-button,
+                .choice-button,
+                .yes-button,
+                .no-button {
+                    color: #ffffff !important;
+                }
+                .copy-button {
+                    color: #111111 !important;
+                }
+                /* Preserve ticket pill */
+                .button-shell {
+                    background-color: #f3b832 !important;
+                }
+                .ticket-label,
+                .ticket-number {
+                    color: #ffffff !important;
+                }
+                /* Daily updates button */
+                .date-button,
+                .view-button {
+                    color: #ffffff !important;
+                }
+            }
+            /* Outlook dark mode (data-ogsc) */
+            [data-ogsc] body,
+            [data-ogsc] center,
+            [data-ogsc] .email-container {
+                background-color: #f5f5f4 !important;
+                color: #111111 !important;
+            }
+            [data-ogsc] .coupon-card {
+                background-color: #ffffff !important;
+            }
+            [data-ogsc] .preview-pill,
+            [data-ogsc] .description-box {
+                background-color: #ededed !important;
+                color: #111111 !important;
+            }
         </style>
     </head>
-    <body style="margin: 0; padding: 0; background-color: #f5f5f4">
+    <body style="margin: 0; padding: 0; background-color: #f5f5f4 color-scheme: only light;">
         <center
             role="article"
             aria-roledescription="email"
@@ -239,7 +307,7 @@
                         style="padding: 85px 0 70px; text-align: center"
                     >
                         <img
-                            src="{{base_url}}/email-images/favicon.png"
+                            src="images/favicon.png"
                             width="72"
                             height="70"
                             alt="SwiftAgent"
@@ -255,7 +323,7 @@
                     >
                         <img
                             class="heading-svg"
-                            src="{{base_url}}/email-images/headings/welcome_heading.png"
+                            src="images/headings/welcome_heading.png"
                             width="514"
                             height="204"
                             alt="Welcome to automated customer service."
@@ -267,7 +335,7 @@
                     <td class="hero-cell" style="padding: 0 31px">
                         <div class="hero-frame">
                             <img
-                                src="{{base_url}}/email-images/welcome.png"
+                                src="images/welcome.png"
                                 width="538"
                                 height="423"
                                 alt="SwiftAgent customer service"
@@ -280,7 +348,7 @@
                 <tr>
                     <td class="cta-cell" style="padding: 58px 46px 94px">
                         <a
-                            href="{{dashboardUrl}}"
+                            href="#"
                             target="_blank"
                             class="cta-button"
                         >

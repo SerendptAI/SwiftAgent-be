@@ -24,13 +24,13 @@
 
 @font-face {
         font-family: "Greed Narrow";
-        src: url("{{base_url}}/email-fonts/GreedNarrow-SemiBold.otf") format("opentype");
+        src: url("fonts/GreedNarrow-SemiBold.otf") format("opentype");
         font-style: normal;
         font-weight: 600;
       }
 
       :root {
-        color-scheme: light;
+        color-scheme: only light;
         supported-color-schemes: light;
       }
 
@@ -180,9 +180,77 @@
       .download-button { font-size: 14px !important; letter-spacing: 1px !important; }
       .image-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 94px !important; }
     }
-  </style>
+  
+            /* ── Force light mode ── */
+            /* Prevent dark-mode inversion in Apple Mail, iOS Mail, Samsung Mail */
+            @media (prefers-color-scheme: dark) {
+                body,
+                center,
+                .email-container {
+                    background-color: #f5f5f4 !important;
+                    color: #111111 !important;
+                }
+                body * {
+                    border-color: transparent !important;
+                }
+                /* Keep image colours untouched */
+                img {
+                    filter: none !important;
+                }
+                /* Preserve white-background cards / pills */
+                .coupon-card {
+                    background-color: #ffffff !important;
+                }
+                .preview-pill,
+                .description-box {
+                    background-color: #ededed !important;
+                    color: #111111 !important;
+                }
+                /* Preserve button colours */
+                .invite-button,
+                .resolve-button,
+                .cta-button,
+                .copy-button,
+                .choice-button,
+                .yes-button,
+                .no-button {
+                    color: #ffffff !important;
+                }
+                .copy-button {
+                    color: #111111 !important;
+                }
+                /* Preserve ticket pill */
+                .button-shell {
+                    background-color: #f3b832 !important;
+                }
+                .ticket-label,
+                .ticket-number {
+                    color: #ffffff !important;
+                }
+                /* Daily updates button */
+                .date-button,
+                .view-button {
+                    color: #ffffff !important;
+                }
+            }
+            /* Outlook dark mode (data-ogsc) */
+            [data-ogsc] body,
+            [data-ogsc] center,
+            [data-ogsc] .email-container {
+                background-color: #f5f5f4 !important;
+                color: #111111 !important;
+            }
+            [data-ogsc] .coupon-card {
+                background-color: #ffffff !important;
+            }
+            [data-ogsc] .preview-pill,
+            [data-ogsc] .description-box {
+                background-color: #ededed !important;
+                color: #111111 !important;
+            }
+        </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f4;">
+<body style="margin: 0; padding: 0; background-color: #f5f5f4; color-scheme: only light;">
   <div style="display: none; max-height: 0; overflow: hidden;">
     Congratulations. Your billing payment was successful.
     &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
@@ -198,7 +266,7 @@
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
         <td class="logo-cell" style="padding: 82px 0 48px; text-align: center;">
-          <img src="{{base_url}}/email-images/favicon.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
+          <img src="images/favicon.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
         </td>
       </tr>
 
@@ -206,7 +274,7 @@
         <td class="heading-cell" style="padding: 0 42px 64px; text-align: center;">
           <img
             class="heading-svg"
-            src="{{base_url}}/email-images/headings/billing_success_heading.png"
+            src="images/headings/billing_success_heading.png"
             width="405"
             height="58"
             alt="Congratulations!"
@@ -216,9 +284,9 @@
 
       <tr>
         <td class="details-cell" style="padding: 0 120px 116px;">
-          <p class="body-text">Duration: {{duration}}</p>
-          <p class="body-text">Amount: {{amount}}</p>
-          <p class="body-text">Plan: {{plan_name}}</p>
+          <p class="body-text">Duration: 30 days</p>
+          <p class="body-text">Amount: $49.00</p>
+          <p class="body-text">Plan: Pro Plan</p>
           <p class="body-text">Payment status: Successful</p>
         </td>
       </tr>
@@ -228,10 +296,10 @@
           <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" height="58" class="button-shell">
             <tr>
               <td width="54%" align="left" class="receipt-label-cell" style="padding: 10px 30px 10px 25px; text-align: left; vertical-align: middle;">
-                <a href="{{receiptUrl}}" target="_blank" class="receipt-button">Download receipt</a>
+                <a href="#" target="_blank" class="receipt-button">Download receipt</a>
               </td>
               <td width="46%" align="right" style="padding: 10px 10px 10px 0; text-align: right; vertical-align: middle;">
-                <a href="{{downloadUrl}}" target="_blank" class="download-button">Download</a>
+                <a href="#" target="_blank" class="download-button">Download</a>
               </td>
             </tr>
           </table>
@@ -241,7 +309,7 @@
       <tr>
         <td class="image-cell" style="padding: 0 58px 94px;">
           <div class="hero-frame">
-            <img src="{{base_url}}/email-images/billing-success.png" width="484" height="381" alt="Billing successful" class="hero-image">
+            <img src="images/billing-success.png" width="484" height="381" alt="Billing successful" class="hero-image">
           </div>
         </td>
       </tr>

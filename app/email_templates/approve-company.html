@@ -29,13 +29,13 @@
 
 @font-face {
       font-family: "Greed Narrow";
-      src: url("{{base_url}}/email-fonts/GreedNarrow-SemiBold.otf") format("opentype");
+      src: url("fonts/GreedNarrow-SemiBold.otf") format("opentype");
       font-style: normal;
       font-weight: 600;
     }
 
     :root {
-      color-scheme: light;
+      color-scheme: only light;
       supported-color-schemes: light;
     }
 
@@ -138,7 +138,7 @@
 
     @media only screen and (max-width: 620px) {
       .email-container { width: 100% !important; max-width: 100% !important; }
-      .logo-cell { padding-top: 72px !important; padding-bottom: 16px !important; }
+      .logo-cell { padding-top: 72px !important; padding-bottom: 52px !important; }
       .heading-cell { padding: 0 70px 26px !important; }
       .copy-cell { padding: 0 101px 34px !important; }
       .button-cell { padding: 0 42px 48px !important; }
@@ -146,7 +146,7 @@
     }
 
     @media only screen and (max-width: 480px) {
-      .logo-cell { padding-top: 48px !important; padding-bottom: 16px !important; }
+      .logo-cell { padding-top: 48px !important; padding-bottom: 52px !important; }
       .logo-mark { width: 58px !important; height: 57px !important; }
       .heading-cell { padding: 0 48px 26px !important; }
       .copy-cell { padding: 0 48px 34px !important; }
@@ -158,16 +158,84 @@
     }
 
     @media only screen and (max-width: 375px) {
-      .logo-cell { padding-top: 42px !important; padding-bottom: 16px !important; }
+      .logo-cell { padding-top: 42px !important; padding-bottom: 52px !important; }
       .logo-mark { width: 50px !important; height: 49px !important; }
       .heading-cell { padding-left: 32px !important; padding-right: 32px !important; }
       .copy-cell { padding-left: 32px !important; padding-right: 32px !important; padding-bottom: 34px !important; }
       .button-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 48px !important; }
       .image-cell { padding-left: 28px !important; padding-right: 28px !important; padding-bottom: 51px !important; }
     }
-  </style>
+  
+            /* ── Force light mode ── */
+            /* Prevent dark-mode inversion in Apple Mail, iOS Mail, Samsung Mail */
+            @media (prefers-color-scheme: dark) {
+                body,
+                center,
+                .email-container {
+                    background-color: #f5f5f4 !important;
+                    color: #111111 !important;
+                }
+                body * {
+                    border-color: transparent !important;
+                }
+                /* Keep image colours untouched */
+                img {
+                    filter: none !important;
+                }
+                /* Preserve white-background cards / pills */
+                .coupon-card {
+                    background-color: #ffffff !important;
+                }
+                .preview-pill,
+                .description-box {
+                    background-color: #ededed !important;
+                    color: #111111 !important;
+                }
+                /* Preserve button colours */
+                .invite-button,
+                .resolve-button,
+                .cta-button,
+                .copy-button,
+                .choice-button,
+                .yes-button,
+                .no-button {
+                    color: #ffffff !important;
+                }
+                .copy-button {
+                    color: #111111 !important;
+                }
+                /* Preserve ticket pill */
+                .button-shell {
+                    background-color: #f3b832 !important;
+                }
+                .ticket-label,
+                .ticket-number {
+                    color: #ffffff !important;
+                }
+                /* Daily updates button */
+                .date-button,
+                .view-button {
+                    color: #ffffff !important;
+                }
+            }
+            /* Outlook dark mode (data-ogsc) */
+            [data-ogsc] body,
+            [data-ogsc] center,
+            [data-ogsc] .email-container {
+                background-color: #f5f5f4 !important;
+                color: #111111 !important;
+            }
+            [data-ogsc] .coupon-card {
+                background-color: #ffffff !important;
+            }
+            [data-ogsc] .preview-pill,
+            [data-ogsc] .description-box {
+                background-color: #ededed !important;
+                color: #111111 !important;
+            }
+        </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f4;">
+<body style="margin: 0; padding: 0; background-color: #f5f5f4; color-scheme: only light;">
   <div style="display: none; max-height: 0; overflow: hidden;">
     There is a new company on the waitlist. Review and approve their registration.
     &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
@@ -176,8 +244,8 @@
   <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4;">
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
-        <td class="logo-cell" style="padding: 72px 0 16px; text-align: center;">
-          <img src="{{base_url}}/email-images/favicon.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
+        <td class="logo-cell" style="padding: 72px 0 52px; text-align: center;">
+          <img src="images/favicon.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
         </td>
       </tr>
 
@@ -185,7 +253,7 @@
         <td class="heading-cell" style="padding: 0 70px 26px; text-align: center;">
           <img
             class="heading-svg"
-            src="{{base_url}}/email-images/headings/approve_company_heading.png"
+            src="images/headings/approve_company_heading.png"
             width="327"
             height="136"
             alt="There's a new company!"
@@ -199,24 +267,24 @@
             There's a new company on the waitlist, ensure you verify their legitimacy
           </p>
           <div class="details-list">
-            <span class="detail-item">{{company_name}}</span>
-            <span class="detail-item">{{company_email}}</span>
-            <span class="detail-item">{{company_description}}</span>
-            <span class="detail-item">{{customer_size}}</span>
+            <span class="detail-item">Romeo Support</span>
+            <span class="detail-item">hello@romeosupport.com</span>
+            <span class="detail-item">AI-powered customer support platform</span>
+            <span class="detail-item">11–50</span>
           </div>
         </td>
       </tr>
 
       <tr>
         <td class="button-cell" style="padding: 0 42px 48px;">
-          <a href="{{approval_url}}" target="_blank" class="invite-button">Approve</a>
+          <a href="#" target="_blank" class="invite-button">Approve</a>
         </td>
       </tr>
 
       <tr>
         <td class="image-cell" style="padding: 0 58px 51px;">
           <div class="hero-frame">
-            <img src="{{base_url}}/email-images/approve-company.png" width="474" height="373" alt="New kids on the block" class="hero-image">
+            <img src="images/approve-company.png" width="474" height="373" alt="New kids on the block" class="hero-image">
           </div>
         </td>
       </tr>

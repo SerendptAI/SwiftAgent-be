@@ -32,13 +32,13 @@
 
 @font-face {
         font-family: "Greed Narrow";
-        src: url("{{base_url}}/email-fonts/GreedNarrow-SemiBold.otf") format("opentype");
+        src: url("fonts/GreedNarrow-SemiBold.otf") format("opentype");
         font-style: normal;
         font-weight: 600;
       }
 
       :root {
-        color-scheme: light;
+        color-scheme: only light;
         supported-color-schemes: light;
       }
 
@@ -328,9 +328,77 @@
           padding-bottom: 94px !important;
         }
       }
-    </style>
+    
+            /* ── Force light mode ── */
+            /* Prevent dark-mode inversion in Apple Mail, iOS Mail, Samsung Mail */
+            @media (prefers-color-scheme: dark) {
+                body,
+                center,
+                .email-container {
+                    background-color: #f5f5f4 !important;
+                    color: #111111 !important;
+                }
+                body * {
+                    border-color: transparent !important;
+                }
+                /* Keep image colours untouched */
+                img {
+                    filter: none !important;
+                }
+                /* Preserve white-background cards / pills */
+                .coupon-card {
+                    background-color: #ffffff !important;
+                }
+                .preview-pill,
+                .description-box {
+                    background-color: #ededed !important;
+                    color: #111111 !important;
+                }
+                /* Preserve button colours */
+                .invite-button,
+                .resolve-button,
+                .cta-button,
+                .copy-button,
+                .choice-button,
+                .yes-button,
+                .no-button {
+                    color: #ffffff !important;
+                }
+                .copy-button {
+                    color: #111111 !important;
+                }
+                /* Preserve ticket pill */
+                .button-shell {
+                    background-color: #f3b832 !important;
+                }
+                .ticket-label,
+                .ticket-number {
+                    color: #ffffff !important;
+                }
+                /* Daily updates button */
+                .date-button,
+                .view-button {
+                    color: #ffffff !important;
+                }
+            }
+            /* Outlook dark mode (data-ogsc) */
+            [data-ogsc] body,
+            [data-ogsc] center,
+            [data-ogsc] .email-container {
+                background-color: #f5f5f4 !important;
+                color: #111111 !important;
+            }
+            [data-ogsc] .coupon-card {
+                background-color: #ffffff !important;
+            }
+            [data-ogsc] .preview-pill,
+            [data-ogsc] .description-box {
+                background-color: #ededed !important;
+                color: #111111 !important;
+            }
+        </style>
   </head>
-  <body style="margin: 0; padding: 0; background-color: #f5f5f4">
+  <body style="margin: 0; padding: 0; background-color: #f5f5f4 color-scheme: only light;">
     <div style="display: none; max-height: 0; overflow: hidden">
       Your complaint has been received. &#847; &#847; &#847; &#847; &#847;
       &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
@@ -364,10 +432,10 @@
             style="padding: 82px 0 48px; text-align: center"
           >
             <img
-              src="{{base_url}}/email-images/favicon.png"
+              src="images/logo 2.png"
               width="72"
-              height="71"
-              alt="{{company_name}}"
+              height="70"
+              alt="Romeo Support"
               class="logo-mark"
             />
           </td>
@@ -380,7 +448,7 @@
           >
             <img
               class="heading-svg"
-              src="{{base_url}}/email-images/headings/ticket_confirmation_heading.png"
+              src="images/headings/ticket_confirmation_heading.png"
               width="435"
               height="107"
               alt="Your complaint has been received"
@@ -392,7 +460,7 @@
           <td class="copy-cell" style="padding: 0 58px 80px">
             <p class="body-text">
               You can expect to receive follow-up<br class="copy-break" />
-              emails from the team at {{company_name}}.<br class="copy-break" />
+              emails from the team at Romeo Support.<br class="copy-break" />
               They will keep you updated on<br class="copy-break" />
               any developments and ensure that you<br class="copy-break" />
               have all the information you need.
@@ -446,7 +514,7 @@
           <td class="image-cell" style="padding: 0 58px 94px">
           <div class="hero-frame">
             <img
-              src="{{base_url}}/email-images/ticket-confirmation.png"
+              src="images/ticket-confirmation.png"
               width="484"
               height="381"
               alt="Ticket confirmation"

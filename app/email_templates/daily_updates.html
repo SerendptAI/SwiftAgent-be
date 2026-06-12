@@ -32,14 +32,14 @@
 
             @font-face {
                 font-family: "Greed Narrow";
-                src: url("{{base_url}}/email-fonts/GreedNarrow-SemiBold.otf")
+                src: url("fonts/GreedNarrow-SemiBold.otf")
                     format("opentype");
                 font-style: normal;
                 font-weight: 600;
             }
 
             :root {
-                color-scheme: light;
+                color-scheme: only light;
                 supported-color-schemes: light;
             }
 
@@ -263,9 +263,77 @@
                     padding-bottom: 94px !important;
                 }
             }
+        
+            /* ── Force light mode ── */
+            /* Prevent dark-mode inversion in Apple Mail, iOS Mail, Samsung Mail */
+            @media (prefers-color-scheme: dark) {
+                body,
+                center,
+                .email-container {
+                    background-color: #f5f5f4 !important;
+                    color: #111111 !important;
+                }
+                body * {
+                    border-color: transparent !important;
+                }
+                /* Keep image colours untouched */
+                img {
+                    filter: none !important;
+                }
+                /* Preserve white-background cards / pills */
+                .coupon-card {
+                    background-color: #ffffff !important;
+                }
+                .preview-pill,
+                .description-box {
+                    background-color: #ededed !important;
+                    color: #111111 !important;
+                }
+                /* Preserve button colours */
+                .invite-button,
+                .resolve-button,
+                .cta-button,
+                .copy-button,
+                .choice-button,
+                .yes-button,
+                .no-button {
+                    color: #ffffff !important;
+                }
+                .copy-button {
+                    color: #111111 !important;
+                }
+                /* Preserve ticket pill */
+                .button-shell {
+                    background-color: #f3b832 !important;
+                }
+                .ticket-label,
+                .ticket-number {
+                    color: #ffffff !important;
+                }
+                /* Daily updates button */
+                .date-button,
+                .view-button {
+                    color: #ffffff !important;
+                }
+            }
+            /* Outlook dark mode (data-ogsc) */
+            [data-ogsc] body,
+            [data-ogsc] center,
+            [data-ogsc] .email-container {
+                background-color: #f5f5f4 !important;
+                color: #111111 !important;
+            }
+            [data-ogsc] .coupon-card {
+                background-color: #ffffff !important;
+            }
+            [data-ogsc] .preview-pill,
+            [data-ogsc] .description-box {
+                background-color: #ededed !important;
+                color: #111111 !important;
+            }
         </style>
     </head>
-    <body style="margin: 0; padding: 0; background-color: #f5f5f4">
+    <body style="margin: 0; padding: 0; background-color: #f5f5f4 color-scheme: only light;">
         <div style="display: none; max-height: 0; overflow: hidden">
             Your daily updates are ready. &#847; &#847; &#847; &#847; &#847;
             &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
@@ -300,7 +368,7 @@
                         style="padding: 82px 0 48px; text-align: center"
                     >
                         <img
-                            src="{{base_url}}/email-images/favicon.png"
+                            src="images/favicon.png"
                             width="72"
                             height="70"
                             alt="SwiftAgent"
@@ -316,7 +384,7 @@
                     >
                         <img
                             class="heading-svg"
-                            src="{{base_url}}/email-images/headings/daily_updates_heading.png"
+                            src="images/headings/daily_updates_heading.png"
                             width="245"
                             height="58"
                             alt="You've got"
@@ -327,12 +395,12 @@
                 <tr>
                     <td class="details-cell" style="padding: 0 120px 96px">
                         <p class="body-text">
-                            Pending Messages: {{pending_messages}}
+                            Pending Messages: 5
                         </p>
                         <p class="body-text">
-                            Follow-up emails: {{follow_up_emails}}
+                            Follow-up emails: 2
                         </p>
-                        <p class="body-text">Enquiries: {{enquiries}}</p>
+                        <p class="body-text">Enquiries: 3</p>
                     </td>
                 </tr>
 
@@ -358,20 +426,20 @@
                                     "
                                 >
                                     <span class="date-button"
-                                        >Date: {{date}}</span
+                                        >Date: 12/06/2026</span
                                     >
                                 </td>
                                 <td
                                     width="40%"
                                     align="right"
                                     style="
-                                        padding: 10px 10px 10px 0;
+                                        padding: 10px 10px 10px 16px;
                                         text-align: right;
                                         vertical-align: middle;
                                     "
                                 >
                                     <a
-                                        href="{{updatesUrl}}"
+                                        href="#"
                                         target="_blank"
                                         class="view-button"
                                         >View</a
@@ -386,7 +454,7 @@
                     <td class="image-cell" style="padding: 0 58px 94px">
                         <div class="hero-frame">
                             <img
-                                src="{{base_url}}/email-images/daily-updates.png"
+                                src="images/daily-updates.png"
                                 width="484"
                                 height="381"
                                 alt="Daily updates"
