@@ -28,7 +28,7 @@
             }
 
             :root {
-                color-scheme: light;
+                color-scheme: only light;
                 supported-color-schemes: light;
             }
 
@@ -167,13 +167,13 @@
                 }
                 .logo-cell {
                     padding-top: 72px !important;
-                    padding-bottom: 55px !important;
+                    padding-bottom: 95px !important;
                 }
                 .heading-cell {
                     padding: 0 70px 20px !important;
                 }
                 .copy-cell {
-                    padding: 0 58px 114px !important;
+                    padding: 0 58px 74px !important;
                 }
                 .button-cell {
                     padding: 0 42px 114px !important;
@@ -186,7 +186,7 @@
             @media only screen and (max-width: 480px) {
                 .logo-cell {
                     padding-top: 48px !important;
-                    padding-bottom: 58px !important;
+                    padding-bottom: 98px !important;
                 }
                 .brand-logo,
                 .partner-logo {
@@ -201,7 +201,7 @@
                     padding: 0 34px 20px !important;
                 }
                 .copy-cell {
-                    padding: 0 38px 80px !important;
+                    padding: 0 38px 40px !important;
                 }
                 .body-text {
                     font-size: 16px !important;
@@ -225,7 +225,7 @@
             @media only screen and (max-width: 375px) {
                 .logo-cell {
                     padding-top: 42px !important;
-                    padding-bottom: 52px !important;
+                    padding-bottom: 92px !important;
                 }
                 .brand-logo,
                 .partner-logo {
@@ -243,7 +243,7 @@
                 .copy-cell {
                     padding-left: 24px !important;
                     padding-right: 24px !important;
-                    padding-bottom: 80px !important;
+                    padding-bottom: 40px !important;
                 }
                 .button-cell {
                     padding-left: 24px !important;
@@ -256,9 +256,77 @@
                     padding-bottom: 94px !important;
                 }
             }
+        
+            /* ── Force light mode ── */
+            /* Prevent dark-mode inversion in Apple Mail, iOS Mail, Samsung Mail */
+            @media (prefers-color-scheme: dark) {
+                body,
+                center,
+                .email-container {
+                    background-color: #f5f5f4 !important;
+                    color: #111111 !important;
+                }
+                body * {
+                    border-color: transparent !important;
+                }
+                /* Keep image colours untouched */
+                img {
+                    filter: none !important;
+                }
+                /* Preserve white-background cards / pills */
+                .coupon-card {
+                    background-color: #ffffff !important;
+                }
+                .preview-pill,
+                .description-box {
+                    background-color: #ededed !important;
+                    color: #111111 !important;
+                }
+                /* Preserve button colours */
+                .invite-button,
+                .resolve-button,
+                .cta-button,
+                .copy-button,
+                .choice-button,
+                .yes-button,
+                .no-button {
+                    color: #ffffff !important;
+                }
+                .copy-button {
+                    color: #111111 !important;
+                }
+                /* Preserve ticket pill */
+                .button-shell {
+                    background-color: #f3b832 !important;
+                }
+                .ticket-label,
+                .ticket-number {
+                    color: #ffffff !important;
+                }
+                /* Daily updates button */
+                .date-button,
+                .view-button {
+                    color: #ffffff !important;
+                }
+            }
+            /* Outlook dark mode (data-ogsc) */
+            [data-ogsc] body,
+            [data-ogsc] center,
+            [data-ogsc] .email-container {
+                background-color: #f5f5f4 !important;
+                color: #111111 !important;
+            }
+            [data-ogsc] .coupon-card {
+                background-color: #ffffff !important;
+            }
+            [data-ogsc] .preview-pill,
+            [data-ogsc] .description-box {
+                background-color: #ededed !important;
+                color: #111111 !important;
+            }
         </style>
     </head>
-    <body style="margin: 0; padding: 0; background-color: #f5f5f4">
+    <body style="margin: 0; padding: 0; background-color: #f5f5f4 color-scheme: only light;">
         <center
             role="article"
             aria-roledescription="email"
@@ -278,7 +346,7 @@
                 <tr>
                     <td
                         class="logo-cell"
-                        style="padding: 72px 0 55px; text-align: center"
+                        style="padding: 72px 0 95px; text-align: center"
                     >
                         <span class="brand-row">
                             <img
@@ -290,7 +358,7 @@
                             />
                             <span class="brand-x">x</span>
                             <img
-                                src="images/logo.png"
+                                src="images/logo 2.png"
                                 width="72"
                                 height="70"
                                 alt="Romeo Support"
@@ -316,7 +384,7 @@
                 </tr>
 
                 <tr>
-                    <td class="copy-cell" style="padding: 0 58px 114px">
+                    <td class="copy-cell" style="padding: 0 58px 74px">
                         <p class="body-text">
                             You've been invited to join the Romeo Support
                             team, click the link below to join

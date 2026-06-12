@@ -16,7 +16,7 @@
             name="format-detection"
             content="telephone=no,address=no,email=no,date=no,url=no"
         />
-        <title>Response</title>
+        <title>Discount</title>
         <!--[if mso]>
             <noscript>
                 <xml>
@@ -32,8 +32,7 @@
 
 @font-face {
                 font-family: "Greed Narrow";
-                src: url("fonts/GreedNarrow-SemiBold.otf")
-                    format("opentype");
+                src: url("fonts/GreedNarrow-SemiBold.otf") format("opentype");
                 font-style: normal;
                 font-weight: 600;
             }
@@ -102,76 +101,83 @@
 
             .heading-svg {
                 display: block;
-                max-width: 100%;
+                max-width: 324px;
                 height: auto;
                 margin: 0 auto;
             }
 
-            .profile-image {
+            .logo-mark {
                 display: block;
-                width: 46px;
-                height: 46px;
-                border-radius: 50%;
+                width: 72px;
+                height: 70px;
+                margin: 0 auto;
             }
 
-            .agent-name {
-                margin: 0;
-                color: #111111;
-                font-family: "DM Mono", "Courier New", Courier, monospace;
-                font-size: 18px;
-                line-height: 1.45;
-                font-weight: 500;
-                letter-spacing: 0;
-                text-transform: uppercase;
-            }
-
-            .agent-role {
-                margin: 0;
-                color: #111111;
-                font-family: "DM Mono", "Courier New", Courier, monospace;
-                font-size: 18px;
-                line-height: 1.45;
-                font-weight: 400;
-                letter-spacing: 0;
-                text-transform: uppercase;
-            }
-
-            .love-icon {
+            .description-box {
                 display: block;
-                width: 32px;
-                height: 31px;
-            }
-
-            .message-text {
-                margin: 0;
-                color: #111111;
-                font-family: "DM Mono", "Courier New", Courier, monospace;
-                font-size: 18px;
-                line-height: 2.02;
-                font-weight: 400;
-                letter-spacing: 0;
-                text-align: left;
-                text-transform: uppercase;
-                overflow-wrap: anywhere;
-                word-break: break-word;
-            }
-
-            .resolve-button {
-                display: block;
-                width: 100%;
-                height: 54px;
+                background-color: #ededed;
                 border-radius: 8px;
-                background-color: #f24d33;
-                box-shadow: -4px 8px 0 #000000;
-                color: #ffffff !important;
+                padding: 18px 22px;
+                color: #111111;
+                font-family: "DM Mono", "Courier New", Courier, monospace;
+                font-size: 16px;
+                line-height: 1.75;
+                font-weight: 400;
+                letter-spacing: 0.04em;
+                text-align: center;
+                text-transform: uppercase;
+            }
+
+            .coupon-card {
+                max-width: 325px;
+                margin: 0 auto;
+                background-color: #ffffff;
+                border-radius: 14px;
+                padding: 28px 32px 24px;
+                text-align: center;
+            }
+
+            .barcode-image {
+                display: block;
+                max-width: 214px;
+                height: auto;
+                margin: 0 auto 18px;
+            }
+
+            .discount-code {
+                margin: 0;
+                color: #111111;
+                font-family: "DM Mono", "Courier New", Courier, monospace;
+                font-size: 28px;
+                line-height: 1;
+                font-weight: 500;
+                letter-spacing: 0.08em;
+                text-align: center;
+                text-transform: uppercase;
+            }
+
+            .copy-button {
+                display: block;
+                height: 54px;
+                color: #111111 !important;
+                background-color: #f3b832;
+                border-radius: 8px;
+                box-shadow: -4px 7px 0 #000000;
                 font-family: "DM Mono", "Courier New", Courier, monospace;
                 font-size: 18px;
                 line-height: 54px;
                 font-weight: 500;
-                letter-spacing: 0;
+                letter-spacing: 0.05em;
                 text-align: center;
                 text-decoration: none;
                 text-transform: uppercase;
+            }
+
+            .copy-icon {
+                display: inline-block;
+                vertical-align: middle;
+                margin-right: 10px;
+                margin-top: -3px;
             }
 
             @media only screen and (max-width: 620px) {
@@ -179,80 +185,78 @@
                     width: 100% !important;
                     max-width: 100% !important;
                 }
-                .agent-cell {
-                    padding: 88px 85px 86px !important;
+                .logo-cell {
+                    padding-top: 78px !important;
+                    padding-bottom: 70px !important;
                 }
                 .heading-cell {
-                    padding: 0 85px 40px !important;
+                    padding: 0 34px 48px !important;
                 }
-                .message-cell {
-                    padding: 0 85px 112px !important;
+                .description-cell {
+                    padding: 0 42px 52px !important;
                 }
-                .button-cell {
+                .coupon-cell {
+                    padding: 0 42px 78px !important;
+                }
+                .cta-cell {
                     padding: 0 42px 94px !important;
                 }
             }
 
             @media only screen and (max-width: 480px) {
-                .agent-cell {
-                    padding: 62px 42px 64px !important;
+                .logo-cell {
+                    padding-top: 59px !important;
+                    padding-bottom: 58px !important;
                 }
-                .profile-image {
-                    width: 40px !important;
-                    height: 40px !important;
-                }
-                .agent-name,
-                .agent-role {
-                    font-size: 16px !important;
-                    line-height: 1.45 !important;
-                }
-                .love-icon {
-                    width: 30px !important;
-                    height: 29px !important;
+                .logo-mark {
+                    width: 50px !important;
+                    height: 49px !important;
                 }
                 .heading-cell {
-                    padding: 0 42px 30px !important;
+                    padding: 0 18px 40px !important;
                 }
-                .message-cell {
-                    padding: 0 42px 94px !important;
+                .description-cell {
+                    padding: 0 28px 44px !important;
                 }
-                .message-text {
+                .description-box {
+                    font-size: 14px !important;
+                    padding: 14px 18px !important;
+                }
+                .coupon-cell {
+                    padding: 0 28px 66px !important;
+                }
+                .discount-code {
+                    font-size: 22px !important;
+                }
+                .cta-cell {
+                    padding: 0 32px 94px !important;
+                }
+                .copy-button {
                     font-size: 16px !important;
-                    line-height: 2 !important;
-                }
-                .button-cell {
-                    padding: 0 28px 94px !important;
-                }
-                .resolve-button {
-                    height: 54px !important;
-                    border-radius: 8px !important;
-                    font-size: 16px !important;
-                    line-height: 54px !important;
-                    font-weight: 500 !important;
+                    box-shadow: -3px 5px 0 #000000 !important;
                 }
             }
 
             @media only screen and (max-width: 375px) {
-                .agent-cell {
-                    padding-left: 28px !important;
-                    padding-right: 28px !important;
-                }
                 .heading-cell {
-                    padding-left: 28px !important;
-                    padding-right: 28px !important;
+                    padding-left: 12px !important;
+                    padding-right: 12px !important;
+                    padding-bottom: 34px !important;
                 }
-                .message-cell {
-                    padding-left: 28px !important;
-                    padding-right: 28px !important;
+                .description-cell {
+                    padding-left: 18px !important;
+                    padding-right: 18px !important;
+                    padding-bottom: 38px !important;
                 }
-                .button-cell {
-                    padding-left: 24px !important;
-                    padding-right: 24px !important;
+                .coupon-cell {
+                    padding-left: 18px !important;
+                    padding-right: 18px !important;
+                    padding-bottom: 57px !important;
                 }
-                .agent-name,
-                .agent-role,
-                .message-text {
-                    font-size: 16px !important;
+                .cta-cell {
+                    padding-left: 26px !important;
+                    padding-right: 26px !important;
+                    padding-bottom: 94px !important;
                 }
             }
         
@@ -327,9 +331,8 @@
     </head>
     <body style="margin: 0; padding: 0; background-color: #f5f5f4 color-scheme: only light;">
         <div style="display: none; max-height: 0; overflow: hidden">
-            Erica Pasos from Romeo Support replied. &#847; &#847; &#847; &#847;
+            You have a discount. &#847; &#847; &#847; &#847; &#847; &#847;
             &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
-            &#847; &#847;
         </div>
 
         <center
@@ -355,63 +358,67 @@
                 class="email-container"
             >
                 <tr>
-                    <td class="agent-cell" style="padding: 88px 85px 86px">
-                        <table
-                            role="presentation"
-                            cellspacing="0"
-                            cellpadding="0"
-                            border="0"
-                        >
-                            <tr>
-                                <td
-                                    rowspan="2"
-                                    style="padding: 0 18px 0 0; vertical-align: top;"
-                                >
-                                    <img
-                                        src="images/erica-profile.jpg"
-                                        width="46"
-                                        height="46"
-                                        alt="Erica Pasos"
-                                        class="profile-image"
-                                    />
-                                </td>
-                                <td style="padding: 0; vertical-align: middle; white-space: nowrap;">
-                                    <p class="agent-name" style="margin: 0; display: inline;">Erica Pasos</p><img src="images/logo 2.png" width="24" height="24" alt="Romeo Support" style="display: inline-block; vertical-align: middle; margin-left: 12px;">
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 0; vertical-align: middle;">
-                                    <p class="agent-role" style="margin: 0;">(Customer Support)</p>
-                                </td>
-                            </tr>
-                        </table>
+                    <td
+                        class="logo-cell"
+                        style="padding: 85px 0 70px; text-align: center"
+                    >
+                        <img
+                            src="images/favicon.png"
+                            width="72"
+                            height="70"
+                            alt="SwiftAgent"
+                            class="logo-mark"
+                        />
                     </td>
                 </tr>
 
                 <tr>
                     <td
                         class="heading-cell"
-                        style="padding: 0 85px 40px; text-align: center"
+                        style="padding: 0 45px 48px; text-align: center"
                     >
                         <img
                             class="heading-svg"
-                            src="images/headings/response_heading.png"
-                            width="233"
-                            height="57"
-                            alt="Hey there"
+                            src="images/headings/discount_heading.png"
+                            width="324"
+                            height="159"
+                            alt="You have a discount"
                         />
                     </td>
                 </tr>
 
                 <tr>
-                    <td class="message-cell" style="padding: 0 85px 40px">
-                        <p class="message-text">Hi there! Thank you for contacting Romeo Support. We have reviewed your request and our team is on it. You can expect a resolution within 24 hours. Please reply if you have any additional information to share.</p>
+                    <td class="description-cell" style="padding: 0 42px 52px">
+                        <span class="description-box">As one of our valued early supporters, we&rsquo;re excited to offer you an exclusive discount. Enjoy your experience with us!</span>
                     </td>
                 </tr>
 
                 <tr>
-                    <td class="button-cell" style="padding: 0 42px 94px">
-                        <a href="#" class="resolve-button">Mark as resolved?</a>
+                    <td class="coupon-cell" style="padding: 0 42px 78px">
+                        <div class="coupon-card">
+                            <img
+                                src="images/discount_barcode.png"
+                                width="214"
+                                height="80"
+                                alt="Discount barcode"
+                                class="barcode-image"
+                            />
+                            <p class="discount-code">L4V1OSIR</p>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="cta-cell" style="padding: 0 46px 94px">
+                        <a href="#" target="_blank" class="copy-button">
+                            <img
+                                src="images/copy-icon.svg"
+                                width="20"
+                                height="20"
+                                alt=""
+                                class="copy-icon"
+                            />Copy code
+                        </a>
                     </td>
                 </tr>
             </table>
