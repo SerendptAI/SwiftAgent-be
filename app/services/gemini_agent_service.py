@@ -11,6 +11,7 @@ Conversation history is stored in MongoDB.
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -19,6 +20,7 @@ from google.genai import types
 
 from app.core.config import settings
 from app.core.database import db
+from app.core.langfuse import observe, observe_tool_call, create_llm_generation
 from app.core.utils import get_random_avatar
 from app.services import knowledge_service, chain_service, stroll_index_service, memory_service, page_reader_service, integration_service
 from app.services.stroll_index_service import extract_navigation_steps, reconstruct_navigation_guide
@@ -39,6 +41,7 @@ def _get_client():
     return _client
 
 
+@observe(name="gemini.generate_chat_title")
 async def generate_chat_title(first_message: str) -> str:
     """Intelligently generate a short title for a chat based on the first message."""
     try:
@@ -764,6 +767,7 @@ async def _save_conversation(company_id: str, session_id: str, messages: list[di
 # main chat function
 
 
+@observe(name="gemini.chat")
 async def chat(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None) -> dict:
     """
     Process a chat message from the widget.
@@ -821,8 +825,16 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
     client = _get_client()
     blockchain_data = None
     sources = []
+    _trace_id = None
+    try:
+        from app.core.langfuse import _langfuse_client, _langfuse_enabled
+        if _langfuse_enabled and _langfuse_client:
+            _trace_id = _langfuse_client.get_trace_id() if hasattr(_langfuse_client, 'get_trace_id') else None
+    except Exception:
+        pass
 
     try:
+        _t0 = time.monotonic()
         response = client.models.generate_content(
             model=settings.GEMINI_MODEL,
             contents=gemini_history,
@@ -831,6 +843,20 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
                 tools=TOOLS,
                 temperature=0.3,
             ),
+        )
+        _latency_ms = (time.monotonic() - _t0) * 1000
+        _usage = getattr(response, 'usage_metadata', None)
+        create_llm_generation(
+            trace_id=_trace_id or "",
+            model=settings.GEMINI_MODEL,
+            provider="gemini",
+            system_prompt=system_prompt,
+            user_message=user_message,
+            completion="",
+            input_tokens=getattr(_usage, 'prompt_token_count', 0) if _usage else 0,
+            output_tokens=getattr(_usage, 'candidates_token_count', 0) if _usage else 0,
+            latency_ms=_latency_ms,
+            metadata={"company_id": company_id, "session_id": session_id, "round": 0},
         )
 
         # Handle tool calls (may need multiple rounds)
@@ -851,6 +877,14 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             for fc in function_calls:
                 args = dict(fc.args) if fc.args else {}
                 result = await _execute_tool(fc.name, args, company=company, session_id=session_id)
+
+                # Record each tool call as a Langfuse child span
+                observe_tool_call(
+                    trace_id=_trace_id,
+                    tool_name=fc.name,
+                    tool_input=args,
+                    tool_output=result,
+                )
 
                 # Track blockchain data for response
                 if fc.name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
@@ -878,6 +912,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             gemini_history.append(types.Content(role="user", parts=tool_results))
 
             # Call Gemini again with tool results
+            _t0 = time.monotonic()
             response = client.models.generate_content(
                 model=settings.GEMINI_MODEL,
                 contents=gemini_history,
@@ -886,6 +921,20 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
                     tools=TOOLS,
                     temperature=0.3,
                 ),
+            )
+            _latency_ms = (time.monotonic() - _t0) * 1000
+            _usage = getattr(response, 'usage_metadata', None)
+            create_llm_generation(
+                trace_id=_trace_id or "",
+                model=settings.GEMINI_MODEL,
+                provider="gemini",
+                system_prompt=system_prompt,
+                user_message=user_message,
+                completion="",
+                input_tokens=getattr(_usage, 'prompt_token_count', 0) if _usage else 0,
+                output_tokens=getattr(_usage, 'candidates_token_count', 0) if _usage else 0,
+                latency_ms=_latency_ms,
+                metadata={"company_id": company_id, "session_id": session_id, "tool_round": True},
             )
 
         # Extract final text response

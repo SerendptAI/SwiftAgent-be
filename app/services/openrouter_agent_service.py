@@ -10,6 +10,7 @@ Same tool set and SSE streaming contract as anthropic_agent_service.
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -17,6 +18,7 @@ from openai import AsyncOpenAI
 
 from app.core.config import settings
 from app.core.database import db
+from app.core.langfuse import observe, observe_tool_call, create_llm_generation
 from app.core.validators import validate_email
 from app.core.utils import get_random_avatar
 from app.services import (
@@ -56,6 +58,7 @@ def _get_client() -> AsyncOpenAI:
 MODEL = settings.OPENROUTER_MODEL
 
 
+@observe(name="openrouter.generate_chat_title")
 async def generate_chat_title(first_message: str) -> str:
     """Intelligently generate a short title for a chat based on the first message."""
     try:
@@ -787,6 +790,7 @@ def _history_to_openai(history: list[dict], max_msgs: int = 10) -> list[dict]:
 
 
 # Non-streaming chat
+@observe(name="openrouter.chat")
 async def chat(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None) -> dict:
     """Process a chat message and return a complete response dict."""
     company = await db.companies.find_one({"id": company_id})
@@ -816,8 +820,16 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
     blockchain_data = None
     sources = []
     guide_dump = None
+    _trace_id = None
+    try:
+        from app.core.langfuse import _langfuse_client, _langfuse_enabled
+        if _langfuse_enabled and _langfuse_client:
+            _trace_id = _langfuse_client.get_trace_id() if hasattr(_langfuse_client, 'get_trace_id') else None
+    except Exception:
+        pass
 
     try:
+        _t0 = time.monotonic()
         response = await client.chat.completions.create(
             model=MODEL,
             messages=messages,
@@ -825,6 +837,20 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             tool_choice="auto",
             max_tokens=4096,
             temperature=0.3,
+        )
+        _latency_ms = (time.monotonic() - _t0) * 1000
+        _usage = getattr(response, 'usage', None)
+        create_llm_generation(
+            trace_id=_trace_id or "",
+            model=MODEL,
+            provider="openrouter",
+            system_prompt=system_prompt,
+            user_message=user_message,
+            completion="",
+            input_tokens=getattr(_usage, 'prompt_tokens', 0) if _usage else 0,
+            output_tokens=getattr(_usage, 'completion_tokens', 0) if _usage else 0,
+            latency_ms=_latency_ms,
+            metadata={"company_id": company_id, "session_id": session_id, "round": 0},
         )
 
         nav_report_data = None
@@ -848,6 +874,14 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
 
                 result = await _execute_tool(fn_name, args, company=company, session_id=session_id)
 
+                # Record each tool call as a Langfuse child span
+                observe_tool_call(
+                    trace_id=_trace_id,
+                    tool_name=fn_name,
+                    tool_input=args,
+                    tool_output=result,
+                )
+
                 if fn_name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
                     blockchain_data = result
                 if fn_name == "search_knowledge_base" and isinstance(result, dict):
@@ -862,6 +896,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
                     "content": json.dumps(result, default=str),
                 })
 
+            _t0 = time.monotonic()
             response = await client.chat.completions.create(
                 model=MODEL,
                 messages=messages,
@@ -869,6 +904,20 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
                 tool_choice="auto",
                 max_tokens=4096,
                 temperature=0.3,
+            )
+            _latency_ms = (time.monotonic() - _t0) * 1000
+            _usage = getattr(response, 'usage', None)
+            create_llm_generation(
+                trace_id=_trace_id or "",
+                model=MODEL,
+                provider="openrouter",
+                system_prompt=system_prompt,
+                user_message=user_message,
+                completion="",
+                input_tokens=getattr(_usage, 'prompt_tokens', 0) if _usage else 0,
+                output_tokens=getattr(_usage, 'completion_tokens', 0) if _usage else 0,
+                latency_ms=_latency_ms,
+                metadata={"company_id": company_id, "session_id": session_id, "tool_round": True},
             )
 
         reply = response.choices[0].message.content or ""

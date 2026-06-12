@@ -37,6 +37,7 @@ dependencies = [
     "pywebpush>=2.3.0",
     "python-magic>=0.4.27",
     "polar-sdk>=0.31.6",
+    "langfuse>=2.0.0,<3.0.0",
 ]
 
 [project.optional-dependencies]

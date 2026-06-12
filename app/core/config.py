@@ -104,6 +104,11 @@ class Settings(BaseSettings):
     OTP_CHALLENGE_EXPIRY_SECONDS: int = 300
     STROLL_SCREENSHOT_QUALITY: int = 70
 
+    # Langfuse LLM observability
+    LANGFUSE_PUBLIC_KEY: str = ""
+    LANGFUSE_SECRET_KEY: str = ""
+    LANGFUSE_HOST: str = "https://cloud.langfuse.com"  # Override with your self-hosted URL
+
     # Email Provider toggle: "zoho" or "zepto"
     EMAIL_PROVIDER: str = "zepto"
 

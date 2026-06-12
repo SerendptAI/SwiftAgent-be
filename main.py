@@ -37,6 +37,7 @@ from app.core.config import settings
 from app.core.database import create_indexes
 from app.services.stroll_service import init_browser, close_browser
 from app.services.stroll_scheduler import init_scheduler, close_scheduler
+from app.core.langfuse import init_langfuse, shutdown_langfuse
 
 # structured logging setup
 logging.basicConfig(
@@ -51,6 +52,9 @@ async def lifespan(app: FastAPI):
         await create_indexes()
     except Exception as e:
         logging.getLogger(__name__).warning("DB index creation failed: %s", e)
+
+    # Langfuse LLM observability (no-ops gracefully if keys are unset)
+    init_langfuse()
 
     try:
         await init_browser()
@@ -76,6 +80,8 @@ async def lifespan(app: FastAPI):
         await close_browser()
     except Exception:
         pass
+
+    shutdown_langfuse()
 
 
 app = FastAPI(
