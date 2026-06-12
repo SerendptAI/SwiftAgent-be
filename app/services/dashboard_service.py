@@ -205,7 +205,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "id": {"$ifNull": ["$id", "$session_id"]},
                 "company_id": 1,
                 "session_id": 1,
-                "created_at": 1,
+                "created_at": {"$ifNull": ["$created_at", "$updated_at"]},
                 "updated_at": 1,
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "message_timestamps": "$messages.timestamp",
@@ -393,6 +393,13 @@ async def get_chat_by_id(company_id: str, chat_id: str) -> dict:
         result["duration_seconds"] = _duration_from_timestamps(
             [m.get("timestamp") for m in result.get("messages", [])]
         )
+        result["id"] = result.get("id") or result.get("session_id") or chat_id
+        result["session_id"] = result.get("session_id") or result["id"]
+        result["company_id"] = result.get("company_id") or company_id
+        
+        now = datetime.now(tz=timezone.utc)
+        result["created_at"] = result.get("created_at") or result.get("updated_at") or now
+        result["updated_at"] = result.get("updated_at") or result["created_at"]
         return result
 
     # Fall back to resolved ticket
@@ -419,7 +426,10 @@ async def get_chat_by_id(company_id: str, chat_id: str) -> dict:
 
 async def mark_chat_seen(company_id: str, chat_id: str) -> bool:
     result = await db.widget_conversations.update_one(
-        {"company_id": company_id, "id": chat_id},
+        {
+            "company_id": company_id,
+            "$or": [{"id": chat_id}, {"session_id": chat_id}]
+        },
         {"$set": {"seen": True}},
     )
     return result.matched_count > 0

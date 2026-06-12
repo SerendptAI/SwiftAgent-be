@@ -177,6 +177,7 @@ async def list_tickets(
                 "_id": 0,
                 "id": 1,
                 "company_id": 1,
+                "session_id": {"$ifNull": ["$customer_name", {"$ifNull": ["$customer_email", "$id"]}]},
                 "customer_email": 1,
                 "customer_name": 1,
                 "subject": 1,
@@ -186,6 +187,8 @@ async def list_tickets(
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "created_at": 1,
                 "updated_at": 1,
+                "type": {"$literal": "ticket"},
+                "seen": {"$literal": False},
                 "preview_message": {
                     "$cond": {
                         "if": {"$eq": ["$last_ticket_msg.direction", "system"]},
