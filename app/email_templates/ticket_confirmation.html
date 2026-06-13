@@ -432,10 +432,10 @@
             style="padding: 82px 0 48px; text-align: center"
           >
             <img
-              src="images/logo 2.png"
+              src="{{company_logo_url}}"
               width="72"
               height="70"
-              alt="Romeo Support"
+              alt="{{company_name}}"
               class="logo-mark"
             />
           </td>
@@ -448,7 +448,7 @@
           >
             <img
               class="heading-svg"
-              src="images/headings/ticket_confirmation_heading.png"
+              src="{{base_url}}/images/headings/ticket_confirmation_heading.png"
               width="435"
               height="107"
               alt="Your complaint has been received"
@@ -460,7 +460,7 @@
           <td class="copy-cell" style="padding: 0 58px 80px">
             <p class="body-text">
               You can expect to receive follow-up<br class="copy-break" />
-              emails from the team at Romeo Support.<br class="copy-break" />
+              emails from the team at {{company_name}}.<br class="copy-break" />
               They will keep you updated on<br class="copy-break" />
               any developments and ensure that you<br class="copy-break" />
               have all the information you need.
@@ -503,7 +503,7 @@
                     vertical-align: middle;
                   "
                 >
-                  <span class="ticket-number">V1GSHST-TAR6282</span>
+                  <span class="ticket-number">{{ticket_number}}</span>
                 </td>
               </tr>
             </table>
@@ -514,7 +514,7 @@
           <td class="image-cell" style="padding: 0 58px 94px">
           <div class="hero-frame">
             <img
-              src="images/ticket-confirmation.png"
+              src="{{base_url}}/images/ticket-confirmation.png"
               width="484"
               height="381"
               alt="Ticket confirmation"

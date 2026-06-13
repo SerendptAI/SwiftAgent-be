@@ -363,7 +363,7 @@
                         style="padding: 85px 0 70px; text-align: center"
                     >
                         <img
-                            src="images/favicon.png"
+                            src="{{base_url}}/images/logo.png"
                             width="72"
                             height="70"
                             alt="SwiftAgent"
@@ -379,7 +379,7 @@
                     >
                         <img
                             class="heading-svg"
-                            src="images/headings/discount_heading.png"
+                            src="{{base_url}}/images/headings/discount_heading.png"
                             width="324"
                             height="159"
                             alt="You have a discount"
@@ -397,14 +397,23 @@
                     <td class="coupon-cell" style="padding: 0 42px 94px">
                         <div class="coupon-card">
                             <img
-                                src="images/discount_barcode.png"
+                                src="{{base_url}}/images/discount_barcode.png"
                                 width="214"
                                 height="80"
                                 alt="Discount barcode"
                                 class="barcode-image"
                             />
-                            <p class="discount-code">L4V1OSIR</p>
+                            <p class="discount-code">{{discount_code}}</p>
                         </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="cta-cell" style="padding: 0 46px 94px">
+                        <a href="#" class="copy-button">
+                            <img src="{{base_url}}/images/copy-icon.png" width="24" height="24" alt="Copy" class="copy-icon" />
+                            COPY CODE
+                        </a>
                     </td>
                 </tr>
 

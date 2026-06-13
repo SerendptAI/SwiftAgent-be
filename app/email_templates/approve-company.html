@@ -245,7 +245,7 @@
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
         <td class="logo-cell" style="padding: 72px 0 52px; text-align: center;">
-          <img src="images/favicon.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
+          <img src="{{base_url}}/images/logo.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
         </td>
       </tr>
 
@@ -253,7 +253,7 @@
         <td class="heading-cell" style="padding: 0 70px 26px; text-align: center;">
           <img
             class="heading-svg"
-            src="images/headings/approve_company_heading.png"
+            src="{{base_url}}/images/headings/approve_company_heading.png"
             width="327"
             height="136"
             alt="There's a new company!"
@@ -267,24 +267,24 @@
             There's a new company on the waitlist, ensure you verify their legitimacy
           </p>
           <div class="details-list">
-            <span class="detail-item">Romeo Support</span>
-            <span class="detail-item">hello@romeosupport.com</span>
-            <span class="detail-item">AI-powered customer support platform</span>
-            <span class="detail-item">11–50</span>
+            <span class="detail-item">{{company_name}}</span>
+            <span class="detail-item">{{company_email}}</span>
+            <span class="detail-item">{{company_description}}</span>
+            <span class="detail-item">{{customer_size}}</span>
           </div>
         </td>
       </tr>
 
       <tr>
         <td class="button-cell" style="padding: 0 42px 48px;">
-          <a href="#" target="_blank" class="invite-button">Approve</a>
+          <a href="{{approval_url}}" target="_blank" class="invite-button">Approve</a>
         </td>
       </tr>
 
       <tr>
         <td class="image-cell" style="padding: 0 58px 51px;">
           <div class="hero-frame">
-            <img src="images/approve-company.png" width="474" height="373" alt="New kids on the block" class="hero-image">
+            <img src="{{base_url}}/images/approve-company.png" width="474" height="373" alt="New kids on the block" class="hero-image">
           </div>
         </td>
       </tr>

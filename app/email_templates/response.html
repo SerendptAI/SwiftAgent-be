@@ -327,7 +327,7 @@
     </head>
     <body style="margin: 0; padding: 0; background-color: #f5f5f4 color-scheme: only light;">
         <div style="display: none; max-height: 0; overflow: hidden">
-            Erica Pasos from Romeo Support replied. &#847; &#847; &#847; &#847;
+            {{agent_name}} from {{company_name}} Support replied. &#847; &#847; &#847; &#847;
             &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
             &#847; &#847;
         </div>
@@ -368,20 +368,20 @@
                                     style="padding: 0 18px 0 0; vertical-align: top;"
                                 >
                                     <img
-                                        src="images/erica-profile.jpg"
+                                        src="{{agent_image_url}}"
                                         width="46"
                                         height="46"
-                                        alt="Erica Pasos"
+                                        alt="{{agent_name}}"
                                         class="profile-image"
                                     />
                                 </td>
                                 <td style="padding: 0; vertical-align: middle; white-space: nowrap;">
-                                    <p class="agent-name" style="margin: 0; display: inline;">Erica Pasos</p><img src="images/logo 2.png" width="24" height="24" alt="Romeo Support" style="display: inline-block; vertical-align: middle; margin-left: 12px;">
+                                    <p class="agent-name" style="margin: 0; display: inline;">{{agent_name}}</p><img src="{{company_logo_url}}" width="24" height="24" alt="{{company_name}}" style="display: inline-block; vertical-align: middle; margin-left: 12px;">
                                 </td>
                             </tr>
                             <tr>
                                 <td style="padding: 0; vertical-align: middle;">
-                                    <p class="agent-role" style="margin: 0;">(Customer Support)</p>
+                                    <p class="agent-role" style="margin: 0;">({{company_name}} Support)</p>
                                 </td>
                             </tr>
                         </table>
@@ -395,7 +395,7 @@
                     >
                         <img
                             class="heading-svg"
-                            src="images/headings/response_heading.png"
+                            src="{{base_url}}/images/headings/response_heading.png"
                             width="233"
                             height="57"
                             alt="Hey there"
@@ -405,13 +405,13 @@
 
                 <tr>
                     <td class="message-cell" style="padding: 0 85px 40px">
-                        <p class="message-text">Hi there! Thank you for contacting Romeo Support. We have reviewed your request and our team is on it. You can expect a resolution within 24 hours. Please reply if you have any additional information to share.</p>
+                        <p class="message-text">{{message}}</p>
                     </td>
                 </tr>
 
                 <tr>
                     <td class="button-cell" style="padding: 0 42px 94px">
-                        <a href="#" class="resolve-button">Mark as resolved?</a>
+                        <a href="{{resolve_url}}" class="resolve-button">Mark as resolved?</a>
                     </td>
                 </tr>
             </table>

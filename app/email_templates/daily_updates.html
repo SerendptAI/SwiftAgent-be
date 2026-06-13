@@ -368,7 +368,7 @@
                         style="padding: 82px 0 48px; text-align: center"
                     >
                         <img
-                            src="images/favicon.png"
+                            src="{{base_url}}/images/logo.png"
                             width="72"
                             height="70"
                             alt="SwiftAgent"
@@ -384,7 +384,7 @@
                     >
                         <img
                             class="heading-svg"
-                            src="images/headings/daily_updates_heading.png"
+                            src="{{base_url}}/images/headings/daily_updates_heading.png"
                             width="245"
                             height="58"
                             alt="You've got"
@@ -395,12 +395,12 @@
                 <tr>
                     <td class="details-cell" style="padding: 0 120px 96px">
                         <p class="body-text">
-                            Pending Messages: 5
+                            Pending Messages: {{pending_messages}}
                         </p>
                         <p class="body-text">
-                            Follow-up emails: 2
+                            Follow-up emails: {{follow_up_emails}}
                         </p>
-                        <p class="body-text">Enquiries: 3</p>
+                        <p class="body-text">Enquiries: {{enquiries}}</p>
                     </td>
                 </tr>
 
@@ -426,7 +426,7 @@
                                     "
                                 >
                                     <span class="date-button"
-                                        >Date: 12/06/2026</span
+                                        >Date: {{date}}</span
                                     >
                                 </td>
                                 <td
@@ -439,7 +439,7 @@
                                     "
                                 >
                                     <a
-                                        href="#"
+                                        href="{{view_url}}"
                                         target="_blank"
                                         class="view-button"
                                         >View</a
@@ -454,7 +454,7 @@
                     <td class="image-cell" style="padding: 0 58px 94px">
                         <div class="hero-frame">
                             <img
-                                src="images/daily-updates.png"
+                                src="{{base_url}}/images/daily-updates.png"
                                 width="484"
                                 height="381"
                                 alt="Daily updates"

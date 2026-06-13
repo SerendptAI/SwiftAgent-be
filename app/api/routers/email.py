@@ -67,17 +67,13 @@ async def resolve_ticket_page(token: str):
     company = await company_service.get_company(ticket["company_id"])
     company_name = company.get("name", "Support") if company else "Support"
     logo_url = company.get("logo_url") if company else None
-
-    if logo_url:
-        company_logo = f'<img src="{logo_url}" alt="{company_name}" class="logo-mark">'
-    else:
-        company_logo = f'<img src="{settings.API_BASE_URL}/email-images/logo 2.png" width="72" height="71" alt="{company_name}" class="logo-mark">'
+    
+    logo_url_fallback = logo_url or f"{settings.API_BASE_URL}/images/logo 2.png"
 
     if ticket["status"] == "resolved":
         html = _load_template(RESOLVED_TEMPLATE)
-        html = html.replace("{{confirmation_message}}", "This ticket was already resolved.")
         html = html.replace("{{company_name}}", company_name)
-        html = html.replace("{{company_logo}}", company_logo)
+        html = html.replace("{{company_logo_url}}", logo_url_fallback)
         return HTMLResponse(content=html, status_code=200)
 
     html = _load_template(RESOLVE_CONFIRM_TEMPLATE)
@@ -85,7 +81,7 @@ async def resolve_ticket_page(token: str):
     html = html.replace("{{ticket_subject}}", ticket["subject"])
     html = html.replace("{{resolve_token}}", token)
     html = html.replace("{{company_name}}", company_name)
-    html = html.replace("{{company_logo}}", company_logo)
+    html = html.replace("{{company_logo_url}}", logo_url_fallback)
     return HTMLResponse(content=html, status_code=200)
 
 
@@ -109,15 +105,10 @@ async def confirm_resolve_ticket(token: str):
     company = await company_service.get_company(company_id)
     company_name = company.get("name", "Support") if company else "Support"
     logo_url = company.get("logo_url") if company else None
+    logo_url_fallback = logo_url or f"{settings.API_BASE_URL}/images/logo 2.png"
 
-    if logo_url:
-        company_logo = f'<img src="{logo_url}" alt="{company_name}" class="logo-mark">'
-    else:
-        company_logo = f'<img src="{settings.API_BASE_URL}/email-images/logo 2.png" width="72" height="71" alt="{company_name}" class="logo-mark">'
-
-    html = html.replace("{{confirmation_message}}", msg)
     html = html.replace("{{company_name}}", company_name)
-    html = html.replace("{{company_logo}}", company_logo)
+    html = html.replace("{{company_logo_url}}", logo_url_fallback)
     return HTMLResponse(content=html, status_code=200)
 
 
@@ -331,6 +322,7 @@ async def reply_to_ticket(
             company_id, ticket_id, body_text.strip(), body_html,
             attachments=attachment_data if attachment_data else None,
             agent_name=current_user.get("name"),
+            agent_avatar_url=current_user.get("picture"),
         )
         return result
     except ValueError as e:

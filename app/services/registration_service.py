@@ -18,7 +18,7 @@ from app.services.welcome_email_service import send_welcome_email
 logger = logging.getLogger(__name__)
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "email_templates"
-NOTIFICATION_TEMPLATE = TEMPLATES_DIR / "admin_registration_notification.html"
+NOTIFICATION_TEMPLATE = TEMPLATES_DIR / "approve-company.html"
 CONFIRM_TEMPLATE = TEMPLATES_DIR / "admin_registration_confirm.html"
 APPROVED_TEMPLATE = TEMPLATES_DIR / "admin_registration_approved.html"
 

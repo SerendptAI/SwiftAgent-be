@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 _TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "email_templates" / "team_member_invite.html"
 
-async def send_invite_email(to_email: str, company_name: str, accept_link: str) -> None:
+async def send_invite_email(to_email: str, company_name: str, accept_link: str, company_logo_url: str) -> None:
     """Send an invitation HTML email to `to_email` using Zoho SMTP."""
 
     try:
@@ -20,6 +20,7 @@ async def send_invite_email(to_email: str, company_name: str, accept_link: str) 
         html = (
             html.replace("{{company_name}}", company_name)
                 .replace("{{invite_url}}", accept_link)
+                .replace("{{company_logo_url}}", company_logo_url)
         )
     except Exception:
         logger.exception("Failed to load invite template, falling back to simple text.")

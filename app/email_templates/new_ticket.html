@@ -338,7 +338,7 @@
                         style="padding: 85px 0 70px; text-align: center"
                     >
                         <img
-                            src="images/favicon.png"
+                            src="{{base_url}}/images/logo.png"
                             width="72"
                             height="70"
                             alt="SwiftAgent"
@@ -354,7 +354,7 @@
                     >
                         <img
                             class="heading-svg"
-                            src="images/headings/new_ticket_heading.png"
+                            src="{{base_url}}/images/headings/new_ticket_heading.png"
                             width="324"
                             height="159"
                             alt="You have a new ticket"
@@ -367,7 +367,7 @@
                         class="preview-cell"
                         style="padding: 0 42px 52px"
                     >
-                        <span class="preview-pill">A new ticket from ot@zvask.com</span>
+                        <span class="preview-pill">A new ticket from {{customer_email}}</span>
                     </td>
                 </tr>
 
@@ -375,7 +375,7 @@
                     <td class="hero-cell" style="padding: 0 31px 52px">
                         <div class="hero-frame">
                             <img
-                                src="images/new-ticket.png"
+                                src="{{base_url}}/images/new-ticket.png"
                                 width="484"
                                 height="380"
                                 alt="New ticket"
@@ -387,7 +387,7 @@
 
                 <tr>
                     <td class="cta-cell" style="padding: 0 46px 94px">
-                        <a href="#" target="_blank" class="cta-button">
+                        <a href="{{dashboard_url}}" target="_blank" class="cta-button">
                             Head to your dashboard
                         </a>
                     </td>

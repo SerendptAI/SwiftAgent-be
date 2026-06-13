@@ -327,7 +327,7 @@
             style="padding: 72px 0 55px; text-align: center"
           >
             <img
-              src="images/favicon.png"
+              src="{{base_url}}/images/logo.png"
               width="72"
               height="70"
               alt="SwiftAgent"
@@ -358,7 +358,7 @@
         <tr>
           <td class="button-cell" style="padding: 0 42px 94px">
             <form
-              action="/api/v1/auth/registrations/approve/abc123token"
+              action="{{base_url}}/api/v1/auth/registrations/approve/{{token}}"
               method="post"
               style="margin: 0"
             >

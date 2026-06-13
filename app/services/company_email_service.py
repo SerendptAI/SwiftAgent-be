@@ -37,6 +37,9 @@ _sg_client = None
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "email_templates"
 TICKET_REPLY_TEMPLATE = TEMPLATES_DIR / "response.html"
 RESOLVED_TEMPLATE = TEMPLATES_DIR / "resolved.html"
+NEW_MESSAGE_TEMPLATE = TEMPLATES_DIR / "new_message.html"
+NEW_TICKET_TEMPLATE = TEMPLATES_DIR / "new_ticket.html"
+TICKET_CONFIRMATION_TEMPLATE = TEMPLATES_DIR / "ticket_confirmation.html"
 
 _TICKET_ID_RE = re.compile(r"\[Ticket\s*#([A-Z0-9]{8})\]", re.IGNORECASE)
 
@@ -118,6 +121,10 @@ async def create_ticket(
             data={"ticket_id": ticket_id}
         )
     )
+    company = await company_service.get_company(company_id)
+    if company:
+        asyncio.create_task(_send_new_ticket_email(company, doc))
+        asyncio.create_task(_send_ticket_confirmation_email(company, doc))
 
     # Mark the originating chat as escalated so it's excluded from the resolved list
     if chat_session_id:
@@ -243,18 +250,18 @@ async def mark_ticket_seen(company_id: str, ticket_id: str) -> bool:
 def _build_reply_html(
     response_message: str,
     agent_name: str,
-    support_team: str,
     agent_avatar: str,
     resolve_url: str,
-    company_logo: str,
+    company_logo_url: str,
+    company_name: str,
 ) -> str:
     html = _load_template(TICKET_REPLY_TEMPLATE)
     html = html.replace("{{agent_name}}", agent_name)
-    html = html.replace("{{support_team}}", support_team)
-    html = html.replace("{{agent_avatar}}", agent_avatar)
+    html = html.replace("{{company_name}}", company_name)
+    html = html.replace("{{agent_image_url}}", agent_avatar)
     html = html.replace("{{resolve_url}}", resolve_url)
-    html = html.replace("{{company_logo}}", company_logo)
-    html = html.replace("{{response_message}}", response_message)
+    html = html.replace("{{company_logo_url}}", company_logo_url)
+    html = html.replace("{{message}}", response_message)
     return html
 
 
@@ -265,6 +272,7 @@ async def send_ticket_reply(
     body_html: str | None = None,
     attachments: list[dict] | None = None,
     agent_name: str | None = None,
+    agent_avatar_url: str | None = None,
 ) -> dict:
     """Send a reply from the company to the customer via SendGrid.
 
@@ -291,27 +299,20 @@ async def send_ticket_reply(
     agent_display = (agent_name or "").strip() or company_name
     support_team = "Support Team"
 
-    # Resolve the ticket's avatar to an absolute URL the email client can load.
-    avatar_path = ticket.get("avatar") or get_random_avatar()
+    # Resolve the agent's avatar to an absolute URL the email client can load.
+    avatar_path = agent_avatar_url or get_random_avatar()
     agent_avatar = (
         f"{settings.API_BASE_URL}{avatar_path}"
         if avatar_path.startswith("/")
         else avatar_path
     )
 
-    # Company logo (next to the agent name). Render nothing if the company has
-    # no logo so we never ship a broken image.
-    logo_url = company.get("logo_url")
-    company_logo = (
-        f'<img src="{logo_url}" alt="{company_name}" height="31" '
-        f'style="display:block;border:0;max-height:31px;width:auto" />'
-        if logo_url
-        else ""
-    )
+    # Company logo (next to the agent name).
+    logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo 2.png"
 
     html_body = body_html or f"<p>{body_text}</p>"
     full_html = _build_reply_html(
-        html_body, agent_display, support_team, agent_avatar, resolve_url, company_logo
+        html_body, agent_display, agent_avatar, resolve_url, logo_url, company_name
     )
 
     full_html, attachments_map = process_html_for_inline_images(full_html)
@@ -650,8 +651,165 @@ async def process_inbound_email(payload: dict) -> dict:
             data={"ticket_id": ticket_id}
         )
     )
+    asyncio.create_task(_send_new_message_email(company, ticket, inbound_msg))
     
     return {"status": "stored", "ticket_id": ticket_id}
+
+
+async def _send_new_message_email(company: dict, ticket: dict, inbound_msg: dict):
+    try:
+        html = _load_template(NEW_MESSAGE_TEMPLATE)
+        preview_message = inbound_msg.get("body_text", "")
+        if len(preview_message) > 40:
+            preview_message = preview_message[:40] + "..."
+        
+        customer_email = ticket.get("customer_email", inbound_msg.get("sender_email", ""))
+        dashboard_url = f"{settings.FRONTEND_URL}/dashboard/tickets/{ticket['id']}"
+
+        html = html.replace("{{preview_message}}", preview_message)
+        html = html.replace("{{customer_email}}", customer_email)
+        html = html.replace("{{dashboard_url}}", dashboard_url)
+        
+        full_html, attachments_map = process_html_for_inline_images(html)
+        
+        subject = f"New message from {customer_email} - Ticket #{ticket['id']}"
+        from_email = "noreply@swiftagents.org"
+        company_name = "SwiftAgent"
+
+        # Send to all company members
+        user_ids = [company.get("user_id")]
+        for member in company.get("members", []):
+            if member.get("user_id"):
+                user_ids.append(member["user_id"])
+        
+        user_ids = list(set([uid for uid in user_ids if uid]))
+        if not user_ids:
+            return
+
+        cursor = db.users.find({"user_id": {"$in": user_ids}})
+        to_emails = []
+        async for u in cursor:
+            if u.get("email"):
+                to_emails.append(u["email"])
+
+        if not to_emails:
+            return
+
+        message = Mail(
+            from_email=From(from_email, company_name),
+            to_emails=to_emails,
+            subject=Subject(subject),
+        )
+        message.add_content(Content(MimeType.text, f"New message from {customer_email}: {preview_message}"))
+        message.add_content(Content(MimeType.html, full_html))
+        
+        sg = _get_sendgrid_client()
+        
+        def _send() -> None:
+            sg.send(message)
+            
+        import asyncio
+        await asyncio.to_thread(_send)
+        logger.info("Sent new message email for ticket %s to %s agents", ticket['id'], len(to_emails))
+    except Exception as e:
+        logger.exception("Failed to send new message email for ticket %s: %s", ticket['id'], e)
+
+
+async def _send_new_ticket_email(company: dict, ticket: dict):
+    try:
+        html = _load_template(NEW_TICKET_TEMPLATE)
+        customer_email = ticket.get("customer_email", "")
+        dashboard_url = f"{settings.FRONTEND_URL}/dashboard/tickets/{ticket['id']}"
+
+        html = html.replace("{{customer_email}}", customer_email)
+        html = html.replace("{{dashboard_url}}", dashboard_url)
+        
+        full_html, attachments_map = process_html_for_inline_images(html)
+        
+        subject = f"New Ticket #{ticket['id']} from {customer_email}"
+        from_email = "noreply@swiftagents.org"
+        company_name = "SwiftAgent"
+
+        # Send to all company members
+        user_ids = [company.get("user_id")]
+        for member in company.get("members", []):
+            if member.get("user_id"):
+                user_ids.append(member["user_id"])
+        
+        user_ids = list(set([uid for uid in user_ids if uid]))
+        if not user_ids:
+            return
+
+        cursor = db.users.find({"user_id": {"$in": user_ids}})
+        to_emails = []
+        async for u in cursor:
+            if u.get("email"):
+                to_emails.append(u["email"])
+
+        if not to_emails:
+            return
+
+        message = Mail(
+            from_email=From(from_email, company_name),
+            to_emails=to_emails,
+            subject=Subject(subject),
+        )
+        message.add_content(Content(MimeType.text, f"New ticket #{ticket['id']} opened by {customer_email}. View it on your dashboard."))
+        message.add_content(Content(MimeType.html, full_html))
+        
+        sg = _get_sendgrid_client()
+        
+        def _send() -> None:
+            sg.send(message)
+            
+        import asyncio
+        await asyncio.to_thread(_send)
+        logger.info("Sent new ticket email for ticket %s to %s agents", ticket['id'], len(to_emails))
+    except Exception as e:
+        logger.exception("Failed to send new ticket email for ticket %s: %s", ticket['id'], e)
+
+
+async def _send_ticket_confirmation_email(company: dict, ticket: dict):
+    try:
+        html = _load_template(TICKET_CONFIRMATION_TEMPLATE)
+        company_name = company.get("name", "Support")
+        email_slug = company.get("email_slug")
+        if not email_slug:
+            logger.warning("Company %s has no email slug, skipping ticket confirmation email", company["id"])
+            return
+
+        from_email = f"{email_slug}@{settings.EMAIL_DOMAIN}"
+        to_email = ticket["customer_email"]
+        
+        logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo 2.png"
+        
+        html = html.replace("{{company_logo_url}}", logo_url)
+        html = html.replace("{{company_name}}", company_name)
+        html = html.replace("{{base_url}}", settings.API_BASE_URL)
+        html = html.replace("{{ticket_number}}", ticket["id"])
+        
+        full_html, attachments_map = process_html_for_inline_images(html)
+        
+        subject = f"Your ticket has been received - #{ticket['id']}"
+
+        message = Mail(
+            from_email=From(from_email, company_name),
+            to_emails=To(to_email),
+            subject=Subject(subject),
+        )
+        message.add_content(Content(MimeType.text, f"Your ticket #{ticket['id']} has been received. We will get back to you shortly."))
+        message.add_content(Content(MimeType.html, full_html))
+        
+        sg = _get_sendgrid_client()
+        
+        def _send() -> None:
+            sg.send(message)
+            
+        import asyncio
+        await asyncio.to_thread(_send)
+        logger.info("Sent ticket confirmation email for ticket %s to %s", ticket['id'], to_email)
+    except Exception as e:
+        logger.exception("Failed to send ticket confirmation email for ticket %s: %s", ticket['id'], e)
 
 
 async def get_ticket_by_resolve_token(token: str) -> dict | None:
@@ -725,15 +883,10 @@ async def _send_resolved_email(ticket: dict):
         to_email = ticket["customer_email"]
         
         html = _load_template(RESOLVED_TEMPLATE)
-        logo_url = company.get("logo_url")
-        if logo_url:
-            company_logo = f'<img src="{logo_url}" alt="{company_name}" class="logo-mark">'
-        else:
-            company_logo = f'<img src="{settings.API_BASE_URL}/email-images/logo 2.png" width="72" height="71" alt="{company_name}" class="logo-mark">'
+        logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo 2.png"
         
-        html = html.replace("{{company_logo}}", company_logo)
+        html = html.replace("{{company_logo_url}}", logo_url)
         html = html.replace("{{company_name}}", company_name)
-        html = html.replace("{{confirmation_message}}", "Your ticket has been closed.")
         
         # Inline images using existing util
         full_html, attachments_map = process_html_for_inline_images(html)

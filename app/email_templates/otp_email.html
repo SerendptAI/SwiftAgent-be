@@ -262,7 +262,7 @@
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
         <td class="logo-cell" style="padding: 82px 0 80px; text-align: center;">
-          <img src="images/favicon.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
+          <img src="{{base_url}}/images/logo.png" width="72" height="70" alt="SwiftAgent" class="logo-mark">
         </td>
       </tr>
 
@@ -270,7 +270,7 @@
         <td class="heading-cell" style="padding: 0 58px 32px; text-align: center;">
           <img
             class="heading-svg"
-            src="images/headings/otp_email_heading.png"
+            src="{{base_url}}/images/headings/otp_email_heading.png"
             width="381"
             height="58"
             alt="Here's your OTP"
@@ -281,8 +281,8 @@
       <tr>
         <td class="copy-cell" style="padding: 0 90px 62px;">
           <p class="body-text">
-            Here is your login verification code<br class="copy-break">
-            (OTP). It expires in 10 minutes.<br class="copy-break">
+            Here is your {{purpose_label}} code<br class="copy-break">
+            (OTP). It expires in {{ttl_minutes}} minutes.<br class="copy-break">
             If you did not request this,<br class="copy-break">
             please disregard this message.
           </p>
@@ -293,17 +293,17 @@
         <td class="code-cell" style="padding: 0 49px 88px;">
           <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="otp-code">
             <tr>
-              <td class="code-box">4</td>
+              <td class="code-box">{{d0}}</td>
               <td class="code-gap">&nbsp;</td>
-              <td class="code-box">8</td>
+              <td class="code-box">{{d1}}</td>
               <td class="code-gap">&nbsp;</td>
-              <td class="code-box">2</td>
+              <td class="code-box">{{d2}}</td>
               <td class="code-gap">&nbsp;</td>
-              <td class="code-box">9</td>
+              <td class="code-box">{{d3}}</td>
               <td class="code-gap">&nbsp;</td>
-              <td class="code-box">1</td>
+              <td class="code-box">{{d4}}</td>
               <td class="code-gap">&nbsp;</td>
-              <td class="code-box">7</td>
+              <td class="code-box">{{d5}}</td>
             </tr>
           </table>
         </td>
@@ -312,7 +312,7 @@
       <tr>
         <td class="image-cell" style="padding: 0 58px 94px;">
           <div class="hero-frame">
-            <img src="images/otp.png" width="484" height="381" alt="OTP verification" class="hero-image">
+            <img src="{{base_url}}/images/otp.png" width="484" height="381" alt="OTP verification" class="hero-image">
           </div>
         </td>
       </tr>
