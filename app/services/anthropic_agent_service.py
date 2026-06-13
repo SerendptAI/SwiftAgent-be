@@ -11,6 +11,7 @@ Conversation history is stored in MongoDB.
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -18,6 +19,7 @@ import anthropic
 
 from app.core.config import settings
 from app.core.database import db
+from app.core.langfuse import observe, observe_tool_call, create_llm_generation
 from app.core.validators import validate_email
 from app.core.utils import get_random_avatar
 from app.services import knowledge_service, chain_service, stroll_index_service, memory_service, company_email_service, page_reader_service, integration_service
@@ -42,10 +44,12 @@ def _get_client() -> anthropic.AsyncAnthropic:
 MODEL = settings.ANTHROPIC_MODEL
 
 
+@observe(name="anthropic.generate_chat_title")
 async def generate_chat_title(first_message: str) -> str:
     """Intelligently generate a short title for a chat based on the first message."""
     try:
         client = _get_client()
+        _t0 = time.monotonic()
         response = await client.messages.create(
             model=MODEL,
             max_tokens=15,
@@ -861,6 +865,7 @@ async def _save_conversation(company_id: str, session_id: str, messages: list[di
 # main chat function
 
 
+@observe(name="anthropic.chat")
 async def chat(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None) -> dict:
     """
     Process a chat message from the widget using Anthropic Claude.
@@ -914,8 +919,16 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
     client = _get_client()
     blockchain_data = None
     sources = []
+    _trace_id = None
+    try:
+        from app.core.langfuse import _langfuse_client, _langfuse_enabled
+        if _langfuse_enabled and _langfuse_client:
+            _trace_id = _langfuse_client.get_trace_id() if hasattr(_langfuse_client, 'get_trace_id') else None
+    except Exception:
+        pass
 
     try:
+        _t0 = time.monotonic()
         response = await client.messages.create(
             model=MODEL,
             max_tokens=4096,
@@ -923,6 +936,19 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             tools=TOOLS,
             messages=claude_messages,
             temperature=0.3,
+        )
+        _latency_ms = (time.monotonic() - _t0) * 1000
+        create_llm_generation(
+            trace_id=_trace_id or "",
+            model=MODEL,
+            provider="anthropic",
+            system_prompt=system_prompt,
+            user_message=user_message,
+            completion="",  # filled below after tool loop
+            input_tokens=getattr(response.usage, 'input_tokens', 0),
+            output_tokens=getattr(response.usage, 'output_tokens', 0),
+            latency_ms=_latency_ms,
+            metadata={"company_id": company_id, "session_id": session_id, "round": 0},
         )
 
         # handle tool-use loop (may need multiple rounds)
@@ -942,6 +968,14 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             tool_results = []
             for block in tool_use_blocks:
                 result = await _execute_tool(block.name, block.input, company=company, session_id=session_id)
+
+                # Record each tool call as a Langfuse child span
+                observe_tool_call(
+                    trace_id=_trace_id,
+                    tool_name=block.name,
+                    tool_input=dict(block.input) if block.input else {},
+                    tool_output=result,
+                )
 
                 # track blockchain data for response
                 if block.name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
@@ -979,6 +1013,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             # add tool results and call Claude again
             claude_messages.append({"role": "user", "content": tool_results})
 
+            _t0 = time.monotonic()
             response = await client.messages.create(
                 model=MODEL,
                 max_tokens=4096,
@@ -986,6 +1021,19 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
                 tools=TOOLS,
                 messages=claude_messages,
                 temperature=0.3,
+            )
+            _latency_ms = (time.monotonic() - _t0) * 1000
+            create_llm_generation(
+                trace_id=_trace_id or "",
+                model=MODEL,
+                provider="anthropic",
+                system_prompt=system_prompt,
+                user_message=user_message,
+                completion="",
+                input_tokens=getattr(response.usage, 'input_tokens', 0),
+                output_tokens=getattr(response.usage, 'output_tokens', 0),
+                latency_ms=_latency_ms,
+                metadata={"company_id": company_id, "session_id": session_id, "tool_round": True},
             )
 
         # extract final text response
