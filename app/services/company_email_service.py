@@ -6,33 +6,27 @@ from pathlib import Path
 from uuid import uuid4
 
 from pymongo import ReturnDocument
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import (
-    Attachment,
-    Content,
-    ContentId,
-    Disposition,
-    FileContent,
-    FileName,
-    FileType,
-    From,
-    Header,
-    Mail,
-    MimeType,
-    Subject,
-    To,
-)
+import smtplib
+from email.message import EmailMessage
 
 from app.core.config import settings
 from app.core.database import db
 from app.core.utils import get_random_avatar
 from app.services import company_service
-from app.services.email_utils import get_image_data, process_html_for_inline_images
+from app.services.email_utils import get_image_data, process_html_for_inline_images, add_html_with_inline_images
 from app.services import notification_service
 
 logger = logging.getLogger(__name__)
 
-_sg_client = None
+def _send_smtp_email(msg: EmailMessage):
+    """Helper to dispatch via native Zepto/Zoho SMTP connection."""
+    try:
+        with smtplib.SMTP_SSL(settings.active_smtp_server, settings.active_smtp_port) as smtp:
+            smtp.login(settings.active_smtp_username, settings.active_smtp_password)
+            smtp.send_message(msg)
+    except Exception as e:
+        logger.exception("Failed to send SMTP email: %s", e)
+        raise
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "email_templates"
 TICKET_REPLY_TEMPLATE = TEMPLATES_DIR / "response.html"
@@ -42,13 +36,6 @@ NEW_TICKET_TEMPLATE = TEMPLATES_DIR / "new_ticket.html"
 TICKET_CONFIRMATION_TEMPLATE = TEMPLATES_DIR / "ticket_confirmation.html"
 
 _TICKET_ID_RE = re.compile(r"\[Ticket\s*#([A-Z0-9]{8})\]", re.IGNORECASE)
-
-
-def _get_sendgrid_client() -> SendGridAPIClient:
-    global _sg_client
-    if _sg_client is None:
-        _sg_client = SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
-    return _sg_client
 
 
 def _load_template(path: Path) -> str:
@@ -315,8 +302,6 @@ async def send_ticket_reply(
         html_body, agent_display, agent_avatar, resolve_url, logo_url, company_name
     )
 
-    full_html, attachments_map = process_html_for_inline_images(full_html)
-
     # Process base64 inline images from rich text editors
     base64_attachments = []
 
@@ -343,77 +328,66 @@ async def send_ticket_reply(
     subject = f"Re: [Ticket #{ticket_id}] {ticket['subject']}"
 
     last_message_id = None
-    for msg in reversed(ticket.get("messages", [])):
-        if msg.get("message_id"):
-            last_message_id = msg["message_id"]
+    for m in reversed(ticket.get("messages", [])):
+        if m.get("message_id"):
+            last_message_id = m["message_id"]
             break
 
     outbound_message_id = f"<{uuid4()}@{settings.EMAIL_DOMAIN}>"
 
-    message = Mail(
-        from_email=From(from_email, company_name),
-        to_emails=To(ticket["customer_email"]),
-        subject=Subject(subject),
-    )
-    message.add_content(Content(MimeType.text, body_text))
-    message.add_content(Content(MimeType.html, full_html))
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = f"{company_name} <{settings.active_sender_email}>"
+    msg["To"] = ticket["customer_email"]
+    msg["Reply-To"] = from_email
+    msg["Message-ID"] = outbound_message_id
+    if last_message_id:
+        msg["In-Reply-To"] = last_message_id
+        msg["References"] = last_message_id
+    msg["X-Swift-Ticket-ID"] = ticket_id
 
-    for filename, cid in attachments_map.items():
-        try:
-            data, maintype, subtype = get_image_data(filename)
-            encoded = base64.b64encode(data).decode("utf-8")
-            sg_attachment = Attachment(
-                FileContent(encoded),
-                FileName(filename),
-                FileType(f"{maintype}/{subtype}"),
-                Disposition("inline"),
-                ContentId(cid),
-            )
-            message.add_attachment(sg_attachment)
-        except Exception as e:
-            logger.warning(f"Could not attach image {filename} to ticket reply: {e}")
+    msg.set_content(body_text)
+    add_html_with_inline_images(msg, full_html)
 
+    # Now add the base64 inline images to the html_part
+    html_part = msg.get_payload()[1]
     for att in base64_attachments:
         try:
-            sg_attachment = Attachment(
-                FileContent(att["data"]),
-                FileName(att["filename"]),
-                FileType(att["mime_type"]),
-                Disposition("inline"),
-                ContentId(att["cid"]),
-            )
-            message.add_attachment(sg_attachment)
+            data = base64.b64decode(att["data"])
+            maintype, subtype = att["mime_type"].split("/", 1)
+            html_part.add_related(data, maintype=maintype, subtype=subtype, cid=f"<{att['cid']}>")
+            image_part = html_part.get_payload()[-1]
+            del image_part["Content-Disposition"]
+            image_part["Content-Disposition"] = f'inline; filename="{att["filename"]}"'
+            image_part["X-Attachment-Id"] = att["cid"]
+            image_part.set_param("name", att["filename"])
         except Exception as e:
             logger.warning(f"Could not attach base64 image {att['filename']} to ticket reply: {e}")
-
-    message.add_header(Header("Message-ID", outbound_message_id))
-    if last_message_id:
-        message.add_header(Header("In-Reply-To", last_message_id))
-        message.add_header(Header("References", last_message_id))
-    message.add_header(Header("X-Swift-Ticket-ID", ticket_id))
 
     # Attach user-uploaded files as regular (non-inline) attachments
     attachment_meta = []
     if attachments:
         for att in attachments:
-            encoded = base64.b64encode(att["content"]).decode("utf-8")
-            sg_attachment = Attachment(
-                FileContent(encoded),
-                FileName(att["filename"]),
-                FileType(att["content_type"]),
-                Disposition("attachment"),
-            )
-            message.add_attachment(sg_attachment)
-            attachment_meta.append({
-                "filename": att["filename"],
-                "content_type": att["content_type"],
-                "size": len(att["content"]),
-            })
+            try:
+                maintype, subtype = att["content_type"].split("/", 1) if "/" in att["content_type"] else ("application", "octet-stream")
+                msg.add_attachment(
+                    att["content"],
+                    maintype=maintype,
+                    subtype=subtype,
+                    filename=att["filename"]
+                )
+                attachment_meta.append({
+                    "filename": att["filename"],
+                    "content_type": att["content_type"],
+                    "size": len(att["content"]),
+                })
+            except Exception as e:
+                logger.warning("Could not attach file %s: %s", att["filename"], e)
 
     try:
-        sg = _get_sendgrid_client()
-        response = sg.send(message)
-        logger.info("Sent ticket reply for %s, status=%s", ticket_id, response.status_code)
+        import asyncio
+        await asyncio.to_thread(_send_smtp_email, msg)
+        logger.info("Sent ticket reply for %s", ticket_id)
     except Exception as e:
         logger.exception("Failed to send email for ticket %s: %s", ticket_id, e)
         raise
@@ -670,10 +644,7 @@ async def _send_new_message_email(company: dict, ticket: dict, inbound_msg: dict
         html = html.replace("{{customer_email}}", customer_email)
         html = html.replace("{{dashboard_url}}", dashboard_url)
         
-        full_html, attachments_map = process_html_for_inline_images(html)
-        
         subject = f"New message from {customer_email} - Ticket #{ticket['id']}"
-        from_email = "noreply@swiftagents.org"
         company_name = "SwiftAgent"
 
         # Send to all company members
@@ -695,21 +666,16 @@ async def _send_new_message_email(company: dict, ticket: dict, inbound_msg: dict
         if not to_emails:
             return
 
-        message = Mail(
-            from_email=From(from_email, company_name),
-            to_emails=to_emails,
-            subject=Subject(subject),
-        )
-        message.add_content(Content(MimeType.text, f"New message from {customer_email}: {preview_message}"))
-        message.add_content(Content(MimeType.html, full_html))
-        
-        sg = _get_sendgrid_client()
-        
-        def _send() -> None:
-            sg.send(message)
-            
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = f"{company_name} <{settings.active_sender_email}>"
+        msg["To"] = ", ".join(to_emails)
+
+        msg.set_content(f"New message from {customer_email}: {preview_message}")
+        add_html_with_inline_images(msg, html)
+
         import asyncio
-        await asyncio.to_thread(_send)
+        await asyncio.to_thread(_send_smtp_email, msg)
         logger.info("Sent new message email for ticket %s to %s agents", ticket['id'], len(to_emails))
     except Exception as e:
         logger.exception("Failed to send new message email for ticket %s: %s", ticket['id'], e)
@@ -724,10 +690,7 @@ async def _send_new_ticket_email(company: dict, ticket: dict):
         html = html.replace("{{customer_email}}", customer_email)
         html = html.replace("{{dashboard_url}}", dashboard_url)
         
-        full_html, attachments_map = process_html_for_inline_images(html)
-        
         subject = f"New Ticket #{ticket['id']} from {customer_email}"
-        from_email = "noreply@swiftagents.org"
         company_name = "SwiftAgent"
 
         # Send to all company members
@@ -749,21 +712,16 @@ async def _send_new_ticket_email(company: dict, ticket: dict):
         if not to_emails:
             return
 
-        message = Mail(
-            from_email=From(from_email, company_name),
-            to_emails=to_emails,
-            subject=Subject(subject),
-        )
-        message.add_content(Content(MimeType.text, f"New ticket #{ticket['id']} opened by {customer_email}. View it on your dashboard."))
-        message.add_content(Content(MimeType.html, full_html))
-        
-        sg = _get_sendgrid_client()
-        
-        def _send() -> None:
-            sg.send(message)
-            
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = f"{company_name} <{settings.active_sender_email}>"
+        msg["To"] = ", ".join(to_emails)
+
+        msg.set_content(f"New ticket #{ticket['id']} opened by {customer_email}. View it on your dashboard.")
+        add_html_with_inline_images(msg, html)
+
         import asyncio
-        await asyncio.to_thread(_send)
+        await asyncio.to_thread(_send_smtp_email, msg)
         logger.info("Sent new ticket email for ticket %s to %s agents", ticket['id'], len(to_emails))
     except Exception as e:
         logger.exception("Failed to send new ticket email for ticket %s: %s", ticket['id'], e)
@@ -787,26 +745,19 @@ async def _send_ticket_confirmation_email(company: dict, ticket: dict):
         html = html.replace("{{company_name}}", company_name)
         html = html.replace("{{base_url}}", settings.API_BASE_URL)
         html = html.replace("{{ticket_number}}", ticket["id"])
-        
-        full_html, attachments_map = process_html_for_inline_images(html)
-        
-        subject = f"Your ticket has been received - #{ticket['id']}"
 
-        message = Mail(
-            from_email=From(from_email, company_name),
-            to_emails=To(to_email),
-            subject=Subject(subject),
-        )
-        message.add_content(Content(MimeType.text, f"Your ticket #{ticket['id']} has been received. We will get back to you shortly."))
-        message.add_content(Content(MimeType.html, full_html))
-        
-        sg = _get_sendgrid_client()
-        
-        def _send() -> None:
-            sg.send(message)
-            
+        subject = f"Your ticket has been received - #{ticket['id']}"
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = f"{company_name} <{settings.active_sender_email}>"
+        msg["To"] = to_email
+        msg["Reply-To"] = from_email
+
+        msg.set_content(f"Your ticket #{ticket['id']} has been received. We will get back to you shortly.")
+        add_html_with_inline_images(msg, html)
+
         import asyncio
-        await asyncio.to_thread(_send)
+        await asyncio.to_thread(_send_smtp_email, msg)
         logger.info("Sent ticket confirmation email for ticket %s to %s", ticket['id'], to_email)
     except Exception as e:
         logger.exception("Failed to send ticket confirmation email for ticket %s: %s", ticket['id'], e)
@@ -888,49 +839,30 @@ async def _send_resolved_email(ticket: dict):
         html = html.replace("{{company_logo_url}}", logo_url)
         html = html.replace("{{company_name}}", company_name)
         
-        # Inline images using existing util
-        full_html, attachments_map = process_html_for_inline_images(html)
-        
         subject = f"Re: [Ticket #{ticket['id']}] {ticket['subject']}"
         outbound_message_id = f"<{uuid4()}@{settings.EMAIL_DOMAIN}>"
 
-        message = Mail(
-            from_email=From(from_email, company_name),
-            to_emails=To(to_email),
-            subject=Subject(subject),
-        )
-        message.add_content(Content(MimeType.text, "Your ticket has been closed. Thank you!"))
-        message.add_content(Content(MimeType.html, full_html))
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = f"{company_name} <{settings.active_sender_email}>"
+        msg["To"] = to_email
+        msg["Reply-To"] = from_email
+        msg["Message-ID"] = outbound_message_id
+        msg["X-Swift-Ticket-ID"] = ticket["id"]
 
-        # Attach CID images
-        for filename, cid in attachments_map.items():
-            try:
-                data, maintype, subtype = get_image_data(filename)
-                encoded = base64.b64encode(data).decode("utf-8")
-                sg_attachment = Attachment(
-                    FileContent(encoded),
-                    FileName(filename),
-                    FileType(f"{maintype}/{subtype}"),
-                    Disposition("inline"),
-                    ContentId(cid),
-                )
-                message.add_attachment(sg_attachment)
-            except Exception as e:
-                logger.warning(f"Could not attach image {filename} to resolved email: {e}")
+        msg.set_content("Your ticket has been closed. Thank you!")
+        add_html_with_inline_images(msg, html)
 
-        message.add_header(Header("Message-ID", outbound_message_id))
-        message.add_header(Header("X-Swift-Ticket-ID", ticket["id"]))
-
-        sg = _get_sendgrid_client()
-        response = sg.send(message)
-        logger.info("Sent resolved email for ticket %s, status=%s", ticket["id"], response.status_code)
+        import asyncio
+        await asyncio.to_thread(_send_smtp_email, msg)
+        logger.info("Sent resolved email for ticket %s", ticket["id"])
 
         # Record message in ticket
         now = datetime.now(tz=timezone.utc)
         outbound_msg = {
             "direction": "outbound",
             "body_text": "Your ticket has been closed. Thank you!",
-            "body_html": full_html,
+            "body_html": html,
             "sender_email": from_email,
             "message_id": outbound_message_id,
             "timestamp": now,
@@ -1096,7 +1028,6 @@ async def dispatch_all_test_templates(company_id: str, recipients: list[str], au
         }
     ]
     
-    sg = SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
     success_count = 0
     errors = []
     
@@ -1110,19 +1041,20 @@ async def dispatch_all_test_templates(company_id: str, recipients: list[str], au
             for k, v in task["replacements"].items():
                 html = html.replace(k, str(v))
                 
-            full_html, attachments_map = process_html_for_inline_images(html)
-            
             sender_email = task.get("from_email", from_email)
             sender_name = task.get("from_name", company_name)
             
-            message = Mail(
-                from_email=From(sender_email, sender_name),
-                to_emails=recipients,
-                subject=Subject(task["subject"]),
-            )
-            message.add_content(Content(MimeType.html, full_html))
+            msg = EmailMessage()
+            msg["Subject"] = task["subject"]
+            msg["From"] = f"{sender_name} <{settings.active_sender_email}>"
+            msg["To"] = ", ".join(recipients)
+            msg["Reply-To"] = sender_email
             
-            sg.send(message)
+            msg.set_content("Please view this email in an HTML-compatible client.")
+            add_html_with_inline_images(msg, html)
+            
+            import asyncio
+            await asyncio.to_thread(_send_smtp_email, msg)
             success_count += 1
             
         except Exception as e:
