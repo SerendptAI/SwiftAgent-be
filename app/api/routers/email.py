@@ -13,6 +13,7 @@ from app.models.email_models import (
     EmailReplyRequest,
     EmailTicketResponse,
     EmailTicketSummary,
+    TestDispatchRequest,
 )
 from app.services import company_service, company_email_service
 
@@ -369,3 +370,18 @@ async def resolve_ticket_by_agent_endpoint(
         raise HTTPException(status_code=404, detail="Ticket not found or already resolved")
 
     return {"status": "resolved", "ticket_id": ticket_id}
+
+@router.post("/test-dispatch")
+async def dispatch_test_suite(
+    request: TestDispatchRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Dispatch all 10 templates securely from the backend to the target recipients."""
+    success, msg = await company_email_service.dispatch_all_test_templates(
+        company_id=request.company_id,
+        recipients=request.recipients,
+        auth_user=current_user
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"status": "success", "message": msg}

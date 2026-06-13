@@ -133,3 +133,7 @@ class EmailTicketSummary(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     preview_message: Optional[str] = None
+
+class TestDispatchRequest(BaseModel):
+    company_id: str
+    recipients: List[str]

@@ -977,3 +977,157 @@ async def resolve_ticket_by_agent(company_id: str, ticket_id: str) -> dict | Non
         asyncio.create_task(_send_resolved_email(ticket))
 
     return ticket
+
+async def dispatch_all_test_templates(company_id: str, recipients: list[str], auth_user: dict) -> tuple[bool, str]:
+    company = await db.companies.find_one({"id": company_id})
+    if not company:
+        return False, "Company not found"
+        
+    company_name = company.get("name", "SwiftAgent")
+    company_email = company.get("contact_email") or auth_user.get("email")
+    email_slug = company.get("email_slug", "support")
+    company_logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo 2.png"
+    
+    agent_name = auth_user.get("name", "Support Agent")
+    agent_avatar = auth_user.get("picture") or f"{settings.API_BASE_URL}/images/default_avatar.png"
+    
+    from_email = f"{email_slug}@{settings.EMAIL_DOMAIN}"
+    
+    template_tasks = [
+        {
+            "file": "welcome.html",
+            "subject": "Welcome to SwiftAgent",
+            "replacements": {
+                "{{company_name}}": company_name,
+                "{{login_url}}": f"{settings.FRONTEND_URL}/login"
+            }
+        },
+        {
+            "file": "team_member_invite.html",
+            "subject": "You have been invited to join the team",
+            "replacements": {
+                "{{company_name}}": company_name,
+                "{{invite_url}}": f"{settings.FRONTEND_URL}/invite/test",
+                "{{company_logo_url}}": company_logo_url
+            }
+        },
+        {
+            "file": "otp_email.html",
+            "subject": "Your verification code",
+            "replacements": {
+                "{{ttl_minutes}}": "10",
+                "{{purpose_label}}": "Login",
+                "{{app_name}}": "Swift Agent",
+                "{{otp_code}}": "123456",
+                "{{d0}}": "1", "{{d1}}": "2", "{{d2}}": "3", "{{d3}}": "4", "{{d4}}": "5", "{{d5}}": "6"
+            },
+            "from_email": "noreply@swiftagents.org",
+            "from_name": "SwiftAgent"
+        },
+        {
+            "file": "response.html",
+            "subject": f"New message from {agent_name} - Ticket #TEST1234",
+            "replacements": {
+                "{{agent_name}}": agent_name,
+                "{{company_name}}": company_name,
+                "{{agent_image_url}}": agent_avatar,
+                "{{resolve_url}}": f"{settings.API_BASE_URL}/api/v1/email/resolve/test-token",
+                "{{company_logo_url}}": company_logo_url,
+                "{{message}}": "This is a simulated test response from your support agent. We hope this solves your issue!"
+            }
+        },
+        {
+            "file": "resolved.html",
+            "subject": f"Ticket #TEST1234 Resolved",
+            "replacements": {
+                "{{company_name}}": company_name,
+                "{{company_logo_url}}": company_logo_url
+            }
+        },
+        {
+            "file": "new_ticket.html",
+            "subject": f"New Ticket #TEST1234 from {recipients[0]}",
+            "replacements": {
+                "{{customer_email}}": recipients[0],
+                "{{dashboard_url}}": f"{settings.FRONTEND_URL}/dashboard/tickets/TEST1234"
+            },
+            "from_email": "noreply@swiftagents.org",
+            "from_name": "SwiftAgent"
+        },
+        {
+            "file": "new_message.html",
+            "subject": f"New message from {recipients[0]} - Ticket #TEST1234",
+            "replacements": {
+                "{{customer_email}}": recipients[0],
+                "{{dashboard_url}}": f"{settings.FRONTEND_URL}/dashboard/tickets/TEST1234",
+                "{{preview_message}}": "Please help, I have an issue with..."
+            },
+            "from_email": "noreply@swiftagents.org",
+            "from_name": "SwiftAgent"
+        },
+        {
+            "file": "approve-company.html",
+            "subject": "New Company Registration",
+            "replacements": {
+                "{{company_name}}": company_name,
+                "{{company_email}}": company_email,
+                "{{customer_size}}": "1-10",
+                "{{company_description}}": "A simulated test company for QA purposes.",
+                "{{approval_url}}": f"{settings.API_BASE_URL}/api/v1/auth/registrations/approve/test-token"
+            },
+            "from_email": "noreply@swiftagents.org",
+            "from_name": "SwiftAgent"
+        },
+        {
+            "file": "discount.html",
+            "subject": "You have a discount!",
+            "replacements": {
+                "{{discount_code}}": "LAUNCHDISC"
+            }
+        },
+        {
+            "file": "ticket_confirmation.html",
+            "subject": "Your ticket has been received - #TEST1234",
+            "replacements": {
+                "{{company_logo_url}}": company_logo_url,
+                "{{company_name}}": company_name,
+                "{{ticket_number}}": "TEST1234"
+            }
+        }
+    ]
+    
+    sg = SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
+    success_count = 0
+    errors = []
+    
+    for task in template_tasks:
+        try:
+            template_path = TEMPLATES_DIR / task["file"]
+            with open(template_path, "r", encoding="utf-8") as f:
+                html = f.read()
+            
+            html = html.replace("{{base_url}}", settings.API_BASE_URL)
+            for k, v in task["replacements"].items():
+                html = html.replace(k, str(v))
+                
+            full_html, attachments_map = process_html_for_inline_images(html)
+            
+            sender_email = task.get("from_email", from_email)
+            sender_name = task.get("from_name", company_name)
+            
+            message = Mail(
+                from_email=From(sender_email, sender_name),
+                to_emails=recipients,
+                subject=Subject(task["subject"]),
+            )
+            message.add_content(Content(MimeType.html, full_html))
+            
+            sg.send(message)
+            success_count += 1
+            
+        except Exception as e:
+            errors.append(f"{task['file']}: {e}")
+            
+    if errors:
+        return False, f"Sent {success_count}/10. Errors: {'; '.join(errors)}"
+    return True, f"Successfully dispatched all 10 templates to {len(recipients)} recipients!"
