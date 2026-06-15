@@ -26,6 +26,7 @@ Usage
 """
 
 import logging
+import contextvars
 from functools import wraps
 from typing import Any, Callable, Optional
 
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 _langfuse_client = None
 _langfuse_enabled = False
+_current_trace_id: contextvars.ContextVar[str] = contextvars.ContextVar("langfuse_trace_id", default="")
 
 
 def _get_langfuse_client():
@@ -95,6 +97,11 @@ def shutdown_langfuse() -> None:
             logger.warning("Langfuse flush error: %s", exc)
 
 
+def get_current_trace_id() -> str:
+    """Return the current trace ID set by the @observe decorator, or empty string."""
+    return _current_trace_id.get()
+
+
 # ── Decorator ─────────────────────────────────────────────────────────────────
 
 
@@ -146,6 +153,10 @@ def observe(
                 input=safe_input if capture_input else None,
                 metadata=_extract_trace_metadata(safe_input),
             )
+
+            # Expose trace ID to the wrapped function via context variable
+            trace_id = getattr(trace, "id", "") or ""
+            _current_trace_id.set(trace_id)
 
             try:
                 result = await fn(*args, **kwargs)
@@ -300,4 +311,5 @@ __all__ = [
     "observe",
     "observe_tool_call",
     "create_llm_generation",
+    "get_current_trace_id",
 ]
