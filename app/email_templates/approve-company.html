@@ -40,7 +40,7 @@
     a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }
 
     body {
-      background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);
+      background-color: #f5f5f4;
       color: #111111;
       font-family: Tahoma, Geneva, sans-serif;
       overflow-x: hidden;
@@ -50,7 +50,7 @@
       width: 100%;
       max-width: 600px;
       margin: 0 auto;
-      background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);
+      background-color: #f5f5f4;
     }
 
     .heading-svg {
@@ -163,7 +163,7 @@
                 body,
                 center,
                 .email-container {
-                    background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4) !important;
+                    background-color: #f5f5f4 !important;
                     color: #111111 !important;
                 }
                 body * {
@@ -213,7 +213,7 @@
             [data-ogsc] body,
             [data-ogsc] center,
             [data-ogsc] .email-container {
-                background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4) !important;
+                background-color: #f5f5f4 !important;
                 color: #111111 !important;
             }
             [data-ogsc] .coupon-card {
@@ -224,22 +224,15 @@
                 background-color: #ededed !important;
                 color: #111111 !important;
             }
-        
-            /* ── Gmail dark mode fix (blend mode hack) ── */
-            u + .body .gmail-blend-screen { background: #000000; mix-blend-mode: screen; }
-            u + .body .gmail-blend-difference { background: #000000; mix-blend-mode: difference; }
         </style>
 </head>
-<body class="body" style="margin: 0; padding: 0; background-color: #f5f5f4; color-scheme: only light; background-image: linear-gradient(#f5f5f4, #f5f5f4);">
+<body style="margin: 0; padding: 0; background-color: #f5f5f4; color-scheme: only light;">
   <div style="display: none; max-height: 0; overflow: hidden;">
     There is a new company on the waitlist. Review and approve their registration.
     &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
   </div>
 
-  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);">
-        <div style="background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);">
-            <div class="gmail-blend-screen">
-                <div class="gmail-blend-difference">
+  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4;">
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
         <td class="logo-cell" style="padding: 72px 0 52px; text-align: center;">
@@ -292,9 +285,6 @@
         </td>
       </tr>
     </table>
-                  </div>
-            </div>
-        </div>
     </center>
 </body>
 </html>
