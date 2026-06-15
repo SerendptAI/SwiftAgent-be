@@ -60,7 +60,7 @@
             }
 
             body {
-                background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);
+                background-color: #f5f5f4;
                 color: #111111;
                 font-family: Tahoma, Geneva, sans-serif;
                 overflow-x: hidden;
@@ -70,7 +70,7 @@
                 width: 100%;
                 max-width: 600px;
                 margin: 0 auto;
-                background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);
+                background-color: #f5f5f4;
             }
 
             .heading-svg {
@@ -105,7 +105,7 @@
             .brand-x {
                 padding: 0 16px;
                 color: #000000;
-                font-family: Arial, Helvetica, sans-serif;
+                font-family: Tahoma, Geneva, sans-serif;
                 font-size: 44px;
                 line-height: 1;
                 font-weight: 700;
@@ -254,7 +254,7 @@
                 body,
                 center,
                 .email-container {
-                    background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4) !important;
+                    background-color: #f5f5f4 !important;
                     color: #111111 !important;
                 }
                 body * {
@@ -304,7 +304,7 @@
             [data-ogsc] body,
             [data-ogsc] center,
             [data-ogsc] .email-container {
-                background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4) !important;
+                background-color: #f5f5f4 !important;
                 color: #111111 !important;
             }
             [data-ogsc] .coupon-card {
@@ -315,22 +315,15 @@
                 background-color: #ededed !important;
                 color: #111111 !important;
             }
-        
-            /* ── Gmail dark mode fix (blend mode hack) ── */
-            u + .body .gmail-blend-screen { background: #000000; mix-blend-mode: screen; }
-            u + .body .gmail-blend-difference { background: #000000; mix-blend-mode: difference; }
         </style>
     </head>
-    <body class="body" style="margin: 0; padding: 0; background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4); color-scheme: only light;">
+    <body style="margin: 0; padding: 0; background-color: #f5f5f4; color-scheme: only light;">
         <center
             role="article"
             aria-roledescription="email"
             lang="en"
-            style="width: 100%; overflow-x: hidden; background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4)"
+            style="width: 100%; overflow-x: hidden; background-color: #f5f5f4"
         >
-        <div style="background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);">
-            <div class="gmail-blend-screen">
-                <div class="gmail-blend-difference">
             <table
                 role="presentation"
                 cellspacing="0"
@@ -414,9 +407,6 @@
                     </td>
                 </tr>
             </table>
-                        </div>
-            </div>
-        </div>
     </center>
     </body>
 </html>
