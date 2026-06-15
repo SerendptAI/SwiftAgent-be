@@ -28,14 +28,6 @@
             </noscript>
         <![endif]-->
         <style>
-            @import url("https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap");
-
-@font-face {
-                font-family: "Greed Narrow";
-                src: url("fonts/GreedNarrow-SemiBold.otf") format("opentype");
-                font-style: normal;
-                font-weight: 600;
-            }
 
             :root {
                 color-scheme: only light;
@@ -86,9 +78,9 @@
             }
 
             body {
-                background-color: #f5f5f4;
+                background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);
                 color: #111111;
-                font-family: "DM Mono", "Courier New", Courier, monospace;
+                font-family: Tahoma, Geneva, sans-serif;
                 overflow-x: hidden;
             }
 
@@ -96,7 +88,7 @@
                 width: 100%;
                 max-width: 600px;
                 margin: 0 auto;
-                background-color: #f5f5f4;
+                background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);
             }
 
             .heading-svg {
@@ -121,7 +113,7 @@
                 border-radius: 8px;
                 padding: 14px 22px;
                 color: #111111;
-                font-family: "DM Mono", "Courier New", Courier, monospace;
+                font-family: Tahoma, Geneva, sans-serif;
                 font-size: 16px;
                 line-height: 1;
                 font-weight: 400;
@@ -147,8 +139,7 @@
                 color: #ffffff !important;
                 background-color: #fb492b;
                 border-radius: 8px;
-                box-shadow: -4px 7px 0 #030303;
-                font-family: "DM Mono", "Courier New", Courier, monospace;
+                font-family: Tahoma, Geneva, sans-serif;
                 font-size: 18px;
                 line-height: 52px;
                 font-weight: 500;
@@ -209,7 +200,6 @@
                 .cta-button {
                     font-size: 16px !important;
                     line-height: 52px !important;
-                    box-shadow: -3px 5px 0 #030303 !important;
                 }
             }
 
@@ -241,7 +231,7 @@
                 body,
                 center,
                 .email-container {
-                    background-color: #f5f5f4 !important;
+                    background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4) !important;
                     color: #111111 !important;
                 }
                 body * {
@@ -291,7 +281,7 @@
             [data-ogsc] body,
             [data-ogsc] center,
             [data-ogsc] .email-container {
-                background-color: #f5f5f4 !important;
+                background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4) !important;
                 color: #111111 !important;
             }
             [data-ogsc] .coupon-card {
@@ -302,9 +292,13 @@
                 background-color: #ededed !important;
                 color: #111111 !important;
             }
+        
+            /* ── Gmail dark mode fix (blend mode hack) ── */
+            u + .body .gmail-blend-screen { background: #000000; mix-blend-mode: screen; }
+            u + .body .gmail-blend-difference { background: #000000; mix-blend-mode: difference; }
         </style>
     </head>
-    <body style="margin: 0; padding: 0; background-color: #f5f5f4 color-scheme: only light;">
+    <body class="body" style="margin: 0; padding: 0; background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4); color-scheme: only light;">
         <div style="display: none; max-height: 0; overflow: hidden">
             You have a new message. &#847; &#847; &#847; &#847; &#847; &#847;
             &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
@@ -314,8 +308,11 @@
             role="article"
             aria-roledescription="email"
             lang="en"
-            style="width: 100%; overflow-x: hidden; background-color: #f5f5f4"
+            style="width: 100%; overflow-x: hidden; background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4)"
         >
+        <div style="background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);">
+            <div class="gmail-blend-screen">
+                <div class="gmail-blend-difference">
             <!--[if mso | IE]>
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" align="center" style="width:600px;">
     <tr>
@@ -357,8 +354,7 @@
                             src="{{base_url}}/images/headings/new_message_heading.png"
                             width="324"
                             height="137"
-                            alt="You have a new message"
-                        />
+                            alt="You have a new message" style="max-width: 100%; width: 100%; height: auto;">
                     </td>
                 </tr>
 
@@ -379,17 +375,22 @@
                                 width="484"
                                 height="380"
                                 alt="New message"
-                                class="hero-image"
-                            />
+                                class="hero-image" style="max-width: 100%; width: 100%; height: auto;">
                         </div>
                     </td>
                 </tr>
 
                 <tr>
                     <td class="cta-cell" style="padding: 0 46px 94px">
-                        <a href="{{dashboard_url}}" target="_blank" class="cta-button">
-                            Head to your dashboard
-                        </a>
+                        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: separate; border-spacing: 0;">
+                            <tr>
+                                <td style="background-color: #030303; border-radius: 8px; padding-bottom: 7px; padding-left: 4px;">
+                                    <a href="{{dashboard_url}}" target="_blank" style="display: block; padding: 0 24px; height: 52px; background-color: #fb492b; border-radius: 8px; color: #ffffff; font-family: Tahoma, Geneva, sans-serif; font-size: 18px; line-height: 52px; font-weight: 500; text-align: center; text-decoration: none; text-transform: uppercase;">
+                                        Head to your dashboard
+                                    </a>
+                                </td>
+                            </tr>
+                        </table>
                     </td>
                 </tr>
             </table>
@@ -399,6 +400,9 @@
     </tr>
     </table>
     <![endif]-->
-        </center>
+                        </div>
+            </div>
+        </div>
+    </center>
     </body>
 </html>

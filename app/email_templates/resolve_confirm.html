@@ -20,14 +20,6 @@
   </noscript>
   <![endif]-->
   <style>
-      @import url("https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap");
-
-@font-face {
-        font-family: "Greed Narrow";
-        src: url("fonts/GreedNarrow-SemiBold.otf") format("opentype");
-        font-style: normal;
-        font-weight: 600;
-      }
 
       :root {
         color-scheme: only light;
@@ -60,9 +52,9 @@
     button { font-family: inherit; }
 
     body {
-      background-color: #f5f5f4;
+      background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);
       color: #111111;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
+      font-family: Tahoma, Geneva, sans-serif;
       overflow-x: hidden;
     }
 
@@ -70,7 +62,7 @@
       width: 100%;
       max-width: 600px;
       margin: 0 auto;
-      background-color: #f5f5f4;
+      background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);
     }
 
     .heading-svg {
@@ -90,7 +82,7 @@
     .body-text {
       margin: 0;
       color: #111111;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
+      font-family: Tahoma, Geneva, sans-serif;
       font-size: 18px;
       line-height: 2;
       font-weight: 400;
@@ -108,11 +100,10 @@
       height: 54px;
       border: 0;
       border-radius: 7px;
-      box-shadow: -4px 7px 0 #030303;
       color: #ffffff;
       cursor: pointer;
       display: block;
-      font-family: 'DM Mono', 'Courier New', Courier, monospace;
+      font-family: Tahoma, Geneva, sans-serif;
       font-size: 18px;
       line-height: 54px;
       font-weight: 500;
@@ -176,7 +167,7 @@
                 body,
                 center,
                 .email-container {
-                    background-color: #f5f5f4 !important;
+                    background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4) !important;
                     color: #111111 !important;
                 }
                 body * {
@@ -226,7 +217,7 @@
             [data-ogsc] body,
             [data-ogsc] center,
             [data-ogsc] .email-container {
-                background-color: #f5f5f4 !important;
+                background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4) !important;
                 color: #111111 !important;
             }
             [data-ogsc] .coupon-card {
@@ -237,10 +228,17 @@
                 background-color: #ededed !important;
                 color: #111111 !important;
             }
+        
+            /* ── Gmail dark mode fix (blend mode hack) ── */
+            u + .body .gmail-blend-screen { background: #000000; mix-blend-mode: screen; }
+            u + .body .gmail-blend-difference { background: #000000; mix-blend-mode: difference; }
         </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f4; color-scheme: only light;">
-  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4;">
+<body class="body" style="margin: 0; padding: 0; background-color: #f5f5f4; color-scheme: only light; background-image: linear-gradient(#f5f5f4, #f5f5f4);">
+  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);">
+        <div style="background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);">
+            <div class="gmail-blend-screen">
+                <div class="gmail-blend-difference">
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
         <td class="logo-cell" style="padding: 82px 0 76px; text-align: center;">
@@ -255,8 +253,7 @@
             src="{{base_url}}/images/headings/resolve_confirm_heading.png"
             width="477"
             height="125"
-            alt="Has your issue been resolved?"
-          />
+            alt="Has your issue been resolved?" style="max-width: 100%; width: 100%; height: auto;">
         </td>
       </tr>
 
@@ -276,12 +273,24 @@
             <tr>
               <td width="49%" style="padding: 0 10px 0 0;">
                 <form action="{{base_url}}/api/v1/email/resolve/{{resolve_token}}/confirm" method="POST" style="margin: 0;">
-                  <button type="submit" class="choice-button yes-button">Yes</button>
+                  <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: separate; border-spacing: 0;">
+                    <tr>
+                      <td style="background-color: #030303; border-radius: 7px; padding-bottom: 7px; padding-left: 4px;">
+                        <button type="submit" style="display: block; width: 100%; height: 54px; border: 0; border-radius: 7px; background-color: #fb492b; color: #ffffff; cursor: pointer; font-family: Tahoma, Geneva, sans-serif; font-size: 18px; line-height: 54px; font-weight: 500; text-align: center; text-transform: uppercase;">Yes</button>
+                      </td>
+                    </tr>
+                  </table>
                 </form>
               </td>
               <td width="2%"></td>
               <td width="49%" style="padding: 0 0 0 10px;">
-                <a href="mailto:" class="choice-button no-button" style="text-decoration: none;">No</a>
+                <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: separate; border-spacing: 0;">
+                  <tr>
+                    <td style="background-color: #030303; border-radius: 7px; padding-bottom: 7px; padding-left: 4px;">
+                      <a href="mailto:" style="display: block; width: 100%; height: 54px; border-radius: 7px; background-color: #7d99ef; color: #ffffff; font-family: Tahoma, Geneva, sans-serif; font-size: 18px; line-height: 54px; font-weight: 500; text-align: center; text-decoration: none; text-transform: uppercase;">No</a>
+                    </td>
+                  </tr>
+                </table>
               </td>
             </tr>
           </table>
@@ -291,11 +300,14 @@
       <tr>
         <td class="image-cell" style="padding: 0 58px 94px;">
           <div class="hero-frame">
-            <img src="{{base_url}}/images/otp.png" width="484" height="381" alt="Issue resolution" class="hero-image">
+            <img src="{{base_url}}/images/otp.png" width="484" height="381" alt="Issue resolution" class="hero-image" style="max-width: 100%; width: 100%; height: auto;">
           </div>
         </td>
       </tr>
     </table>
-  </center>
+                  </div>
+            </div>
+        </div>
+    </center>
 </body>
 </html>

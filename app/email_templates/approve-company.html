@@ -25,14 +25,6 @@
   </noscript>
   <![endif]-->
   <style>
-    @import url("https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap");
-
-@font-face {
-      font-family: "Greed Narrow";
-      src: url("fonts/GreedNarrow-SemiBold.otf") format("opentype");
-      font-style: normal;
-      font-weight: 600;
-    }
 
     :root {
       color-scheme: only light;
@@ -48,9 +40,9 @@
     a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }
 
     body {
-      background-color: #f5f5f4;
+      background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);
       color: #111111;
-      font-family: "DM Mono", "Courier New", Courier, monospace;
+      font-family: Tahoma, Geneva, sans-serif;
       overflow-x: hidden;
     }
 
@@ -58,7 +50,7 @@
       width: 100%;
       max-width: 600px;
       margin: 0 auto;
-      background-color: #f5f5f4;
+      background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);
     }
 
     .heading-svg {
@@ -78,7 +70,7 @@
     .body-text {
       margin: 0;
       color: #111111;
-      font-family: "DM Mono", "Courier New", Courier, monospace;
+      font-family: Tahoma, Geneva, sans-serif;
       font-size: 18px;
       line-height: 2;
       font-weight: 400;
@@ -91,7 +83,7 @@
       margin: 14px 0 0;
       padding: 0;
       color: #111111;
-      font-family: "DM Mono", "Courier New", Courier, monospace;
+      font-family: Tahoma, Geneva, sans-serif;
       font-size: 18px;
       line-height: 2;
       font-weight: 400;
@@ -112,9 +104,8 @@
       height: 54px;
       border-radius: 8px;
       background-color: #f24d33;
-      box-shadow: -4px 8px 0 #000000;
       color: #ffffff !important;
-      font-family: "DM Mono", "Courier New", Courier, monospace;
+      font-family: Tahoma, Geneva, sans-serif;
       font-size: 18px;
       line-height: 54px;
       font-weight: 500;
@@ -172,7 +163,7 @@
                 body,
                 center,
                 .email-container {
-                    background-color: #f5f5f4 !important;
+                    background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4) !important;
                     color: #111111 !important;
                 }
                 body * {
@@ -222,7 +213,7 @@
             [data-ogsc] body,
             [data-ogsc] center,
             [data-ogsc] .email-container {
-                background-color: #f5f5f4 !important;
+                background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4) !important;
                 color: #111111 !important;
             }
             [data-ogsc] .coupon-card {
@@ -233,15 +224,22 @@
                 background-color: #ededed !important;
                 color: #111111 !important;
             }
+        
+            /* ── Gmail dark mode fix (blend mode hack) ── */
+            u + .body .gmail-blend-screen { background: #000000; mix-blend-mode: screen; }
+            u + .body .gmail-blend-difference { background: #000000; mix-blend-mode: difference; }
         </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f4; color-scheme: only light;">
+<body class="body" style="margin: 0; padding: 0; background-color: #f5f5f4; color-scheme: only light; background-image: linear-gradient(#f5f5f4, #f5f5f4);">
   <div style="display: none; max-height: 0; overflow: hidden;">
     There is a new company on the waitlist. Review and approve their registration.
     &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847;
   </div>
 
-  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4;">
+  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);">
+        <div style="background-color: #f5f5f4; background-image: linear-gradient(#f5f5f4, #f5f5f4);">
+            <div class="gmail-blend-screen">
+                <div class="gmail-blend-difference">
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
       <tr>
         <td class="logo-cell" style="padding: 72px 0 52px; text-align: center;">
@@ -256,8 +254,7 @@
             src="{{base_url}}/images/headings/approve_company_heading.png"
             width="327"
             height="136"
-            alt="There's a new company!"
-          />
+            alt="There's a new company!" style="max-width: 100%; width: 100%; height: auto;">
         </td>
       </tr>
 
@@ -277,18 +274,27 @@
 
       <tr>
         <td class="button-cell" style="padding: 0 42px 48px;">
-          <a href="{{approval_url}}" target="_blank" class="invite-button">Approve</a>
+          <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: separate; border-spacing: 0;">
+            <tr>
+              <td style="background-color: #000000; border-radius: 8px; padding-bottom: 8px; padding-left: 4px;">
+                <a href="{{approval_url}}" target="_blank" style="display: block; width: 100%; height: 54px; background-color: #f24d33; border-radius: 8px; color: #ffffff; font-family: Tahoma, Geneva, sans-serif; font-size: 18px; line-height: 54px; font-weight: 500; text-align: center; text-decoration: none; text-transform: uppercase;">Approve</a>
+              </td>
+            </tr>
+          </table>
         </td>
       </tr>
 
       <tr>
         <td class="image-cell" style="padding: 0 58px 51px;">
           <div class="hero-frame">
-            <img src="{{base_url}}/images/approve-company.png" width="474" height="373" alt="New kids on the block" class="hero-image">
+            <img src="{{base_url}}/images/approve-company.png" width="474" height="373" alt="New kids on the block" class="hero-image" style="max-width: 100%; width: 100%; height: auto;">
           </div>
         </td>
       </tr>
     </table>
-  </center>
+                  </div>
+            </div>
+        </div>
+    </center>
 </body>
 </html>
