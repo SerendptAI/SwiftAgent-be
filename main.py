@@ -277,7 +277,7 @@ app.add_middleware(WidgetCorsBypassMiddleware)
 # routers
 app.mount("/chat-avatars", StaticFiles(directory="app/chat-avatars"), name="chat-avatars")
 app.mount("/email-fonts", StaticFiles(directory="app/email_templates/fonts"), name="email-fonts")
-app.mount("/email-images", StaticFiles(directory="app/email_templates/images"), name="email-images")
+app.mount("/images", StaticFiles(directory="app/email_templates/images"), name="images")
 app.include_router(auth.router, prefix="/api/v1/auth")
 app.include_router(knowledge.router, prefix="/api/v1/knowledge")
 app.include_router(diagnosis.router, prefix="/api/v1/diagnosis")

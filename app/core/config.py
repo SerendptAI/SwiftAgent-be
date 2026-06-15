@@ -177,6 +177,14 @@ class Settings(BaseSettings):
             raise ValueError("This field is required and cannot be empty")
         return v
 
+    @field_validator("API_BASE_URL", mode="after")
+    @classmethod
+    def validate_api_base_url(cls, v: str) -> str:
+        v = v.strip().rstrip("/")
+        if v and not v.startswith("http://") and not v.startswith("https://"):
+            return f"https://{v}"
+        return v
+
     @field_validator("LOG_LEVEL")
     @classmethod
     def validate_log_level(cls, v: str) -> str:
