@@ -357,10 +357,11 @@ async def send_ticket_reply(
             maintype, subtype = att["mime_type"].split("/", 1)
             html_part.add_related(data, maintype=maintype, subtype=subtype, cid=f"<{att['cid']}>")
             image_part = html_part.get_payload()[-1]
+            # Replace Content-Disposition to be strictly inline without a filename
+            # to prevent email clients from rendering attachment pills at the bottom
             del image_part["Content-Disposition"]
-            image_part["Content-Disposition"] = f'inline; filename="{att["filename"]}"'
+            image_part["Content-Disposition"] = "inline"
             image_part["X-Attachment-Id"] = att["cid"]
-            image_part.set_param("name", att["filename"])
         except Exception as e:
             logger.warning(f"Could not attach base64 image {att['filename']} to ticket reply: {e}")
 

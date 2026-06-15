@@ -58,12 +58,11 @@ def add_html_with_inline_images(msg: EmailMessage, html: str) -> dict[str, str]:
             data, maintype, subtype = get_image_data(filename)
             html_part.add_related(data, maintype=maintype, subtype=subtype, cid=f"<{cid}>")
             image_part = html_part.get_payload()[-1]
-            # replace_header raises KeyError if header is missing; del+set is safer
+            # Replace Content-Disposition to be strictly inline without a filename
+            # to prevent email clients from rendering attachment pills at the bottom
             del image_part["Content-Disposition"]
-            image_part["Content-Disposition"] = f'inline; filename="{filename}"'
+            image_part["Content-Disposition"] = "inline"
             image_part["X-Attachment-Id"] = cid
-            # Ensure Content-Type carries a name so clients show a proper label
-            image_part.set_param("name", filename)
         except Exception as e:
             logger.warning("Could not attach inline email image %s: %s", filename, e)
 
