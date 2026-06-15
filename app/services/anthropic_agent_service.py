@@ -19,7 +19,7 @@ import anthropic
 
 from app.core.config import settings
 from app.core.database import db
-from app.core.langfuse import observe, observe_tool_call, create_llm_generation
+from app.core.langfuse import observe, observe_tool_call, create_llm_generation, get_current_trace_id
 from app.core.validators import validate_email
 from app.core.utils import get_random_avatar
 from app.services import knowledge_service, chain_service, stroll_index_service, memory_service, company_email_service, page_reader_service, integration_service
@@ -919,13 +919,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
     client = _get_client()
     blockchain_data = None
     sources = []
-    _trace_id = None
-    try:
-        from app.core.langfuse import _langfuse_client, _langfuse_enabled
-        if _langfuse_enabled and _langfuse_client:
-            _trace_id = _langfuse_client.get_trace_id() if hasattr(_langfuse_client, 'get_trace_id') else None
-    except Exception:
-        pass
+    _trace_id = get_current_trace_id()
 
     try:
         _t0 = time.monotonic()
