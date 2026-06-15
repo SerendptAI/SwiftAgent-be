@@ -266,6 +266,10 @@
                 img {
                     filter: none !important;
                 }
+                /* Invert barcode for readability in dark mode */
+                .barcode-image {
+                    filter: invert(1) !important;
+                }
                 /* Preserve white-background cards / pills */
                 .coupon-card {
                     background-color: #ffffff !important;
@@ -393,15 +397,6 @@
                                 class="barcode-image" style="max-width: 100%; width: 100%; height: auto;">
                             <p class="discount-code">{{discount_code}}</p>
                         </div>
-                    </td>
-                </tr>
-
-                <tr>
-                    <td class="cta-cell" style="padding: 0 46px 94px">
-                        <a href="#" class="copy-button">
-                            <img src="{{base_url}}/images/copy-icon.png" width="24" height="24" alt="Copy" class="copy-icon" />
-                            COPY CODE
-                        </a>
                     </td>
                 </tr>
 
