@@ -83,6 +83,7 @@ class ChatRequest(BaseModel):
     session_id: str = Field(..., description="Unique identifier for the chat session.")
     message: str = Field(..., description="The user's input message.")
     user_id: str = Field(None, description="Optional ID of the user (used for memory generation).")
+    user_email: Optional[str] = Field(None, description="Optional email address of the user. If provided, chats become aggregatable across SDK/Web widget.")
     # Optional — if omitted, falls back to company.ai_provider, then global default
     agent: Optional[AgentType] = Field(
         None, 
@@ -194,14 +195,24 @@ async def _chat_sse_generator(
         # Link this conversation to the visitor (by IP) so the visitors
         # endpoint can attribute communication duration. Done pre-stream so it
         # runs reliably even if the client disconnects right after "done".
+        update_fields = {}
         if visitor_ip:
+            update_fields["visitor_ip"] = visitor_ip
+        if req.user_email:
+            update_fields["sdk_user_email"] = req.user_email
+
+        if update_fields:
             await db.widget_conversations.update_one(
                 {"company_id": company_id, "session_id": req.session_id},
-                {"$set": {"visitor_ip": visitor_ip}},
+                {"$set": update_fields},
                 upsert=True,
             )
 
         stream_fns_to_try = [_AGENT_MAP.get(ak, _AGENT_MAP[_DEFAULT_AGENT]) for ak in agents_to_try]
+
+        actual_message_to_send = req.message
+        if req.user_email:
+            actual_message_to_send = f"[System Context: The current user's email address is {req.user_email}. Do NOT ask for their email address if you need to create a support ticket. Use this email address automatically.]\n\n{req.message}"
 
         # Serialize attachments for agent services
         attachments_raw = [a.model_dump() for a in req.attachments] if req.attachments else []
@@ -212,7 +223,7 @@ async def _chat_sse_generator(
             try:
                 response_text = ""
                 async for event in stream_fn(
-                    company_id, req.session_id, req.message,
+                    company_id, req.session_id, actual_message_to_send,
                     req.user_id, req.page_url, attachments_raw,
                     user_timestamp=user_timestamp,
                 ):
@@ -264,6 +275,21 @@ async def _chat_sse_generator(
                     response_text = friendly
                 yield _sse("stream", message=friendly)
                 break
+
+        # Remove injected context
+        if req.user_email:
+            conversation = await db.widget_conversations.find_one({"company_id": company_id, "session_id": req.session_id})
+            if conversation and "messages" in conversation:
+                messages = conversation["messages"]
+                for i in range(len(messages) - 1, -1, -1):
+                    if messages[i].get("role") == "user" and "System Context:" in messages[i].get("content", ""):
+                        messages[i]["content"] = req.message
+                        break
+                
+                await db.widget_conversations.update_one(
+                    {"_id": conversation["_id"]},
+                    {"$set": {"messages": messages}}
+                )
 
         yield _sse("done")
 
