@@ -48,22 +48,13 @@ def process_html_for_inline_images(html: str) -> tuple[str, dict[str, str]]:
 
 
 def add_html_with_inline_images(msg: EmailMessage, html: str) -> dict[str, str]:
-    """Add an HTML alternative and attach local template img assets inline."""
-    html, attachments = process_html_for_inline_images(html)
+    """
+    Add an HTML alternative.
+    We no longer embed template images as inline attachments (CIDs)
+    because email clients (like Gmail) still render them as attachment pills
+    at the bottom of the email, cluttering the UI.
+    The templates already use absolute URLs (e.g. {{base_url}}/images/...)
+    so remote HTTP loading will work perfectly.
+    """
     msg.add_alternative(html, subtype="html")
-    html_part = msg.get_payload()[1]
-
-    for filename, cid in attachments.items():
-        try:
-            data, maintype, subtype = get_image_data(filename)
-            html_part.add_related(data, maintype=maintype, subtype=subtype, cid=f"<{cid}>")
-            image_part = html_part.get_payload()[-1]
-            # Replace Content-Disposition to be strictly inline without a filename
-            # to prevent email clients from rendering attachment pills at the bottom
-            del image_part["Content-Disposition"]
-            image_part["Content-Disposition"] = "inline"
-            image_part["X-Attachment-Id"] = cid
-        except Exception as e:
-            logger.warning("Could not attach inline email image %s: %s", filename, e)
-
-    return attachments
+    return {}
