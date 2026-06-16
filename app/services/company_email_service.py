@@ -1031,35 +1031,43 @@ async def dispatch_all_test_templates(company_id: str, recipients: list[str], au
     
     success_count = 0
     errors = []
-    
-    for task in template_tasks:
-        try:
-            template_path = TEMPLATES_DIR / task["file"]
-            with open(template_path, "r", encoding="utf-8") as f:
-                html = f.read()
-            
-            html = html.replace("{{base_url}}", settings.API_BASE_URL)
-            for k, v in task["replacements"].items():
-                html = html.replace(k, str(v))
-                
-            sender_email = task.get("from_email", from_email)
-            sender_name = task.get("from_name", company_name)
-            
-            msg = EmailMessage()
-            msg["Subject"] = task["subject"]
-            msg["From"] = f"{sender_name} <{settings.active_sender_email}>"
-            msg["To"] = ", ".join(recipients)
-            msg["Reply-To"] = sender_email
-            
-            msg.set_content("Please view this email in an HTML-compatible client.")
-            add_html_with_inline_images(msg, html)
-            
-            import asyncio
-            await asyncio.to_thread(_send_smtp_email, msg)
-            success_count += 1
-            
-        except Exception as e:
-            errors.append(f"{task['file']}: {e}")
+
+    try:
+        import smtplib
+        with smtplib.SMTP_SSL(settings.active_smtp_server, settings.active_smtp_port) as smtp:
+            smtp.login(settings.active_smtp_username, settings.active_smtp_password)
+
+            for task in template_tasks:
+                try:
+                    template_path = TEMPLATES_DIR / task["file"]
+                    with open(template_path, "r", encoding="utf-8") as f:
+                        html = f.read()
+
+                    html = html.replace("{{base_url}}", settings.API_BASE_URL)
+                    for k, v in task["replacements"].items():
+                        html = html.replace(k, str(v))
+
+                    sender_email = task.get("from_email", from_email)
+                    sender_name = task.get("from_name", company_name)
+
+                    msg = EmailMessage()
+                    msg["Subject"] = task["subject"]
+                    msg["From"] = f"{sender_name} <{settings.active_sender_email}>"
+                    msg["To"] = ", ".join(recipients)
+                    msg["Reply-To"] = sender_email
+
+                    msg.set_content("Please view this email in an HTML-compatible client.")
+                    add_html_with_inline_images(msg, html)
+
+                    smtp.send_message(msg)
+                    success_count += 1
+
+                except Exception as e:
+                    errors.append(f"{task['file']}: {e}")
+
+    except Exception as e:
+        logger.exception("Failed to connect or authenticate to SMTP server during test dispatch: %s", e)
+        return False, f"Failed to connect to SMTP server: {e}"
             
     if errors:
         return False, f"Sent {success_count}/10. Errors: {'; '.join(errors)}"
