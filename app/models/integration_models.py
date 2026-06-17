@@ -27,7 +27,7 @@ class IntegrationCreate(BaseModel):
 
     name: str  # e.g. "Internal Order API"
     base_url: str  # e.g. "https://api.acme.com"
-    api_key: str  # raw key — encrypted before storage
+    api_key: Optional[str] = None  # raw key — encrypted before storage
     auth_header: str = "Authorization"  # header name for the key
     auth_prefix: str = "Bearer"  # prefix, e.g. "Bearer", "Api-Key", ""
     documentation_url: Optional[str] = None  # URL to extract documentation from

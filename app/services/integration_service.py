@@ -69,7 +69,7 @@ def _sanitize_doc(doc: dict) -> dict:
 
 async def create_integration(company_id: str, data: dict) -> dict:
     """Create a new API integration. Encrypts the raw API key."""
-    raw_key = data.pop("api_key")
+    raw_key = data.pop("api_key", None)
 
     now = datetime.now(tz=timezone.utc)
     doc = {
@@ -77,7 +77,7 @@ async def create_integration(company_id: str, data: dict) -> dict:
         "company_id": company_id,
         "name": data["name"],
         "base_url": data["base_url"],
-        "api_key_encrypted": encrypt(raw_key),
+        "api_key_encrypted": encrypt(raw_key) if raw_key else None,
         "auth_header": data.get("auth_header", "Authorization"),
         "auth_prefix": data.get("auth_prefix", "Bearer"),
         "documentation_url": data.get("documentation_url"),
