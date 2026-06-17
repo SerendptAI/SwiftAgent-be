@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - staging
 
 jobs:
   changes:
@@ -27,7 +28,7 @@ jobs:
 
   deploy-backend:
     needs: changes
-    if: ${{ needs.changes.outputs.backend == 'true' || github.event_name != 'push' }}
+    if: ${{ github.ref == 'refs/heads/master' && (needs.changes.outputs.backend == 'true' || github.event_name != 'push') }}
     name: Deploy Backend
     runs-on: self-hosted
     steps:
@@ -35,9 +36,19 @@ jobs:
         run: ./deploy.sh backend
         working-directory: /home/ghrunner/swift-agents-prod
 
+  deploy-staging-backend:
+    needs: changes
+    if: ${{ github.ref == 'refs/heads/staging' && (needs.changes.outputs.backend == 'true' || github.event_name != 'push') }}
+    name: Deploy Staging Backend
+    runs-on: self-hosted
+    steps:
+      - name: Deploy Staging Backend
+        run: ./deploy.sh staging-backend
+        working-directory: /home/ghrunner/swift-agents-prod
+
   deploy-raiseapp:
     needs: changes
-    if: ${{ needs.changes.outputs.raiseapp == 'true' }}
+    if: ${{ github.ref == 'refs/heads/master' && needs.changes.outputs.raiseapp == 'true' }}
     name: Deploy Raise App
     runs-on: self-hosted
     steps:

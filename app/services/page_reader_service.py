@@ -29,7 +29,7 @@ async def _is_url_safe(url: str) -> tuple[bool, str]:
 
         # Resolve all IPs for the hostname using async wrapper
         loop = asyncio.get_running_loop()
-        addr_infos = await loop.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        addr_infos = await loop.getaddrinfo(hostname, None, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM)
         
         if not addr_infos:
             return False, "Could not resolve hostname"

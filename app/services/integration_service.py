@@ -69,7 +69,7 @@ def _sanitize_doc(doc: dict) -> dict:
 
 async def create_integration(company_id: str, data: dict) -> dict:
     """Create a new API integration. Encrypts the raw API key."""
-    raw_key = data.pop("api_key")
+    raw_key = data.pop("api_key", None)
 
     now = datetime.now(tz=timezone.utc)
     doc = {
@@ -77,9 +77,10 @@ async def create_integration(company_id: str, data: dict) -> dict:
         "company_id": company_id,
         "name": data["name"],
         "base_url": data["base_url"],
-        "api_key_encrypted": encrypt(raw_key),
+        "api_key_encrypted": encrypt(raw_key) if raw_key else None,
         "auth_header": data.get("auth_header", "Authorization"),
         "auth_prefix": data.get("auth_prefix", "Bearer"),
+        "documentation_url": data.get("documentation_url"),
         "documentation": data.get("documentation", ""),
         "endpoints": [ep if isinstance(ep, dict) else ep.model_dump() for ep in data.get("endpoints", [])],
         "active": True,
@@ -115,7 +116,7 @@ async def update_integration(company_id: str, integration_id: str, data: dict) -
     """Partial update. Re-encrypts the API key if a new one is provided."""
     update_fields: dict = {}
 
-    for field in ("name", "base_url", "auth_header", "auth_prefix", "documentation"):
+    for field in ("name", "base_url", "auth_header", "auth_prefix", "documentation_url", "documentation"):
         if field in data and data[field] is not None:
             update_fields[field] = data[field]
 
@@ -154,6 +155,66 @@ async def delete_integration(company_id: str, integration_id: str) -> bool:
         logger.info("Deactivated integration %s for company %s", integration_id, company_id)
         return True
     return False
+
+# Background tasks
+
+async def scrape_and_update_documentation(company_id: str, integration_id: str, url: str):
+    """Background task to scrape documentation from a URL and update the integration."""
+    try:
+        from app.services import page_reader_service, notification_service
+        
+        logger.info(f"Background scraping API documentation for {integration_id} from {url}")
+        result = await page_reader_service.read_website_page(url)
+        
+        if "error" in result:
+            logger.error(f"Failed to scrape documentation for {integration_id}: {result['error']}")
+            await notification_service.notify_company(
+                company_id=company_id,
+                title="API Documentation Sync Failed",
+                body=f"Failed to extract documentation from {url}. Error: {result['error']}",
+                type="integration_error"
+            )
+            return
+
+        content = result.get("content", "")
+        if content:
+            # Heuristic check for locked/authenticated content
+            lower_content = content.lower().strip()
+            auth_keywords = ["not authenticated", "unauthorized", "forbidden", "access denied", "please log in", "requires authentication"]
+            
+            if len(lower_content) < 200 and any(keyword in lower_content for keyword in auth_keywords):
+                logger.warning(f"Documentation at {url} appears to be locked/authenticated for integration {integration_id}")
+                await notification_service.notify_company(
+                    company_id=company_id,
+                    title="API Documentation Sync Failed (Authentication Required)",
+                    body=f"We successfully reached {url}, but the documentation is locked behind authentication. Please make the page public or manually paste the documentation text.",
+                    type="integration_warning"
+                )
+                return
+
+            await db[COLLECTION].update_one(
+                {"company_id": company_id, "id": integration_id, "active": True},
+                {"$set": {"documentation": content, "updated_at": datetime.now(tz=timezone.utc)}}
+            )
+            
+            logger.info(f"Successfully updated documentation for integration {integration_id}")
+            await notification_service.notify_company(
+                company_id=company_id,
+                title="API Documentation Synced",
+                body=f"Successfully extracted and indexed documentation from {url}. The AI agent can now use this information.",
+                type="integration_success"
+            )
+        else:
+            logger.warning(f"No content extracted from {url} for integration {integration_id}")
+            await notification_service.notify_company(
+                company_id=company_id,
+                title="API Documentation Sync Failed",
+                body=f"No readable content could be extracted from {url}. Please check the URL or manually enter the documentation.",
+                type="integration_warning"
+            )
+            
+    except Exception as e:
+        logger.exception(f"Unexpected error scraping documentation for {integration_id}")
 
 # Agent helpers
 

@@ -103,11 +103,13 @@ async def get_company_public(
     website = company.get("website")
     logo_url = company.get("logo_url")
     suggested_ai_prompts = company.get("suggested_ai_prompts", [])
+    enable_suggested_prompts = company.get("enable_suggested_prompts", True)
     return {
         "name": name, 
         "website": website, 
         "logo_url": logo_url,
-        "suggested_ai_prompts": suggested_ai_prompts
+        "suggested_ai_prompts": suggested_ai_prompts,
+        "enable_suggested_prompts": enable_suggested_prompts
     }
 
 

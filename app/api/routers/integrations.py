@@ -8,7 +8,7 @@ These are then available to the agent as read-only verification tools.
 import logging
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 
 from app.core.auth import get_current_user
 from app.models.integration_models import (
@@ -38,6 +38,7 @@ async def _require_company_admin(company_id: str, user_id: str) -> dict:
 async def create_integration(
     company_id: str,
     data: IntegrationCreate,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
 ):
     """Register a new API integration. The API key is encrypted before storage."""
@@ -54,6 +55,15 @@ async def create_integration(
     result = await integration_service.create_integration(
         company_id, data.model_dump()
     )
+
+    if data.documentation_url:
+        background_tasks.add_task(
+            integration_service.scrape_and_update_documentation,
+            company_id=company_id,
+            integration_id=result["id"],
+            url=data.documentation_url
+        )
+
     return result
 
 
@@ -86,6 +96,7 @@ async def update_integration(
     company_id: str,
     integration_id: str,
     data: IntegrationUpdate,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
 ):
     """Update an integration. If a new API key is provided, it will be re-encrypted."""
@@ -96,6 +107,15 @@ async def update_integration(
     )
     if not result:
         raise HTTPException(status_code=404, detail="Integration not found.")
+
+    if data.documentation_url:
+        background_tasks.add_task(
+            integration_service.scrape_and_update_documentation,
+            company_id=company_id,
+            integration_id=result["id"],
+            url=data.documentation_url
+        )
+
     return result
 
 
