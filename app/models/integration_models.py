@@ -30,6 +30,7 @@ class IntegrationCreate(BaseModel):
     api_key: str  # raw key — encrypted before storage
     auth_header: str = "Authorization"  # header name for the key
     auth_prefix: str = "Bearer"  # prefix, e.g. "Bearer", "Api-Key", ""
+    documentation_url: Optional[str] = None  # URL to extract documentation from
     documentation: str = ""  # free-text API docs (markdown/plain)
     endpoints: List[APIEndpoint] = []  # registered GET endpoints
 
@@ -49,6 +50,7 @@ class IntegrationUpdate(BaseModel):
     api_key: Optional[str] = None  # if provided, re-encrypts
     auth_header: Optional[str] = None
     auth_prefix: Optional[str] = None
+    documentation_url: Optional[str] = None
     documentation: Optional[str] = None
     endpoints: Optional[List[APIEndpoint]] = None
 
@@ -69,6 +71,7 @@ class IntegrationResponse(BaseModel):
     base_url: str
     auth_header: str
     auth_prefix: str
+    documentation_url: Optional[str] = None
     documentation: str
     endpoints: List[APIEndpoint]
     active: bool
