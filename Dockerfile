@@ -32,7 +32,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 # We no longer install chromium here. 
 # A separate browserless container should be used in production.
-# RUN playwright install --with-deps chromium
+RUN playwright install --with-deps chromium
 
 # Reset the entrypoint, don't invoke `uv`
 ENTRYPOINT []
