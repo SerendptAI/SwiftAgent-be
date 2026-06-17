@@ -25,6 +25,7 @@ class CompanyInfoUpdate(BaseModel):
     support_email: Optional[str] = None
     phone_number: Optional[str] = None
     suggested_ai_prompts: Optional[List[str]] = None
+    enable_suggested_prompts: Optional[bool] = None
 
 class CompanySecurityUpdate(BaseModel):
     backup_email: Optional[str] = None
@@ -108,6 +109,7 @@ class CompanyResponse(BaseModel):
     industry: Optional[str] = None
     company_size: Optional[str] = None
     country: Optional[str] = None
+    enable_suggested_prompts: bool = True
     timezone: Optional[str] = None
     contact_email: Optional[str] = None
     support_email: Optional[str] = None
@@ -147,6 +149,7 @@ class CompanySummary(BaseModel):
     setup_complete: bool = False
     onboarding_step: int = 1
     suggested_ai_prompts: List[str] = []
+    enable_suggested_prompts: bool = True
 
 class LogoUpdate(BaseModel):
     logo_url: str

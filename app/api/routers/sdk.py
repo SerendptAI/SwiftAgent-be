@@ -63,6 +63,7 @@ async def init_sdk(
             "name": company.get("name", "Support"),
             "logo_url": company.get("logo_url"),
             "suggested_ai_prompts": company.get("suggested_ai_prompts", []),
+            "enable_suggested_prompts": company.get("enable_suggested_prompts", True),
         },
         "user": user_data,
     }
