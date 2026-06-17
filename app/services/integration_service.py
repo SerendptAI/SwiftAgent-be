@@ -330,7 +330,9 @@ async def execute_get_request(
     if "{" in path:
         return {"error": f"Missing path parameters in '{path}'. Provide all required path_params."}
 
-    full_url = f"{doc['base_url']}{path}"
+    base = doc['base_url'].rstrip('/')
+    ep_path = path.lstrip('/')
+    full_url = f"{base}/{ep_path}"
 
     # 4. SSRF check
     if _is_private_url(full_url):
