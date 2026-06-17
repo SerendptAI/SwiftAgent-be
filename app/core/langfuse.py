@@ -25,10 +25,11 @@ Usage
     )
 """
 
+import inspect
 import logging
 import contextvars
 from functools import wraps
-from typing import Any, Callable, Optional
+from typing import Any, AsyncGenerator, Callable, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,11 @@ def observe(
     capture_output: bool = True,
 ):
     """
-    Decorator that wraps an async function as a Langfuse trace/span.
+    Decorator that wraps an async function (or async generator) as a Langfuse trace.
+
+    - For regular async functions: creates a trace, records input/output, returns the result.
+    - For async generators (streaming): creates a trace, yields each event, captures the
+      final ``text`` event's ``content`` as the trace output.
 
     When Langfuse is disabled the function runs unchanged — zero overhead.
 
@@ -129,60 +134,111 @@ def observe(
     def decorator(fn: Callable) -> Callable:
         trace_name = name or f"{fn.__module__}.{fn.__qualname__}"
 
-        @wraps(fn)
-        async def wrapper(*args, **kwargs):
-            if not _langfuse_enabled or _langfuse_client is None:
-                return await fn(*args, **kwargs)
+        if inspect.isasyncgenfunction(fn):
+            # ── Async-generator wrapper (for chat_stream etc.) ────────────
+            @wraps(fn)
+            async def async_gen_wrapper(*args, **kwargs) -> AsyncGenerator:
+                if not _langfuse_enabled or _langfuse_client is None:
+                    async for event in fn(*args, **kwargs):
+                        yield event
+                    return
 
-            # ── Build a safe, serialisable input dict ──────────────────────
-            safe_input: dict[str, Any] = {}
-            if capture_input:
+                safe_input: dict[str, Any] = {}
+                if capture_input:
+                    try:
+                        sig = inspect.signature(fn)
+                        bound = sig.bind(*args, **kwargs)
+                        bound.apply_defaults()
+                        safe_input = {
+                            k: _safe_repr(v) for k, v in bound.arguments.items()
+                        }
+                    except Exception:
+                        safe_input = {}
+
+                trace = _langfuse_client.trace(
+                    name=trace_name,
+                    input=safe_input if capture_input else None,
+                    metadata=_extract_trace_metadata(safe_input),
+                )
+                trace_id = getattr(trace, "id", "") or ""
+                _current_trace_id.set(trace_id)
+
+                reply: Optional[str] = None
                 try:
-                    import inspect
-                    sig = inspect.signature(fn)
-                    bound = sig.bind(*args, **kwargs)
-                    bound.apply_defaults()
-                    safe_input = {
-                        k: _safe_repr(v) for k, v in bound.arguments.items()
-                    }
-                except Exception:
-                    safe_input = {}
+                    async for event in fn(*args, **kwargs):
+                        if isinstance(event, dict) and event.get("type") == "text":
+                            reply = event.get("content", "")
+                        yield event
 
-            trace = _langfuse_client.trace(
-                name=trace_name,
-                input=safe_input if capture_input else None,
-                metadata=_extract_trace_metadata(safe_input),
-            )
+                    if capture_output and trace is not None:
+                        try:
+                            trace.update(output=_safe_repr(reply) if reply else "")
+                        except Exception:
+                            pass
 
-            # Expose trace ID to the wrapped function via context variable
-            trace_id = getattr(trace, "id", "") or ""
-            _current_trace_id.set(trace_id)
+                except Exception as exc:
+                    if trace is not None:
+                        try:
+                            trace.update(
+                                level="ERROR",
+                                status_message=str(exc),
+                            )
+                        except Exception:
+                            pass
+                    raise
 
-            try:
-                result = await fn(*args, **kwargs)
-                if capture_output and trace is not None:
+            return async_gen_wrapper
+
+        else:
+            # ── Regular async-function wrapper ────────────────────────────
+            @wraps(fn)
+            async def wrapper(*args, **kwargs):
+                if not _langfuse_enabled or _langfuse_client is None:
+                    return await fn(*args, **kwargs)
+
+                safe_input: dict[str, Any] = {}
+                if capture_input:
                     try:
-                        trace.update(output=_safe_repr(result))
+                        sig = inspect.signature(fn)
+                        bound = sig.bind(*args, **kwargs)
+                        bound.apply_defaults()
+                        safe_input = {
+                            k: _safe_repr(v) for k, v in bound.arguments.items()
+                        }
                     except Exception:
-                        pass
-                return result
+                        safe_input = {}
 
-            except Exception as exc:
-                if trace is not None:
-                    try:
-                        trace.update(
-                            level="ERROR",
-                            status_message=str(exc),
-                        )
-                    except Exception:
-                        pass
-                raise
+                trace = _langfuse_client.trace(
+                    name=trace_name,
+                    input=safe_input if capture_input else None,
+                    metadata=_extract_trace_metadata(safe_input),
+                )
 
-            finally:
-                # Non-blocking flush — Langfuse SDK batches in background
-                pass
+                trace_id = getattr(trace, "id", "") or ""
+                _current_trace_id.set(trace_id)
 
-        return wrapper
+                try:
+                    result = await fn(*args, **kwargs)
+                    if capture_output and trace is not None:
+                        try:
+                            trace.update(output=_safe_repr(result))
+                        except Exception:
+                            pass
+                    return result
+
+                except Exception as exc:
+                    if trace is not None:
+                        try:
+                            trace.update(
+                                level="ERROR",
+                                status_message=str(exc),
+                            )
+                        except Exception:
+                            pass
+                    raise
+
+            return wrapper
+
     return decorator
 
 
