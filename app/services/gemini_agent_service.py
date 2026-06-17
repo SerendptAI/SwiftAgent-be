@@ -942,6 +942,19 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
         if not reply:
             reply = "I apologize, but I wasn't able to generate a response. Could you please rephrase your question?"
 
+        create_llm_generation(
+            trace_id=_trace_id or "",
+            model=settings.GEMINI_MODEL,
+            provider="gemini",
+            completion=reply,
+            system_prompt=system_prompt,
+            user_message=user_message,
+            input_tokens=0,
+            output_tokens=0,
+            latency_ms=0,
+            metadata={"company_id": company_id, "session_id": session_id, "final": True},
+        )
+
     except Exception as e:
         logger.error(f"Gemini API error: {e}")
         raise e
@@ -976,6 +989,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
 # streaming chat (SSE)
 
 
+@observe(name="gemini.chat_stream")
 async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None, attachments: list = None, user_timestamp: str = None):
     """
     Async generator that streams the Gemini agent chat flow as events.
@@ -1040,10 +1054,12 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
     client = _get_client()
     blockchain_data = None
     sources = []
+    _trace_id = get_current_trace_id()
 
     try:
         yield {"type": "thinking", "message": "Thinking…"}
 
+        _t0 = time.monotonic()
         response = client.models.generate_content(
             model=settings.GEMINI_MODEL,
             contents=gemini_history,
@@ -1052,6 +1068,20 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
                 tools=TOOLS,
                 temperature=0.3,
             ),
+        )
+        _latency_ms = (time.monotonic() - _t0) * 1000
+        _usage = getattr(response, 'usage_metadata', None)
+        create_llm_generation(
+            trace_id=_trace_id or "",
+            model=settings.GEMINI_MODEL,
+            provider="gemini",
+            system_prompt=system_prompt,
+            user_message=user_message,
+            completion="",
+            input_tokens=getattr(_usage, 'prompt_token_count', 0) if _usage else 0,
+            output_tokens=getattr(_usage, 'candidates_token_count', 0) if _usage else 0,
+            latency_ms=_latency_ms,
+            metadata={"company_id": company_id, "session_id": session_id, "round": 0},
         )
 
         # Handle tool calls (may need multiple rounds)
@@ -1085,6 +1115,13 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
 
                 args = dict(fc.args) if fc.args else {}
                 result = await _execute_tool(tool_name, args, company=company, session_id=session_id)
+
+                observe_tool_call(
+                    trace_id=_trace_id,
+                    tool_name=tool_name,
+                    tool_input=args,
+                    tool_output=result,
+                )
                 
                 if tool_name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
                     blockchain_data = result
@@ -1123,6 +1160,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
             yield {"type": "thinking", "message": "Preparing response…"}
 
             # Call Gemini again with tool results
+            _t0 = time.monotonic()
             response = client.models.generate_content(
                 model=settings.GEMINI_MODEL,
                 contents=gemini_history,
@@ -1131,6 +1169,20 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
                     tools=TOOLS,
                     temperature=0.3,
                 ),
+            )
+            _latency_ms = (time.monotonic() - _t0) * 1000
+            _usage = getattr(response, 'usage_metadata', None)
+            create_llm_generation(
+                trace_id=_trace_id or "",
+                model=settings.GEMINI_MODEL,
+                provider="gemini",
+                system_prompt=system_prompt,
+                user_message=user_message,
+                completion="",
+                input_tokens=getattr(_usage, 'prompt_token_count', 0) if _usage else 0,
+                output_tokens=getattr(_usage, 'candidates_token_count', 0) if _usage else 0,
+                latency_ms=_latency_ms,
+                metadata={"company_id": company_id, "session_id": session_id, "tool_round": True},
             )
 
         # Extract final text response
@@ -1142,6 +1194,19 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
 
         if not reply:
             reply = "I apologize, but I wasn't able to generate a response. Could you please rephrase your question?"
+
+        create_llm_generation(
+            trace_id=_trace_id or "",
+            model=settings.GEMINI_MODEL,
+            provider="gemini",
+            completion=reply,
+            system_prompt=system_prompt,
+            user_message=user_message,
+            input_tokens=0,
+            output_tokens=0,
+            latency_ms=0,
+            metadata={"company_id": company_id, "session_id": session_id, "final": True},
+        )
 
         # extract navigation_steps from reply and reconstruct guide
         if nav_report_data:

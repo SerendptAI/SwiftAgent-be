@@ -919,6 +919,19 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
         if not reply:
             reply = "I apologize, but I wasn't able to generate a response. Could you please rephrase?"
 
+        create_llm_generation(
+            trace_id=_trace_id or "",
+            model=MODEL,
+            provider="openrouter",
+            completion=reply,
+            system_prompt=system_prompt,
+            user_message=user_message,
+            input_tokens=0,
+            output_tokens=0,
+            latency_ms=0,
+            metadata={"company_id": company_id, "session_id": session_id, "final": True},
+        )
+
         if nav_report_data:
             nav_steps, reply = extract_navigation_steps(reply)
             if nav_steps:
@@ -947,6 +960,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
 # Streaming chat (SSE)
 
 
+@observe(name="openrouter.chat_stream")
 async def chat_stream(company_id: str, session_id: str, user_message: str, user_id: str = None, page_url: str = None, attachments: list = None, user_timestamp: str = None):
     """
     Async generator yielding dicts with a "type" key:
@@ -1008,10 +1022,12 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
     sources = []
     reply = ""
     guide = None
+    _trace_id = get_current_trace_id()
 
     try:
         yield {"type": "thinking", "message": "Thinking…"}
 
+        _t0 = time.monotonic()
         response = await client.chat.completions.create(
             model=MODEL,
             messages=messages,
@@ -1019,6 +1035,20 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
             tool_choice="auto",
             max_tokens=4096,
             temperature=0.3,
+        )
+        _latency_ms = (time.monotonic() - _t0) * 1000
+        _usage = getattr(response, 'usage', None)
+        create_llm_generation(
+            trace_id=_trace_id or "",
+            model=MODEL,
+            provider="openrouter",
+            system_prompt=system_prompt,
+            user_message=user_message,
+            completion="",
+            input_tokens=getattr(_usage, 'prompt_tokens', 0) if _usage else 0,
+            output_tokens=getattr(_usage, 'completion_tokens', 0) if _usage else 0,
+            latency_ms=_latency_ms,
+            metadata={"company_id": company_id, "session_id": session_id, "round": 0},
         )
 
         nav_report_data = None
@@ -1050,6 +1080,13 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
                     args = {}
 
                 result = await _execute_tool(fn_name, args, company=company, session_id=session_id)
+
+                observe_tool_call(
+                    trace_id=_trace_id,
+                    tool_name=fn_name,
+                    tool_input=args,
+                    tool_output=result,
+                )
                 
                 if fn_name in ("lookup_transaction", "lookup_wallet", "diagnose_problem"):
                     blockchain_data = result
@@ -1067,6 +1104,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
 
             yield {"type": "thinking", "message": "Preparing response…"}
 
+            _t0 = time.monotonic()
             response = await client.chat.completions.create(
                 model=MODEL,
                 messages=messages,
@@ -1075,10 +1113,37 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
                 max_tokens=4096,
                 temperature=0.3,
             )
+            _latency_ms = (time.monotonic() - _t0) * 1000
+            _usage = getattr(response, 'usage', None)
+            create_llm_generation(
+                trace_id=_trace_id or "",
+                model=MODEL,
+                provider="openrouter",
+                system_prompt=system_prompt,
+                user_message=user_message,
+                completion="",
+                input_tokens=getattr(_usage, 'prompt_tokens', 0) if _usage else 0,
+                output_tokens=getattr(_usage, 'completion_tokens', 0) if _usage else 0,
+                latency_ms=_latency_ms,
+                metadata={"company_id": company_id, "session_id": session_id, "tool_round": True},
+            )
 
         reply = response.choices[0].message.content or ""
         if not reply:
             reply = "I apologize, but I wasn't able to generate a response. Could you please rephrase?"
+
+        create_llm_generation(
+            trace_id=_trace_id or "",
+            model=MODEL,
+            provider="openrouter",
+            completion=reply,
+            system_prompt=system_prompt,
+            user_message=user_message,
+            input_tokens=0,
+            output_tokens=0,
+            latency_ms=0,
+            metadata={"company_id": company_id, "session_id": session_id, "final": True},
+        )
 
         if nav_report_data:
             nav_steps, reply = extract_navigation_steps(reply)
