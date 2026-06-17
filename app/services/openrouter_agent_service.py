@@ -563,6 +563,7 @@ This company has {integration_count} registered internal API(s) you can query to
 - Then use `query_company_api` to make read-only (GET) requests to look up or verify data
 - Only use these when a customer asks you to verify, check, or look up specific data
 - NEVER modify data — these are read-only lookups only
+- CRITICAL: You MUST ALWAYS attempt to check the API documentation (`get_api_documentation`) before ever stating that you don't know something or that the company doesn't offer a specific feature or service.
 ''' if integration_count > 0 else ''}
 """
 
