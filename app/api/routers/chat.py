@@ -208,6 +208,122 @@ async def _chat_sse_generator(
                 upsert=True,
             )
 
+        if company.get("route_to_human"):
+            yield _sse("thinking", message="Routing to a human agent...")
+            
+            import re
+            email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', req.message)
+            found_email = email_match.group(0) if email_match else None
+            
+            customer_email = found_email or req.user_email
+            ticket_id = conversation.get("ticket_id") if conversation else None
+            
+            if not customer_email and conversation:
+                customer_email = conversation.get("sdk_user_email")
+                
+            if not customer_email and ticket_id:
+                ticket = await db.email_tickets.find_one({"id": ticket_id, "company_id": company_id})
+                if ticket:
+                    customer_email = ticket.get("customer_email")
+                    
+            now = datetime.now(tz=timezone.utc).isoformat()
+            user_msg_doc = {
+                "role": "user",
+                "content": req.message,
+                "timestamp": user_timestamp or now
+            }
+            await db.widget_conversations.update_one(
+                {"company_id": company_id, "session_id": req.session_id},
+                {"$push": {"messages": user_msg_doc}},
+                upsert=True
+            )
+            
+            if not conversation:
+                conversation = await db.widget_conversations.find_one({"company_id": company_id, "session_id": req.session_id})
+            
+            if customer_email:
+                from app.services import company_email_service, notification_service
+                import asyncio
+                
+                if ticket_id:
+                    inbound_msg = {
+                        "direction": "inbound",
+                        "body_text": req.message,
+                        "body_html": None,
+                        "sender_email": customer_email,
+                        "message_id": None,
+                        "timestamp": datetime.now(tz=timezone.utc),
+                        "seen": False,
+                    }
+                    await db.email_tickets.update_one(
+                        {"id": ticket_id, "company_id": company_id},
+                        {
+                            "$push": {"messages": inbound_msg},
+                            "$set": {"status": "follow_up", "updated_at": datetime.now(tz=timezone.utc)},
+                            "$inc": {"unseen_count": 1},
+                        }
+                    )
+                    asyncio.create_task(
+                        notification_service.notify_company(
+                            company_id=company_id,
+                            title="💬 New Ticket Reply",
+                            body=f"Customer {customer_email} replied to Ticket #{ticket_id}",
+                            type="ticket_reply",
+                            data={"ticket_id": ticket_id}
+                        )
+                    )
+                    ticket_doc = await db.email_tickets.find_one({"id": ticket_id, "company_id": company_id})
+                    if ticket_doc:
+                        asyncio.create_task(company_email_service._send_new_message_email(company, ticket_doc, inbound_msg))
+                    
+                    reply_text = f"Your message has been sent to our human support team. We will continue to reach out to you at {customer_email} shortly."
+                else:
+                    subject = conversation.get("subject", "New Chat") if conversation else "New Chat"
+                    chat_summary = req.message
+                    if conversation and "messages" in conversation:
+                        history_texts = [f"{m.get('role', 'user')}: {m.get('content', '')}" for m in conversation.get("messages", [])]
+                        if not any(m.get("content") == req.message and m.get("role") == "user" for m in conversation.get("messages", [])):
+                            history_texts.append(f"user: {req.message}")
+                        chat_summary = "\n\n".join(history_texts)
+                        
+                    ticket = await company_email_service.create_ticket(
+                        company_id=company_id,
+                        customer_email=customer_email,
+                        subject=subject,
+                        chat_summary=chat_summary,
+                        chat_session_id=req.session_id,
+                        customer_name=None
+                    )
+                    reply_text = f"Thank you! Your chat has been escalated to our human support team as Ticket #{ticket['id']}. We will reach out to you at {customer_email} shortly."
+                    
+                assistant_msg_doc = {
+                    "role": "assistant",
+                    "content": reply_text,
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat()
+                }
+                await db.widget_conversations.update_one(
+                    {"company_id": company_id, "session_id": req.session_id},
+                    {"$push": {"messages": assistant_msg_doc}},
+                )
+                
+                yield _sse("stream", message=reply_text)
+                yield _sse("done")
+                return
+            else:
+                reply_text = "You are speaking with our human support team! Please provide your email address below so we can track your request and get back to you shortly."
+                assistant_msg_doc = {
+                    "role": "assistant",
+                    "content": reply_text,
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat()
+                }
+                await db.widget_conversations.update_one(
+                    {"company_id": company_id, "session_id": req.session_id},
+                    {"$push": {"messages": assistant_msg_doc}},
+                )
+                yield _sse("stream", message=reply_text)
+                yield _sse("done")
+                return
+
         stream_fns_to_try = [_AGENT_MAP.get(ak, _AGENT_MAP[_DEFAULT_AGENT]) for ak in agents_to_try]
 
         actual_message_to_send = req.message
