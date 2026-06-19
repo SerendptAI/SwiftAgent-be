@@ -38,6 +38,7 @@ dependencies = [
     "python-magic>=0.4.27",
     "polar-sdk>=0.31.6",
     "langfuse>=2.0.0,<3.0.0",
+    "playwright-stealth>=2.0.3",
 ]
 
 [project.optional-dependencies]

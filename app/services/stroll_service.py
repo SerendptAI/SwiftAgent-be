@@ -13,6 +13,7 @@ import base64
 import hashlib
 import json
 import logging
+import random
 from collections import deque
 from datetime import datetime, timezone
 from io import BytesIO
@@ -22,9 +23,11 @@ from uuid import uuid4
 
 import anthropic
 import openai
+from PIL import Image, ImageDraw, ImageFont
 from google import genai
 from google.genai import types
 from playwright.async_api import async_playwright, Browser, Page
+from playwright_stealth import Stealth
 
 from app.core.config import settings
 from app.core.database import db
@@ -40,9 +43,11 @@ from app.models.stroll_models import (
     StrollConfigCreate,
     WidgetStrollReport,
     StrollVersion,
+    TokenUsage,
 )
 from app.services.cloudinary_service import upload_document
 from app.services import otp_challenge_service
+from app.core.langfuse import observe
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +83,7 @@ def _get_anthropic_client() -> anthropic.AsyncAnthropic:
     return anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 
-async def _call_vision_with_fallback(prompt_text: str, screenshot_bytes: bytes) -> str:
+async def _call_vision_with_fallback(prompt_text: str, screenshot_bytes: bytes, token_tracker: dict = None) -> str:
     """Three-tier agent fallback specifically for vision analysis."""
     # 1. Try Anthropic
     try:
@@ -104,6 +109,9 @@ async def _call_vision_with_fallback(prompt_text: str, screenshot_bytes: bytes) 
                 ],
             }],
         )
+        if token_tracker is not None and hasattr(response, 'usage'):
+            token_tracker['in'] += getattr(response.usage, 'input_tokens', 0)
+            token_tracker['out'] += getattr(response.usage, 'output_tokens', 0)
         return response.content[0].text
     except Exception as e:
         logger.warning(f"Anthropic vision failed: {e}. Falling back to Gemini...")
@@ -126,6 +134,11 @@ async def _call_vision_with_fallback(prompt_text: str, screenshot_bytes: bytes) 
             for part in response.candidates[0].content.parts:
                 if part.text:
                     reply += part.text
+                    
+        if token_tracker is not None and hasattr(response, 'usage_metadata') and response.usage_metadata:
+            token_tracker['in'] += getattr(response.usage_metadata, 'prompt_token_count', 0)
+            token_tracker['out'] += getattr(response.usage_metadata, 'candidates_token_count', 0)
+            
         if not reply:
             raise Exception("Empty response from Gemini")
         return reply
@@ -159,40 +172,90 @@ async def _call_vision_with_fallback(prompt_text: str, screenshot_bytes: bytes) 
             max_tokens=4096,
             temperature=0.3,
         )
+        if token_tracker is not None and hasattr(response, 'usage') and response.usage:
+            token_tracker['in'] += getattr(response.usage, 'prompt_tokens', 0)
+            token_tracker['out'] += getattr(response.usage, 'completion_tokens', 0)
+            
         return response.choices[0].message.content or ""
     except Exception as e:
         logger.error(f"OpenRouter vision failed: {e}. All vision providers exhausted.")
         raise Exception("All vision providers exhausted") from e
 
 
+def _draw_som_boxes(screenshot_bytes: bytes, elements: list[dict]) -> bytes:
+    """Draw numbered Set-of-Mark bounding boxes on the screenshot."""
+    try:
+        image = Image.open(BytesIO(screenshot_bytes)).convert("RGB")
+        draw = ImageDraw.Draw(image, "RGBA")
+        try:
+            font = ImageFont.truetype("arial.ttf", 14)
+        except Exception:
+            font = ImageFont.load_default()
+            
+        for idx, el in enumerate(elements):
+            bbox = el.get("bbox")
+            if not bbox:
+                continue
+            x, y, w, h = bbox["x"], bbox["y"], bbox["w"], bbox["h"]
+            draw.rectangle([x, y, x + w, y + h], outline=(255, 0, 0, 200), width=2)
+            
+            label = str(idx)
+            text_bbox = draw.textbbox((0, 0), label, font=font)
+            tw = text_bbox[2] - text_bbox[0]
+            th = text_bbox[3] - text_bbox[1]
+            draw.rectangle([x, y, x + tw + 4, y + th + 4], fill=(255, 0, 0, 255))
+            draw.text((x + 2, y + 2), label, fill="white", font=font)
+            
+            el["som_id"] = idx
+            
+        out = BytesIO()
+        image.save(out, format="PNG")
+        return out.getvalue()
+    except Exception as e:
+        logger.warning(f"Failed to draw SoM boxes: {e}")
+        return screenshot_bytes
+
 async def _analyze_page_with_vision(
     screenshot_bytes: bytes,
     raw_elements: list[dict],
     page_title: str,
     page_url: str,
+    token_tracker: dict = None
 ) -> dict:
     """
     Use Claude vision to semantically understand a page screenshot.
     Returns enriched element descriptions and a page summary.
     """
-    elements_text = json.dumps(raw_elements[:30], indent=2)  # cap to avoid token overflow
+    annotated_bytes = _draw_som_boxes(screenshot_bytes, raw_elements)
+    
+    pruned_elements = []
+    for el in raw_elements[:40]:
+        if "som_id" in el:
+            pruned_elements.append({
+                "som_id": el["som_id"],
+                "label": el.get("label", ""),
+                "selector": el.get("selector", "")
+            })
+
+    elements_text = json.dumps(pruned_elements, indent=2)
 
     prompt_text = (
-        f"This is a screenshot of the page '{page_title}' at {page_url}.\n\n"
-        f"Detected interactive elements from the DOM:\n{elements_text}\n\n"
+        f"This is a screenshot of the page '{page_title}' at {page_url}. "
+        "It has been annotated with numbered red bounding boxes (Set-of-Mark).\n\n"
+        f"Detected interactive elements and their corresponding box IDs:\n{elements_text}\n\n"
         "Please provide:\n"
-        "1. A 'scratchpad' string where you reason about the layout as a senior QA engineer. Your goal is to systematically uncover every core feature (especially Settings, Profiles, Upload forms, and core workflows). Plan out which elements to click next to achieve this.\n"
+        "1. A 'scratchpad' string reasoning about the layout. Plan out which elements to click next to uncover core features.\n"
         "2. A one-sentence summary of what this page is for.\n"
         "3. For each interactive element above, a human-readable description of what it does.\n"
-        "4. A list of CSS selectors (chosen strictly from the provided list) that the crawler should click next. PRIORITIZE navigation to Settings, Uploads, and unmapped features. Exclude truly destructive actions (Delete Account, Log Out, Process Payment) or redundant elements you've clearly already explored.\n"
-        "5. An 'is_exploration_complete' boolean. Set this to true ONLY if you are absolutely confident there are no more meaningful forms, settings, or sub-pages to explore on this screen.\n\n"
+        "4. A list of CSS selectors (chosen strictly from the provided list) that the crawler should click next. PRIORITIZE navigation to Settings, Uploads, and unmapped features. Exclude truly destructive actions.\n"
+        "5. An 'is_exploration_complete' boolean. Set this to true ONLY if you are absolutely confident there are no more meaningful sub-pages to explore.\n\n"
         "Respond in JSON format:\n"
         '{"scratchpad": "...", "page_summary": "...", "elements": [{"selector": "...", '
         '"human_description": "..."}], "navigation_selectors_to_explore": ["selector1", "selector_2"], "is_exploration_complete": false}'
     )
 
     try:
-        text = await _call_vision_with_fallback(prompt_text, screenshot_bytes)
+        text = await _call_vision_with_fallback(prompt_text, annotated_bytes, token_tracker=token_tracker)
         
         # extract JSON from response (handle markdown code blocks)
         if "```json" in text:
@@ -209,69 +272,74 @@ async def _analyze_page_with_vision(
 DETECT_ELEMENTS_JS = """
 () => {
     const elements = [];
-    const allNodes = document.querySelectorAll('a, button, [role="button"], [role="tab"], [role="menuitem"], input, [type="submit"]');
-    
-    // Also find any element with cursor: pointer (crucial for React SPAs that use divs for buttons)
-    const pointerNodes = Array.from(document.querySelectorAll('*')).filter(el => {
-        // avoid expensive getComputedStyle for non-likely elements like path, script, etc
-        if (['path', 'svg', 'script', 'style', 'html', 'body'].includes(el.tagName.toLowerCase())) return false;
-        try {
-            return window.getComputedStyle(el).cursor === 'pointer';
-        } catch(e) { return false; }
-    });
+    let idCounter = 0;
 
-    const nodes = Array.from(new Set([...Array.from(allNodes), ...pointerNodes]));
-
-    nodes.forEach((el, i) => {
-        const rect = el.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return;  // skip hidden elements
-
-        const label = (
-            el.textContent?.trim() ||
-            el.getAttribute('aria-label') ||
-            el.getAttribute('title') ||
-            el.getAttribute('placeholder') ||
-            ''
-        ).slice(0, 100);
-
-        const href = el.getAttribute('href') || '';
-        const isNav = el.tagName === 'A' || 
-                      el.closest('nav') !== null ||
-                      el.closest('aside') !== null ||
-                      el.closest('[class*="sidebar"]') !== null ||
-                      el.closest('[class*="menu"]') !== null ||
-                      el.getAttribute('role') === 'tab' ||
-                      el.getAttribute('role') === 'menuitem';
-
-        // build a reasonably unique CSS selector
-        let selector = '';
-        if (el.id) {
-            selector = '#' + el.id;
-        } else {
-            const tag = el.tagName.toLowerCase();
-            const classes = Array.from(el.classList).slice(0, 3).map(c => CSS.escape(c)).join('.');
-            selector = classes ? `${tag}.${classes}` : tag;
+    function isInteractive(el) {
+        const tag = el.tagName.toLowerCase();
+        if (['a', 'button', 'input', 'select', 'textarea', 'details'].includes(tag)) return true;
+        if (el.hasAttribute('role')) {
+            const role = el.getAttribute('role');
+            if (['button', 'link', 'menuitem', 'tab', 'checkbox', 'radio', 'switch', 'treeitem'].includes(role)) return true;
         }
+        if (el.hasAttribute('tabindex') && el.getAttribute('tabindex') !== '-1') return true;
+        try {
+            const style = window.getComputedStyle(el);
+            if (style.cursor === 'pointer' && !['body', 'html'].includes(tag)) return true;
+        } catch(e) {}
+        return false;
+    }
+
+    function isVisible(el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return false;
+        try {
+            const style = window.getComputedStyle(el);
+            if (style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0') return false;
+        } catch(e) {}
+        let current = el;
+        while (current) {
+            if (current.getAttribute && current.getAttribute('aria-hidden') === 'true') return false;
+            current = current.parentElement;
+        }
+        return true;
+    }
+
+    function walk(node) {
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
         
-        // Guarantee uniqueness for Playwright clicks and vision mapping
-        const strollId = `stroll-${i}`;
-        el.setAttribute('data-stroll-id', strollId);
-        selector = `${selector}[data-stroll-id="${strollId}"]`;
-
-        elements.push({
-            selector: selector,
-            label: label,
-            type: isNav ? 'nav' : 'action',
-            href: href,
-            bbox: {
-                x: Math.round(rect.x),
-                y: Math.round(rect.y),
-                w: Math.round(rect.width),
-                h: Math.round(rect.height)
+        if (isVisible(node) && isInteractive(node)) {
+            const rect = node.getBoundingClientRect();
+            const label = (node.getAttribute('aria-label') || node.getAttribute('title') || node.getAttribute('placeholder') || node.textContent || node.value || '').replace(/\\s+/g, ' ').trim().slice(0, 100);
+            const hasPopup = node.getAttribute('aria-haspopup') === 'true' || node.getAttribute('aria-expanded') !== null;
+            const href = node.getAttribute('href') || '';
+            const role = node.getAttribute('role') || node.tagName.toLowerCase();
+            
+            let selector = '';
+            if (node.id) {
+                selector = '#' + CSS.escape(node.id);
+            } else {
+                const tag = node.tagName.toLowerCase();
+                const classes = Array.from(node.classList).slice(0, 3).map(c => CSS.escape(c)).join('.');
+                selector = classes ? `${tag}.${classes}` : tag;
             }
-        });
-    });
+            
+            const strollId = `stroll-${idCounter++}`;
+            node.setAttribute('data-stroll-id', strollId);
+            selector = `${selector}[data-stroll-id="${strollId}"]`;
 
+            elements.push({
+                selector: selector, label: label,
+                type: hasPopup ? 'menu' : (href ? 'nav' : 'action'),
+                href: href, has_popup: hasPopup, role: role,
+                bbox: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) }
+            });
+            if (['button', 'a'].includes(node.tagName.toLowerCase())) return;
+        }
+        for (const child of node.children) walk(child);
+        if (node.shadowRoot) for (const child of node.shadowRoot.children) walk(child);
+    }
+
+    walk(document.body);
     return elements;
 }
 """
@@ -459,7 +527,7 @@ DETECT_LOGIN_FORM_JS = """
 
 
 async def _read_login_dom_with_vision(
-    page: Page, screenshot_bytes: bytes, page_url: str,
+    page: Page, screenshot_bytes: bytes, page_url: str, token_tracker: dict = None
 ) -> dict:
     """
     Use Claude vision to intelligently identify login form fields.
@@ -489,7 +557,7 @@ async def _read_login_dom_with_vision(
     )
 
     try:
-        text = await _call_vision_with_fallback(prompt_text, screenshot_bytes)
+        text = await _call_vision_with_fallback(prompt_text, screenshot_bytes, token_tracker=token_tracker)
         
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0]
@@ -527,7 +595,7 @@ def _select_auth_strategy(config: StrollConfig) -> str:
     return "none"
 
 
-async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tuple[bool, dict[str, str]]:
+async def _authenticate(page: Page, config: StrollConfig, company_id: str, token_tracker: dict = None) -> tuple[bool, dict[str, str]]:
     """
     Handle dashboard authentication with smart strategy selection.
 
@@ -618,7 +686,7 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
             logger.warning(f"Failed to upload login page screenshot: {e}")
 
         # Read the DOM with Claude vision to identify form fields
-        vision_selectors = await _read_login_dom_with_vision(page, login_screenshot, login_url)
+        vision_selectors = await _read_login_dom_with_vision(page, login_screenshot, login_url, token_tracker=token_tracker)
 
         # Find and fill username — prefer vision, then config override, then heuristics
         username_el = await _find_element(
@@ -630,7 +698,8 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
             logger.error(f"Could not find username field on {login_url} for company {company_id}")
             return False, extra_screenshots
 
-        await username_el.fill(creds.username)
+        await username_el.fill("")
+        await username_el.press_sequentially(creds.username, delay=random.randint(30, 80))
 
         # Find and fill password — prefer vision, then config override, then heuristics
         password_el = await _find_element(
@@ -639,7 +708,8 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
             _PASSWORD_SELECTORS,
         )
         if password_el:
-            await password_el.fill(creds.password)
+            await password_el.fill("")
+            await password_el.press_sequentially(creds.password, delay=random.randint(30, 80))
         else:
             logger.info(f"No password field found on {login_url} — assuming passwordless/OTP login flow")
 
@@ -746,10 +816,13 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str) -> tu
 
         logger.info(f"Login succeeded for company {company_id}, now at {page.url}")
 
-        # navigate to dashboard URL if we're not already there
+        # navigate to dashboard URL if we're not already there,
+        # but avoid backwards navigation if dashboard_url was set to the login page
         current = page.url.split("?")[0].rstrip("/")
         target = config.dashboard_url.split("?")[0].rstrip("/")
-        if current != target:
+        login_target = login_url.split("?")[0].rstrip("/")
+        
+        if current != target and target != login_target:
             try:
                 await page.goto(
                     config.dashboard_url,
@@ -862,9 +935,20 @@ async def _handle_otp_challenge(
     )
 
     # Block until the admin responds (or timeout)
-    otp_value = await otp_challenge_service.wait_for_challenge_response(challenge.id)
+    otp_value = await otp_challenge_service.wait_for_challenge_response(
+        challenge.id, timeout_seconds=300
+    )
     if otp_value:
         logger.info(f"otp from push received: {otp_value}")
+    else:
+        from app.services.push_notification_service import send_generic_push
+        await send_generic_push(
+            user_id=notify_user_id,
+            title="⏳ OTP Timeout",
+            body="You missed the agent's OTP request. The crawl was aborted.",
+            notification_type="otp_timeout",
+            data={"challenge_id": challenge.id}
+        )
     return otp_value
 
 
@@ -925,7 +1009,8 @@ async def _fill_and_submit_otp(
 
             if len(visible_boxes) >= len(otp_value):
                 for i, digit in enumerate(otp_value):
-                    await visible_boxes[i].fill(digit)
+                    await visible_boxes[i].fill("")
+                    await visible_boxes[i].press_sequentially(digit, delay=random.randint(30, 80))
                 filled = True
                 logger.info(f"OTP filled across {len(otp_value)} digit boxes")
         except Exception as e:
@@ -968,6 +1053,7 @@ async def _fill_and_submit_otp(
     return True
 
 
+@observe(name="stroll.run_stroll")
 async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
     """
     Execute a full BFS crawl of the customer's dashboard.
@@ -990,9 +1076,11 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
 
     graph = NavGraph()
     screenshot_urls: dict[str, str] = {}
+    token_tracker = {"in": 0, "out": 0}
 
     try:
         page = await context.new_page()
+        await Stealth().apply_stealth_async(page)
 
         # — health check —
         try:
@@ -1029,7 +1117,7 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
             )
 
         # — authenticate if credentials provided —
-        auth_ok, extra_screenshots = await _authenticate(page, config, company_id)
+        auth_ok, extra_screenshots = await _authenticate(page, config, company_id, token_tracker=token_tracker)
         if extra_screenshots:
             screenshot_urls.update(extra_screenshots)
 
@@ -1053,7 +1141,7 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
             logger.warning(f"Failed to screenshot dashboard home: {e}")
 
         # — BFS crawl —
-        crawl_queue: deque[str] = deque([config.dashboard_url])
+        crawl_queue: deque[str] = deque([page.url])
         visited: set[str] = set()
         max_pages = min(config.max_pages, settings.STROLL_MAX_PAGES)
 
@@ -1100,7 +1188,7 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
 
             # Claude vision analysis for rich understanding
             vision_result = await _analyze_page_with_vision(
-                screenshot_bytes, raw_elements, page_title, current_url
+                screenshot_bytes, raw_elements, page_title, current_url, token_tracker=token_tracker
             )
 
             # build enriched elements
@@ -1145,7 +1233,21 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
                 logger.info(f"Vision Scratchpad [{page_title}]: {vision_result['scratchpad']}")
             logger.info(f"Vision suggested nav elements: {list(selectors_to_explore)}")
 
-            nav_candidates = [e for e in elements if e.type == "nav" or e.selector in selectors_to_explore]
+            llm_candidates = [e for e in elements if e.selector in selectors_to_explore]
+            heuristic_candidates = [e for e in elements if e.type in ["nav", "menu", "action"] and e.label]
+            
+            candidate_selectors = set(selectors_to_explore)
+            nav_candidates = llm_candidates[:]
+            
+            if not vision_result.get("is_exploration_complete") or not selectors_to_explore:
+                for hc in heuristic_candidates:
+                    if hc.selector not in candidate_selectors:
+                        lower_label = hc.label.lower()
+                        if not any(bad in lower_label for bad in ["delete", "remove", "logout", "log out", "sign out"]):
+                            nav_candidates.append(hc)
+                            candidate_selectors.add(hc.selector)
+            
+            nav_candidates = nav_candidates[:20]
             click_nav_elements = []
 
             for elem in nav_candidates:
@@ -1160,10 +1262,7 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
                 href = raw_match.get("href", "")
                 if not href:
                     # If it has no href, queue it for SPA click exploration
-                    # Only click it if Claude explicitly said we should.
-                    # We drop the blind `elem.type == "nav"` fallback because it clicks hidden screen-reader spans.
-                    if elem.selector in selectors_to_explore:
-                        click_nav_elements.append(elem)
+                    click_nav_elements.append(elem)
                     continue
 
                 dest_url = _normalize_url(href, config.dashboard_url)
@@ -1210,8 +1309,15 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
 
                     click_el = page.locator(elem.selector).first
                     if await click_el.is_visible():
-                        logger.info(f"Click-exploring SPA nav element (DOM selector): {elem.selector}")
-                        await click_el.click(timeout=3000)
+                        raw_match = next((r for r in raw_elements if r["selector"] == elem.selector), {})
+                        is_menu = raw_match.get("has_popup", False)
+                        if is_menu:
+                            logger.info(f"Hover-exploring menu element: {elem.selector}")
+                            await click_el.hover(timeout=3000)
+                            await page.wait_for_timeout(1000)
+                        else:
+                            logger.info(f"Click-exploring SPA nav element (DOM selector): {elem.selector}")
+                            await click_el.click(timeout=3000)
                     elif elem.bbox:
                         logger.info(f"Click-exploring SPA nav element (BBox fallback): {elem.selector}")
                         x = elem.bbox.x + (elem.bbox.w / 2)
@@ -1256,7 +1362,7 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
                         
                         modal_raw = await page.evaluate(DETECT_ELEMENTS_JS)
                         modal_vision = await _analyze_page_with_vision(
-                            modal_bytes, modal_raw, f"State after clicking {elem.label or 'button'} on {page_title}", current_url
+                            modal_bytes, modal_raw, f"State after clicking {elem.label or 'button'} on {page_title}", current_url, token_tracker=token_tracker
                         )
                         
                         v_map = {e.get("selector", ""): e.get("human_description", "") for e in modal_vision.get("elements", [])}
@@ -1310,12 +1416,19 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
         except Exception as e:
             logger.warning(f"Error closing browser context: {e}")
 
+    ai_usage = TokenUsage(
+        input_tokens=token_tracker["in"],
+        output_tokens=token_tracker["out"],
+        total_cost_usd=(token_tracker["in"] / 1_000_000 * 3.0) + (token_tracker["out"] / 1_000_000 * 15.0)
+    )
+
     return StrollVersion(
         id=f"stroll_{str(uuid4())[:8]}",
         company_id=company_id,
         timestamp=datetime.now(tz=timezone.utc),
         graph=graph,
         screenshot_urls=screenshot_urls,
+        ai_usage=ai_usage,
         status="success",
     )
 
@@ -1448,6 +1561,11 @@ async def process_widget_stroll(company_id: str, report: WidgetStrollReport):
             company_id=company_id,
             timestamp=datetime.now(tz=timezone.utc),
             graph=NavGraph(),
+            ai_usage=TokenUsage(
+                input_tokens=token_tracker["in"],
+                output_tokens=token_tracker["out"],
+                total_cost_usd=(token_tracker["in"] / 1_000_000 * 3.0) + (token_tracker["out"] / 1_000_000 * 15.0)
+            ),
             status="failed",
         )
         await db.stroll_versions.insert_one(version.model_dump())

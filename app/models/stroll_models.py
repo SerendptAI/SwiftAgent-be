@@ -101,6 +101,12 @@ class DiffLog(BaseModel):
     unchanged_count: int = 0
 
 
+class TokenUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_cost_usd: float = 0.0
+
+
 class StrollVersion(BaseModel):
     id: str                                     # "stroll_v1", "stroll_v2", ...
     company_id: str
@@ -108,6 +114,7 @@ class StrollVersion(BaseModel):
     graph: NavGraph
     screenshot_urls: Dict[str, str] = {}        # page_id → cloudinary URL
     diff: Optional[DiffLog] = None
+    ai_usage: Optional[TokenUsage] = None       # aggregates all vision API costs for this version
     status: str = "success"                     # "success" | "failed" | "aborted"
 
 

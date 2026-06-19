@@ -99,19 +99,21 @@ async def send_otp_challenge_push(
         )
         return False
 
-    # Create history notification for the challenge
-    await notification_service.create_notification(
-        user_id=user_id,
-        title="🔐 OTP Required",
-        body="Your agent needs an OTP to log into a dashboard. Tap to enter the code.",
-        type="otp_challenge",
-        data={
+    # Create history notification for the challenge without triggering a duplicate background push
+    await db.notifications.insert_one({
+        "user_id": user_id,
+        "type": "otp_challenge",
+        "title": "🔐 OTP Required",
+        "body": "Your agent needs an OTP to log into a dashboard. Tap to enter the code.",
+        "data": {
             "type": "otp_challenge",
             "challenge_id": challenge_id,
             "login_url": login_url,
             "screenshot_url": screenshot_url
-        }
-    )
+        },
+        "read": False,
+        "created_at": datetime.now(tz=timezone.utc),
+    })
 
     # Build push messages
     data_payload = {
