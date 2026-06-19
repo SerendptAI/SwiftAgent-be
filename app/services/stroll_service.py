@@ -1146,6 +1146,11 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
         max_pages = min(config.max_pages, settings.STROLL_MAX_PAGES)
 
         while crawl_queue and len(visited) < max_pages:
+            current_cost = (token_tracker["in"] / 1_000_000 * 3.0) + (token_tracker["out"] / 1_000_000 * 15.0)
+            if current_cost > 2.0:
+                logger.warning(f"Aborting stroll for {company_id}: Cost limit exceeded (${current_cost:.2f})")
+                break
+                
             current_url = crawl_queue.popleft()
             if current_url in visited:
                 continue
@@ -1296,7 +1301,12 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
             # --- SPA Click Exploration for nav items without href ---
             # Track the element AND the node ID it originated from
             click_queue = deque([(elem, page_id) for elem in click_nav_elements])
+            click_iterations = 0
             while click_queue:
+                if click_iterations >= 20:
+                    logger.warning("Max click iterations reached for this page, breaking to prevent loops.")
+                    break
+                click_iterations += 1
                 elem, from_node_id = click_queue.popleft()
                 try:
                     # If the URL changed, we navigated! Stop trying to click elements from the old DOM.
@@ -1317,7 +1327,7 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
                             await page.wait_for_timeout(1000)
                         else:
                             logger.info(f"Click-exploring SPA nav element (DOM selector): {elem.selector}")
-                            await click_el.click(timeout=3000)
+                            await click_el.click(timeout=1000, force=True)
                     elif elem.bbox:
                         logger.info(f"Click-exploring SPA nav element (BBox fallback): {elem.selector}")
                         x = elem.bbox.x + (elem.bbox.w / 2)
