@@ -221,6 +221,82 @@ async def tickets_websocket(
             pass
 
 
+@router.websocket("/{company_id}/tickets/{ticket_id}/ws")
+async def ticket_detail_websocket(
+    websocket: WebSocket,
+    company_id: str,
+    ticket_id: str,
+    token: str = Query(...)
+):
+    """Real-time WebSocket for a specific ticket's details.
+    Pushes the full ticket details upon connection, and whenever the ticket changes.
+    Requires a valid JWT token passed as a query parameter (?token=...).
+    """
+    await websocket.accept()
+
+    # Authenticate via query param token
+    try:
+        payload = decode_access_token(token)
+        if not payload or not payload.get("sub"):
+            await websocket.send_json({"type": "error", "message": "Invalid or missing token"})
+            await websocket.close(code=1008)
+            return
+        user_id = payload.get("sub")
+        
+        # Verify the user has access to this company
+        company = await company_service.get_company(company_id, user_id)
+        if not company:
+            await websocket.send_json({"type": "error", "message": "Company not found or unauthorized"})
+            await websocket.close(code=1008)
+            return
+            
+    except Exception as e:
+        logger.error(f"WebSocket auth failed: {e}")
+        await websocket.close(code=1008)
+        return
+
+    from fastapi.encoders import jsonable_encoder
+
+    # Initial push
+    try:
+        result = await _get_ticket_with_context(company_id, ticket_id)
+        if result:
+            ticket = result.get("ticket", {})
+            attributed_chat = result.get("attributed_chat")
+            if attributed_chat:
+                ticket["attributed_chat"] = attributed_chat
+            await websocket.send_json({"type": "init", "data": jsonable_encoder(ticket)})
+    except Exception as e:
+        logger.error(f"Error fetching initial ticket detail for WS: {e}")
+        await websocket.close()
+        return
+
+    from app.core.database import db
+
+    try:
+        # Watch for changes to this specific ticket
+        pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}, "fullDocument.id": ticket_id}}]
+        async with db.email_tickets.watch(pipeline) as stream:
+            async for change in stream:
+                full_doc = change.get("fullDocument")
+                if full_doc and full_doc.get("company_id") == company_id:
+                    res = await _get_ticket_with_context(company_id, ticket_id)
+                    if res:
+                        ticket = res.get("ticket", {})
+                        attributed_chat = res.get("attributed_chat")
+                        if attributed_chat:
+                            ticket["attributed_chat"] = attributed_chat
+                        await websocket.send_json({"type": "update", "data": jsonable_encoder(ticket)})
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for ticket {ticket_id}")
+    except Exception as e:
+        logger.error(f"Ticket detail WebSocket change stream error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
+
+
 async def _get_ticket_with_context(company_id: str, ticket_id: str) -> dict:
     """Fetch ticket with attributed chat context."""
     return await company_email_service.get_ticket_with_chat(company_id, ticket_id)
@@ -370,6 +446,25 @@ async def resolve_ticket_by_agent_endpoint(
         raise HTTPException(status_code=404, detail="Ticket not found or already resolved")
 
     return {"status": "resolved", "ticket_id": ticket_id}
+
+
+@router.patch("/{company_id}/tickets/{ticket_id}/reopen")
+async def reopen_ticket_endpoint(
+    company_id: str,
+    ticket_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reopen a resolved ticket."""
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    result = await company_email_service.reopen_ticket(company_id, ticket_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Ticket not found or not resolved")
+
+    return {"status": "reopened", "ticket_id": ticket_id}
 
 @router.post("/test-dispatch")
 async def dispatch_test_suite(

@@ -164,16 +164,22 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
     })
     
     if chat:
+        company = await db.companies.find_one({"id": company_id})
+        ai_name = company.get("name") if company else "AI Assistant"
+        ai_avatar_url = company.get("logo_url") if company else None
+
         messages = chat.get("messages", [])
-        formatted_messages = [
-            {
-                "role": m.get("role", "user"),
+        formatted_messages = []
+        for m in messages:
+            role = m.get("role", "user")
+            formatted_messages.append({
+                "role": role,
                 "content": m.get("content", ""),
                 "timestamp": m.get("timestamp"),
-                "attachments": m.get("attachments")
-            }
-            for m in messages
-        ]
+                "attachments": m.get("attachments"),
+                "author_name": ai_name if role == "assistant" else m.get("agent_name"),
+                "avatar_url": ai_avatar_url if role == "assistant" else m.get("agent_avatar_url")
+            })
         
         subject = chat.get("subject")
         if not subject:
@@ -206,7 +212,9 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
                 "role": m.get("direction", "user"), # inbound/outbound/system
                 "content": m.get("body_text", ""),
                 "timestamp": m.get("timestamp").isoformat() if isinstance(m.get("timestamp"), datetime) else m.get("timestamp"),
-                "attachments": m.get("attachments")
+                "attachments": m.get("attachments"),
+                "author_name": m.get("agent_name"),
+                "avatar_url": m.get("agent_avatar_url")
             }
             for m in messages
         ]
@@ -219,15 +227,21 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
                  "session_id": ticket.get("chat_session_id")
              })
              if linked_chat:
-                 attributed_chat = [
-                    {
-                        "role": m.get("role", "user"),
-                        "content": m.get("content", ""),
-                        "timestamp": m.get("timestamp"),
-                        "attachments": m.get("attachments")
-                    }
-                    for m in linked_chat.get("messages", [])
-                 ]
+                 company = await db.companies.find_one({"id": company_id})
+                 ai_name = company.get("name") if company else "AI Assistant"
+                 ai_avatar_url = company.get("logo_url") if company else None
+
+                 attributed_chat = []
+                 for m in linked_chat.get("messages", []):
+                     role = m.get("role", "user")
+                     attributed_chat.append({
+                         "role": role,
+                         "content": m.get("content", ""),
+                         "timestamp": m.get("timestamp"),
+                         "attachments": m.get("attachments"),
+                         "author_name": ai_name if role == "assistant" else m.get("agent_name"),
+                         "avatar_url": ai_avatar_url if role == "assistant" else m.get("agent_avatar_url")
+                     })
 
         return {
             "id": ticket.get("id"),

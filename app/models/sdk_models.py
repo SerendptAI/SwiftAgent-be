@@ -101,6 +101,8 @@ class SdkMessageItem(BaseModel):
     content: str
     timestamp: Optional[str] = None
     attachments: Optional[List[SdkAttachmentMeta]] = None
+    author_name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class SdkConversationDetail(BaseModel):

@@ -319,3 +319,198 @@ async def get_sdk_conversation_detail(
         raise HTTPException(status_code=404, detail="Conversation not found")
         
     return detail
+
+
+@router.post("/{company_id}/tickets/{ticket_id}/reopen")
+async def sdk_reopen_ticket(
+    company_id: str,
+    ticket_id: str,
+    session: dict = Depends(get_sdk_session),
+):
+    """
+    Reopen a ticket from the SDK.
+    """
+    if session["company_id"] != company_id:
+        raise HTTPException(status_code=403, detail="Your session is not authorized for this company. Please re-initialize the SDK.")
+
+    from app.services import company_email_service
+    result = await company_email_service.reopen_ticket(company_id, ticket_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Ticket not found or not resolved")
+
+    return {"status": "reopened", "ticket_id": ticket_id}
+
+
+from fastapi import WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
+
+@router.websocket("/{company_id}/conversations/ws")
+async def sdk_conversations_websocket(
+    websocket: WebSocket,
+    company_id: str,
+    token: str = Query(...)
+):
+    """
+    Real-time WebSocket for SDK conversations (chats and tickets).
+    Requires a valid JWT token passed as a query parameter (?token=...).
+    """
+    await websocket.accept()
+
+    try:
+        from app.core.security import decode_access_token
+        payload = decode_access_token(token)
+        if not payload or not payload.get("sub") or payload.get("type") != "sdk":
+            await websocket.send_json({"type": "error", "message": "Invalid or missing SDK token"})
+            await websocket.close(code=1008)
+            return
+            
+        email = payload.get("sub")
+        if payload.get("company_id") != company_id:
+            await websocket.send_json({"type": "error", "message": "Token not authorized for this company"})
+            await websocket.close(code=1008)
+            return
+            
+    except Exception as e:
+        logger.error(f"SDK WebSocket auth failed: {e}")
+        await websocket.close(code=1008)
+        return
+
+    # Initial push of conversations
+    try:
+        result = await sdk_service.get_conversation_history(company_id, email)
+        await websocket.send_json({
+            "type": "init",
+            "data": jsonable_encoder(result)
+        })
+    except Exception as e:
+        logger.error(f"Error fetching initial conversations for SDK WS: {e}")
+        await websocket.close()
+        return
+
+    from app.core.database import db
+
+    try:
+        # Watch for changes in widget_conversations and email_tickets
+        # We use a loop with short timeouts or two separate change streams.
+        # But we can just use two tasks.
+        import asyncio
+        
+        async def watch_chats():
+            pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}}}]
+            async with db.widget_conversations.watch(pipeline) as stream:
+                async for change in stream:
+                    full_doc = change.get("fullDocument")
+                    if full_doc and full_doc.get("company_id") == company_id and full_doc.get("sdk_user_email") == email:
+                        res = await sdk_service.get_conversation_history(company_id, email)
+                        await websocket.send_json({"type": "update", "data": jsonable_encoder(res)})
+
+        async def watch_tickets():
+            pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}}}]
+            async with db.email_tickets.watch(pipeline) as stream:
+                async for change in stream:
+                    full_doc = change.get("fullDocument")
+                    if full_doc and full_doc.get("company_id") == company_id and full_doc.get("customer_email") == email:
+                        res = await sdk_service.get_conversation_history(company_id, email)
+                        await websocket.send_json({"type": "update", "data": jsonable_encoder(res)})
+
+        chat_task = asyncio.create_task(watch_chats())
+        ticket_task = asyncio.create_task(watch_tickets())
+
+        # Keep alive loop
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            pass
+        finally:
+            chat_task.cancel()
+            ticket_task.cancel()
+
+    except Exception as e:
+        logger.error(f"SDK WebSocket change stream error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
+
+@router.websocket("/{company_id}/conversations/{conversation_id}/ws")
+async def sdk_conversation_detail_websocket(
+    websocket: WebSocket,
+    company_id: str,
+    conversation_id: str,
+    token: str = Query(...)
+):
+    """
+    Real-time WebSocket for a specific conversation's messages.
+    """
+    await websocket.accept()
+
+    try:
+        from app.core.security import decode_access_token
+        payload = decode_access_token(token)
+        if not payload or not payload.get("sub") or payload.get("type") != "sdk":
+            await websocket.send_json({"type": "error", "message": "Invalid or missing SDK token"})
+            await websocket.close(code=1008)
+            return
+            
+        email = payload.get("sub")
+        if payload.get("company_id") != company_id:
+            await websocket.send_json({"type": "error", "message": "Token not authorized for this company"})
+            await websocket.close(code=1008)
+            return
+            
+    except Exception as e:
+        logger.error(f"SDK WebSocket auth failed: {e}")
+        await websocket.close(code=1008)
+        return
+
+    # Initial push
+    try:
+        detail = await sdk_service.get_conversation_detail(company_id, email, conversation_id)
+        if detail:
+            await websocket.send_json({"type": "init", "data": jsonable_encoder(detail)})
+    except Exception as e:
+        logger.error(f"Error fetching initial conversation detail for SDK WS: {e}")
+        await websocket.close()
+        return
+
+    from app.core.database import db
+    import asyncio
+
+    try:
+        async def watch_chat():
+            pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}, "fullDocument.session_id": conversation_id}}]
+            async with db.widget_conversations.watch(pipeline) as stream:
+                async for change in stream:
+                    full_doc = change.get("fullDocument")
+                    if full_doc and full_doc.get("company_id") == company_id and full_doc.get("sdk_user_email") == email:
+                        res = await sdk_service.get_conversation_detail(company_id, email, conversation_id)
+                        await websocket.send_json({"type": "update", "data": jsonable_encoder(res)})
+
+        async def watch_ticket():
+            pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}, "fullDocument.id": conversation_id}}]
+            async with db.email_tickets.watch(pipeline) as stream:
+                async for change in stream:
+                    full_doc = change.get("fullDocument")
+                    if full_doc and full_doc.get("company_id") == company_id and full_doc.get("customer_email") == email:
+                        res = await sdk_service.get_conversation_detail(company_id, email, conversation_id)
+                        await websocket.send_json({"type": "update", "data": jsonable_encoder(res)})
+
+        chat_task = asyncio.create_task(watch_chat())
+        ticket_task = asyncio.create_task(watch_ticket())
+
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            pass
+        finally:
+            chat_task.cancel()
+            ticket_task.cancel()
+
+    except Exception as e:
+        logger.error(f"SDK detail WebSocket change stream error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass

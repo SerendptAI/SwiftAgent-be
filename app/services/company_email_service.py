@@ -403,6 +403,8 @@ async def send_ticket_reply(
         "timestamp": now,
         "seen": True,
         "attachments": attachment_meta,
+        "agent_name": agent_display,
+        "agent_avatar_url": agent_avatar,
     }
 
     await db.email_tickets.update_one(
@@ -909,6 +911,33 @@ async def resolve_ticket_by_agent(company_id: str, ticket_id: str) -> dict | Non
         # Trigger customer email asynchronously
         asyncio.create_task(_send_resolved_email(ticket))
 
+    return ticket
+
+async def reopen_ticket(company_id: str, ticket_id: str) -> dict | None:
+    now = datetime.now(tz=timezone.utc)
+    ticket = await db.email_tickets.find_one_and_update(
+        {"company_id": company_id, "id": ticket_id, "status": "resolved"},
+        {
+            "$set": {
+                "status": "open",
+                "updated_at": now,
+            }
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+
+    if ticket:
+        logger.info("Ticket %s reopened", ticket["id"])
+        import asyncio
+        asyncio.create_task(
+            notification_service.notify_company(
+                company_id=company_id,
+                title="🔄 Ticket Reopened",
+                body=f"Ticket #{ticket['id']} was reopened.",
+                type="ticket_reopen",
+                data={"ticket_id": ticket["id"]}
+            )
+        )
     return ticket
 
 async def dispatch_all_test_templates(company_id: str, recipients: list[str], auth_user: dict) -> tuple[bool, str]:
