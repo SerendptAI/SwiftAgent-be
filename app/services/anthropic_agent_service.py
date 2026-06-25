@@ -930,7 +930,8 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
         response = await client.messages.create(
             model=MODEL,
             max_tokens=4096,
-            system=system_prompt,
+            system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
+            extra_headers={"anthropic-beta": "prompt-caching-2024-09-02"},
             tools=TOOLS,
             messages=claude_messages,
             temperature=0.3,
@@ -1015,7 +1016,8 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
             response = await client.messages.create(
                 model=MODEL,
                 max_tokens=4096,
-                system=system_prompt,
+                system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
+                extra_headers={"anthropic-beta": "prompt-caching-2024-09-02"},
                 tools=TOOLS,
                 messages=claude_messages,
                 temperature=0.3,
@@ -1179,7 +1181,8 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
         response = await client.messages.create(
             model=MODEL,
             max_tokens=4096,
-            system=system_prompt,
+            system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
+            extra_headers={"anthropic-beta": "prompt-caching-2024-09-02"},
             tools=TOOLS,
             messages=claude_messages,
             temperature=0.3,
@@ -1272,7 +1275,8 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
             response = await client.messages.create(
                 model=MODEL,
                 max_tokens=4096,
-                system=system_prompt,
+                system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
+                extra_headers={"anthropic-beta": "prompt-caching-2024-09-02"},
                 tools=TOOLS,
                 messages=claude_messages,
                 temperature=0.3,

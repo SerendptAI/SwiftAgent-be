@@ -270,7 +270,8 @@ async def enforce_stroll_limit(company: dict) -> None:
 
     current_count = await db.stroll_versions.count_documents({
         "company_id": company_id,
-        "timestamp": {"$gte": month_start}
+        "timestamp": {"$gte": month_start},
+        "status": "success"
     })
 
     if current_count >= max_strolls:
@@ -334,7 +335,8 @@ async def get_usage_summary(company: dict) -> dict:
     # strolls this month
     strolls_used = await db.stroll_versions.count_documents({
         "company_id": company_id,
-        "timestamp": {"$gte": month_start}
+        "timestamp": {"$gte": month_start},
+        "status": "success"
     })
 
     return {

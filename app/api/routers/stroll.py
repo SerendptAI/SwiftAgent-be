@@ -59,9 +59,6 @@ async def _run_stroll_background(company_id: str):
 
         if version.status != "success":
             logger.error(f"Stroll failed for company {company_id}: {version.status}")
-            # persist failure record
-            version.diff = None
-            await db.stroll_versions.insert_one(version.model_dump())
             return
 
         # diff against previous

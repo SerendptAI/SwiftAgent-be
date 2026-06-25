@@ -72,8 +72,6 @@ async def _scheduled_stroll_task(company_id: str):
 
         if version.status != "success":
             logger.error(f"Scheduled stroll failed for {company_id}: {version.status}")
-            version.diff = None
-            await db.stroll_versions.insert_one(version.model_dump())
             return
 
         prev = await stroll_service.get_latest_version(company_id)

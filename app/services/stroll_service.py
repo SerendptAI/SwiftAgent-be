@@ -1077,6 +1077,7 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
     graph = NavGraph()
     screenshot_urls: dict[str, str] = {}
     token_tracker = {"in": 0, "out": 0}
+    previous_version = await get_latest_version(company_id)
 
     try:
         page = await context.new_page()
@@ -1191,10 +1192,31 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
 
             logger.info(f"Reading DOM and capturing layout of {current_url} to plan next moves...")
 
-            # Claude vision analysis for rich understanding
-            vision_result = await _analyze_page_with_vision(
-                screenshot_bytes, raw_elements, page_title, current_url, token_tracker=token_tracker
-            )
+            cached_node = None
+            if previous_version:
+                prev_node = previous_version.graph.nodes.get(page_id)
+                if prev_node and prev_node.dom_hash == dom_hash:
+                    cached_node = prev_node
+
+            if cached_node:
+                logger.info(f"DOM hash match for {current_url}. Reusing cached vision data.")
+                vision_result = {
+                    "elements": [
+                        {"selector": e.selector, "human_description": e.human_description} 
+                        for e in cached_node.elements
+                    ],
+                    "page_summary": cached_node.page_summary,
+                    "navigation_selectors_to_explore": [
+                        edge.via.selector for edge in previous_version.graph.edges 
+                        if edge.from_page == page_id
+                    ],
+                    "is_exploration_complete": False
+                }
+            else:
+                # Claude vision analysis for rich understanding
+                vision_result = await _analyze_page_with_vision(
+                    screenshot_bytes, raw_elements, page_title, current_url, token_tracker=token_tracker
+                )
 
             # build enriched elements
             vision_elements_map = {
@@ -1224,7 +1246,12 @@ async def run_stroll(company_id: str, config: StrollConfig) -> StrollVersion:
             graph.nodes[page_id] = node
 
             # upload screenshot
-            screenshot_url = await _upload_screenshot(screenshot_bytes, company_id, page_id)
+            cached_screenshot_url = previous_version.screenshot_urls.get(page_id) if previous_version else None
+            if cached_node and cached_screenshot_url:
+                screenshot_url = cached_screenshot_url
+                logger.info(f"Reusing cached screenshot for {page_id}")
+            else:
+                screenshot_url = await _upload_screenshot(screenshot_bytes, company_id, page_id)
             screenshot_urls[page_id] = screenshot_url
 
             # --- Navigation & Edge Building ---
@@ -1578,7 +1605,7 @@ async def process_widget_stroll(company_id: str, report: WidgetStrollReport):
             ),
             status="failed",
         )
-        await db.stroll_versions.insert_one(version.model_dump())
+        logger.warning(f"Widget stroll failed for company {company_id}, not saving to DB.")
 
 def diff_stroll(new_graph: NavGraph, prev_version: Optional[StrollVersion]) -> DiffLog:
     """Compare new graph against previous version. Returns a DiffLog."""
