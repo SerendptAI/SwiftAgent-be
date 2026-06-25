@@ -7,12 +7,14 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
+from fastapi.encoders import jsonable_encoder
 
-from app.core.security import create_access_token
+from app.core.security import create_access_token, decode_access_token
 from app.core.request_utils import get_client_ip
 from app.core.sdk_auth import get_sdk_session, verify_api_key
+from app.core.database import db
 from app.models.sdk_models import (
     SdkChatRequest,
     SdkConversationDetail,
@@ -20,7 +22,8 @@ from app.models.sdk_models import (
     SdkInitRequest,
     SdkInitResponse,
 )
-from app.services import sdk_service, anthropic_agent_service, openrouter_agent_service, gemini_agent_service
+from app.services import sdk_service, anthropic_agent_service, openrouter_agent_service, gemini_agent_service, company_email_service
+from app.services.sdk_service import format_chat_session_dict
 from app.api.routers.chat import _AGENT_MAP, _TITLE_MAP, _DEFAULT_AGENT, _sse, upload_chat_files
 from app.core.utils import get_random_avatar
 
@@ -73,7 +76,6 @@ async def init_sdk(
 async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatRequest, visitor_ip: str | None = None, user_timestamp: str | None = None):
     """SSE generator for SDK chat, injecting user email into context."""
     try:
-        from app.core.database import db
         company = await db.companies.find_one({"id": company_id})
         if not company:
             yield _sse("error", message="Company not found")
@@ -148,6 +150,93 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                 upsert=True,
             )
 
+        # Check if the session_id is a ticket_id
+        ticket = await db.email_tickets.find_one({"id": req.session_id, "company_id": company_id})
+        ticket_id = ticket["id"] if ticket else None
+        
+        is_escalated = False
+        if conversation and conversation.get("escalated"):
+            is_escalated = True
+            if not ticket_id:
+                ticket_id = conversation.get("ticket_id")
+
+        if company.get("route_to_human") or is_escalated or ticket_id:
+            now_iso = datetime.now(tz=timezone.utc).isoformat()
+            
+            # Save user message to widget_conversations if it's a chat (not purely a ticket session)
+            if not ticket:
+                user_msg_doc = {
+                    "role": "user",
+                    "content": req.message,
+                    "timestamp": user_timestamp or now_iso
+                }
+                await db.widget_conversations.update_one(
+                    {"company_id": company_id, "session_id": req.session_id},
+                    {"$push": {"messages": user_msg_doc}},
+                    upsert=True
+                )
+            if ticket_id:
+                try:
+                    await company_email_service.add_inbound_ticket_message(
+                        company_id=company_id,
+                        ticket_id=ticket_id,
+                        sender_email=email,
+                        body_text=req.message,
+                        timestamp=datetime.now(tz=timezone.utc)
+                    )
+                except ValueError as e:
+                    yield _sse("stream", message=f"Sorry, this ticket cannot be replied to: {e}")
+                    yield _sse("done")
+                    return
+                    
+                if not ticket:
+                    # User is still in the chat view, so stream a quick confirmation.
+                    reply_text = f"Your message has been sent to our human support team. We will continue to reach out to you at {email} shortly."
+                    assistant_msg_doc = {
+                        "role": "assistant",
+                        "content": reply_text,
+                        "timestamp": datetime.now(tz=timezone.utc).isoformat()
+                    }
+                    await db.widget_conversations.update_one(
+                        {"company_id": company_id, "session_id": req.session_id},
+                        {"$push": {"messages": assistant_msg_doc}},
+                    )
+                    yield _sse("stream", message=reply_text)
+                    
+            else:
+                yield _sse("thinking", message="Routing to a human agent...")
+                subject = conversation.get("subject", "New Chat") if conversation else "New Chat"
+                chat_summary = req.message
+                if conversation and "messages" in conversation:
+                    history_texts = [f"{m.get('role', 'user')}: {m.get('content', '')}" for m in conversation.get("messages", [])]
+                    if not any(m.get("content") == req.message and m.get("role") == "user" for m in conversation.get("messages", [])):
+                        history_texts.append(f"user: {req.message}")
+                    chat_summary = "\n\n".join(history_texts)
+                    
+                new_ticket = await company_email_service.create_ticket(
+                    company_id=company_id,
+                    customer_email=email,
+                    subject=subject,
+                    chat_summary=chat_summary,
+                    chat_session_id=req.session_id,
+                    customer_name=None
+                )
+                reply_text = f"Thank you! Your chat has been escalated to our human support team as Ticket #{new_ticket['id']}. We will reach out to you at {email} shortly."
+                
+                assistant_msg_doc = {
+                    "role": "assistant",
+                    "content": reply_text,
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat()
+                }
+                await db.widget_conversations.update_one(
+                    {"company_id": company_id, "session_id": req.session_id},
+                    {"$push": {"messages": assistant_msg_doc}},
+                )
+                yield _sse("stream", message=reply_text)
+                
+            yield _sse("done")
+            return
+
         # Create a modified user message that reminds the agent of the email address
         # This ensures the ticket creation tool has it without asking.
         # We don't save this prefix to the DB history, just pass it to the agent this turn.
@@ -214,7 +303,6 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
             )
 
             # Format the session dict to return with 'done'
-            from app.services.sdk_service import format_chat_session_dict
             session_dict = format_chat_session_dict(conversation)
             session_dict["created_at"] = session_dict["created_at"].isoformat()
             session_dict["updated_at"] = session_dict["updated_at"].isoformat()
@@ -334,7 +422,6 @@ async def sdk_reopen_ticket(
     if session["company_id"] != company_id:
         raise HTTPException(status_code=403, detail="Your session is not authorized for this company. Please re-initialize the SDK.")
 
-    from app.services import company_email_service
     try:
         result = await company_email_service.reopen_ticket(company_id, ticket_id)
         if not result:
@@ -343,10 +430,6 @@ async def sdk_reopen_ticket(
         raise HTTPException(status_code=400, detail=str(e))
 
     return {"status": "reopened", "ticket_id": ticket_id}
-
-
-from fastapi import WebSocket, WebSocketDisconnect
-from fastapi.encoders import jsonable_encoder
 
 @router.websocket("/{company_id}/conversations/ws")
 async def sdk_conversations_websocket(
@@ -361,7 +444,6 @@ async def sdk_conversations_websocket(
     await websocket.accept()
 
     try:
-        from app.core.security import decode_access_token
         payload = decode_access_token(token)
         if not payload or not payload.get("sub") or payload.get("type") != "sdk":
             await websocket.send_json({"type": "error", "message": "Invalid or missing SDK token"})
@@ -390,9 +472,6 @@ async def sdk_conversations_websocket(
         logger.error(f"Error fetching initial conversations for SDK WS: {e}")
         await websocket.close()
         return
-
-    from app.core.database import db
-
     try:
         # Watch for changes in widget_conversations and email_tickets
         # We use a loop with short timeouts or two separate change streams.
@@ -449,7 +528,6 @@ async def sdk_conversation_detail_websocket(
     await websocket.accept()
 
     try:
-        from app.core.security import decode_access_token
         payload = decode_access_token(token)
         if not payload or not payload.get("sub") or payload.get("type") != "sdk":
             await websocket.send_json({"type": "error", "message": "Invalid or missing SDK token"})
@@ -476,8 +554,6 @@ async def sdk_conversation_detail_websocket(
         logger.error(f"Error fetching initial conversation detail for SDK WS: {e}")
         await websocket.close()
         return
-
-    from app.core.database import db
 
     try:
         async def watch_chat():

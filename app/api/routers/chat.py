@@ -33,8 +33,10 @@ import json
 import logging
 import magic
 from datetime import datetime, timezone
+import re
+import asyncio
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Request
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator, Field
 from typing import List, Literal, Optional
@@ -50,6 +52,8 @@ from app.services import (
     gemini_agent_service,
     memory_service,
     cloudinary_service,
+    company_email_service,
+    notification_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -211,7 +215,6 @@ async def _chat_sse_generator(
         if company.get("route_to_human"):
             yield _sse("thinking", message="Routing to a human agent...")
             
-            import re
             email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', req.message)
             found_email = email_match.group(0) if email_match else None
             
@@ -242,8 +245,6 @@ async def _chat_sse_generator(
                 conversation = await db.widget_conversations.find_one({"company_id": company_id, "session_id": req.session_id})
             
             if customer_email:
-                from app.services import company_email_service, notification_service
-                import asyncio
                 
                 if ticket_id:
                     inbound_msg = {
@@ -548,3 +549,139 @@ async def chat_endpoint(
         _chat_sse_generator(company_id, req, get_client_ip(request), received_at),
         media_type="text/event-stream",
     )
+
+
+async def get_chat_history(company_id: str, session_id: str):
+    """
+    Internal helper to fetch the full history of a chat session, including any escalated ticket replies.
+    Used by the chat WebSocket to push history state.
+    """
+    company = await db.companies.find_one({"id": company_id})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    chat = await db.widget_conversations.find_one({
+        "company_id": company_id,
+        "session_id": session_id
+    })
+    
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+
+    ai_name = company.get("name") if company else "AI Assistant"
+    ai_avatar_url = company.get("logo_url") if company else None
+
+    formatted_messages = []
+    
+    # 1. Add messages from the chat session
+    for m in chat.get("messages", []):
+        role = m.get("role", "user")
+        formatted_messages.append({
+            "role": role,
+            "content": m.get("content", ""),
+            "timestamp": m.get("timestamp"),
+            "attachments": m.get("attachments"),
+            "author_name": ai_name if role == "assistant" else m.get("agent_name"),
+            "avatar_url": ai_avatar_url if role == "assistant" else m.get("agent_avatar_url")
+        })
+
+    # 2. Add messages from the escalated ticket (if any)
+    ticket_id = chat.get("ticket_id")
+    resolved = False
+    
+    if ticket_id:
+        ticket = await db.email_tickets.find_one({
+            "company_id": company_id,
+            "id": ticket_id
+        })
+        if ticket:
+            resolved = ticket.get("status") == "resolved"
+            for m in ticket.get("messages", []):
+                direction = m.get("direction", "user")
+                
+                # Skip the initial system message containing the chat summary
+                if direction == "system":
+                    continue
+                    
+                # In tickets, direction="inbound" is the user, "outbound" is agent
+                role = "assistant" if direction == "outbound" else "user"
+                    
+                formatted_messages.append({
+                    "role": role,
+                    "content": m.get("body_text", ""),
+                    "timestamp": m.get("timestamp").isoformat() if isinstance(m.get("timestamp"), datetime) else m.get("timestamp"),
+                    "attachments": m.get("attachments"),
+                    "author_name": m.get("agent_name") or (ai_name if role == "assistant" else None),
+                    "avatar_url": m.get("agent_avatar_url") or (ai_avatar_url if role == "assistant" else None)
+                })
+
+    return {
+        "session_id": session_id,
+        "ticket_id": ticket_id,
+        "resolved": resolved,
+        "messages": formatted_messages
+    }
+
+
+@router.websocket("/{company_id}/chat/{session_id}/ws")
+async def chat_websocket(
+    websocket: WebSocket,
+    company_id: str,
+    session_id: str
+):
+    """
+    Real-time WebSocket for a specific chat session on the unauthenticated widget.
+    Pushes the full chat history when new messages are appended to the chat or its escalated ticket.
+    """
+    await websocket.accept()
+
+    company = await db.companies.find_one({"id": company_id})
+    if not company:
+        await websocket.close(code=1008)
+        return
+
+    # Initial push
+    try:
+        res = await get_chat_history(company_id, session_id)
+        await websocket.send_json({"type": "init", "data": res})
+    except Exception as e:
+        logger.error(f"Error fetching initial history for chat WS: {e}")
+        await websocket.close(code=1011)
+        return
+
+    try:
+        async def watch_chat():
+            pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}}}]
+            async with db.widget_conversations.watch(pipeline) as stream:
+                async for change in stream:
+                    full_doc = change.get("fullDocument")
+                    if full_doc and full_doc.get("company_id") == company_id and full_doc.get("session_id") == session_id:
+                        res = await get_chat_history(company_id, session_id)
+                        await websocket.send_json({"type": "update", "data": res})
+
+        async def watch_ticket():
+            pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}}}]
+            async with db.email_tickets.watch(pipeline) as stream:
+                async for change in stream:
+                    full_doc = change.get("fullDocument")
+                    if full_doc and full_doc.get("company_id") == company_id and full_doc.get("chat_session_id") == session_id:
+                        res = await get_chat_history(company_id, session_id)
+                        await websocket.send_json({"type": "update", "data": res})
+
+        chat_task = asyncio.create_task(watch_chat())
+        ticket_task = asyncio.create_task(watch_ticket())
+
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            pass
+        finally:
+            chat_task.cancel()
+            ticket_task.cancel()
+    except Exception as e:
+        logger.error(f"Chat WS error: {e}")
+        try:
+            await websocket.close(code=1011)
+        except RuntimeError:
+            pass

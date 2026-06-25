@@ -523,6 +523,81 @@ def _strip_quoted_html(html: str | None) -> str | None:
     return cleaned.strip() or html
 
 
+async def add_inbound_ticket_message(
+    company_id: str,
+    ticket_id: str,
+    sender_email: str,
+    body_text: str,
+    body_html: str | None = None,
+    body_text_full: str | None = None,
+    message_id: str | None = None,
+    timestamp: datetime | None = None,
+) -> dict:
+    """Append a message to an existing ticket, marking it as inbound."""
+    ticket = await get_ticket(company_id, ticket_id)
+    if not ticket:
+        raise ValueError(f"Ticket {ticket_id} not found")
+
+    # Enforce 48-hour limit if resolved
+    if ticket.get("status") == "resolved":
+        now_dt = datetime.now(tz=timezone.utc)
+        forty_eight_hours_ago = now_dt - timedelta(hours=48)
+        updated_at = ticket.get("updated_at")
+        if updated_at:
+            if isinstance(updated_at, str):
+                try:
+                    updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                except ValueError:
+                    pass
+            if isinstance(updated_at, datetime):
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=timezone.utc)
+                if updated_at < forty_eight_hours_ago:
+                    raise ValueError("Cannot reopen a ticket that has been closed for more than 48 hours.")
+
+    now = timestamp or datetime.now(tz=timezone.utc)
+    inbound_msg = {
+        "direction": "inbound",
+        "body_text": body_text,
+        "body_html": body_html,
+        "body_text_full": body_text_full or body_text,
+        "sender_email": sender_email,
+        "message_id": message_id,
+        "timestamp": now,
+        "seen": False,
+    }
+
+    await db.email_tickets.update_one(
+        {"id": ticket_id, "company_id": company_id},
+        {
+            "$push": {"messages": inbound_msg},
+            "$set": {
+                "status": "follow_up",
+                "updated_at": now,
+            },
+            "$inc": {"unseen_count": 1},
+        },
+    )
+
+    logger.info("Added inbound message to ticket %s from %s", ticket_id, sender_email)
+    
+    asyncio.create_task(
+        notification_service.notify_company(
+            company_id=company_id,
+            title="💬 New Ticket Reply",
+            body=f"Customer {sender_email} replied to Ticket #{ticket_id}",
+            type="ticket_reply",
+            data={"ticket_id": ticket_id}
+        )
+    )
+    
+    company = await company_service.get_company(company_id)
+    if company:
+        asyncio.create_task(_send_new_message_email(company, ticket, inbound_msg))
+        
+    return {"status": "stored", "ticket_id": ticket_id}
+
+
 async def process_inbound_email(payload: dict) -> dict:
     """Process an inbound email from SendGrid Inbound Parse webhook."""
     sender_raw = payload.get("from", "")
@@ -575,11 +650,6 @@ async def process_inbound_email(payload: dict) -> dict:
         )
         return {"status": "ignored", "reason": "no matching ticket found"}
 
-    ticket = await get_ticket(company_id, ticket_id)
-    if not ticket:
-        logger.warning("Ticket %s not found for company %s", ticket_id, company_id)
-        return {"status": "ignored", "reason": "ticket not found"}
-
     message_id = None
     headers_raw = payload.get("headers", "")
     msg_id_match = re.search(r"Message-ID:\s*(<[^>]+>)", headers_raw, re.IGNORECASE)
@@ -591,44 +661,20 @@ async def process_inbound_email(payload: dict) -> dict:
     body_html = _strip_quoted_html(body_html_raw)
 
     now = datetime.now(tz=timezone.utc)
-    inbound_msg = {
-        "direction": "inbound",
-        "body_text": body_text,
-        "body_html": body_html,
-        "body_text_full": body_text_raw,  # preserve original for debugging
-        "sender_email": sender_email,
-        "message_id": message_id,
-        "timestamp": now,
-        "seen": False,
-    }
-
-    await db.email_tickets.update_one(
-        {"id": ticket_id, "company_id": company_id},
-        {
-            "$push": {"messages": inbound_msg},
-            "$set": {
-                "status": "follow_up",
-                "updated_at": now,
-            },
-            "$inc": {"unseen_count": 1},
-        },
-    )
-
-    logger.info("Stored inbound email on ticket %s from %s", ticket_id, sender_email)
-    
-    # Notify dashboard users about the reply
-    asyncio.create_task(
-        notification_service.notify_company(
+    try:
+        return await add_inbound_ticket_message(
             company_id=company_id,
-            title="💬 New Ticket Reply",
-            body=f"Customer {sender_email} replied to Ticket #{ticket_id}",
-            type="ticket_reply",
-            data={"ticket_id": ticket_id}
+            ticket_id=ticket_id,
+            sender_email=sender_email,
+            body_text=body_text,
+            body_html=body_html,
+            body_text_full=body_text_raw,
+            message_id=message_id,
+            timestamp=now
         )
-    )
-    asyncio.create_task(_send_new_message_email(company, ticket, inbound_msg))
-    
-    return {"status": "stored", "ticket_id": ticket_id}
+    except ValueError as e:
+        logger.warning("Ticket %s could not be updated from inbound email: %s", ticket_id, e)
+        return {"status": "ignored", "reason": str(e)}
 
 
 async def _send_new_message_email(company: dict, ticket: dict, inbound_msg: dict):
