@@ -1,7 +1,8 @@
+import asyncio
 import base64
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -98,7 +99,6 @@ async def create_ticket(
     logger.info("Created ticket %s for company %s", ticket_id, company_id)
     
     # Notify dashboard users about the new ticket
-    import asyncio
     asyncio.create_task(
         notification_service.notify_company(
             company_id=company_id,
@@ -386,7 +386,6 @@ async def send_ticket_reply(
                 logger.warning("Could not attach file %s: %s", att["filename"], e)
 
     try:
-        import asyncio
         await asyncio.to_thread(_send_smtp_email, msg)
         logger.info("Sent ticket reply for %s", ticket_id)
     except Exception as e:
@@ -618,7 +617,6 @@ async def process_inbound_email(payload: dict) -> dict:
     logger.info("Stored inbound email on ticket %s from %s", ticket_id, sender_email)
     
     # Notify dashboard users about the reply
-    import asyncio
     asyncio.create_task(
         notification_service.notify_company(
             company_id=company_id,
@@ -677,7 +675,6 @@ async def _send_new_message_email(company: dict, ticket: dict, inbound_msg: dict
         msg.set_content(f"New message from {customer_email}: {preview_message}")
         add_html_with_inline_images(msg, html)
 
-        import asyncio
         await asyncio.to_thread(_send_smtp_email, msg)
         logger.info("Sent new message email for ticket %s to %s agents", ticket['id'], len(to_emails))
     except Exception as e:
@@ -723,7 +720,6 @@ async def _send_new_ticket_email(company: dict, ticket: dict):
         msg.set_content(f"New ticket #{ticket['id']} opened by {customer_email}. View it on your dashboard.")
         add_html_with_inline_images(msg, html)
 
-        import asyncio
         await asyncio.to_thread(_send_smtp_email, msg)
         logger.info("Sent new ticket email for ticket %s to %s agents", ticket['id'], len(to_emails))
     except Exception as e:
@@ -759,7 +755,6 @@ async def _send_ticket_confirmation_email(company: dict, ticket: dict):
         msg.set_content(f"Your ticket #{ticket['id']} has been received. We will get back to you shortly.")
         add_html_with_inline_images(msg, html)
 
-        import asyncio
         await asyncio.to_thread(_send_smtp_email, msg)
         logger.info("Sent ticket confirmation email for ticket %s to %s", ticket['id'], to_email)
     except Exception as e:
@@ -786,7 +781,6 @@ async def resolve_ticket(token: str) -> dict | None:
     if result:
         logger.info("Ticket %s resolved via token", result["id"])
         # Notify dashboard users about the ticket being closed
-        import asyncio
         asyncio.create_task(
             notification_service.notify_company(
                 company_id=result["company_id"],
@@ -856,7 +850,6 @@ async def _send_resolved_email(ticket: dict):
         msg.set_content("Your ticket has been closed. Thank you!")
         add_html_with_inline_images(msg, html)
 
-        import asyncio
         await asyncio.to_thread(_send_smtp_email, msg)
         logger.info("Sent resolved email for ticket %s", ticket["id"])
 
@@ -897,7 +890,6 @@ async def resolve_ticket_by_agent(company_id: str, ticket_id: str) -> dict | Non
         logger.info("Ticket %s resolved by agent", ticket["id"])
         
         # Notify dashboard users about the ticket being closed
-        import asyncio
         asyncio.create_task(
             notification_service.notify_company(
                 company_id=company_id,
@@ -915,6 +907,26 @@ async def resolve_ticket_by_agent(company_id: str, ticket_id: str) -> dict | Non
 
 async def reopen_ticket(company_id: str, ticket_id: str) -> dict | None:
     now = datetime.now(tz=timezone.utc)
+    forty_eight_hours_ago = now - timedelta(hours=48)
+
+    # Fetch to check age
+    ticket = await db.email_tickets.find_one({"company_id": company_id, "id": ticket_id, "status": "resolved"})
+    if not ticket:
+        return None
+        
+    updated_at = ticket.get("updated_at")
+    if updated_at:
+        if isinstance(updated_at, str):
+            try:
+                updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+            except ValueError:
+                pass
+        if isinstance(updated_at, datetime):
+            if updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=timezone.utc)
+            if updated_at < forty_eight_hours_ago:
+                raise ValueError("Cannot reopen a ticket that has been closed for more than 48 hours.")
+
     ticket = await db.email_tickets.find_one_and_update(
         {"company_id": company_id, "id": ticket_id, "status": "resolved"},
         {
@@ -928,7 +940,6 @@ async def reopen_ticket(company_id: str, ticket_id: str) -> dict | None:
 
     if ticket:
         logger.info("Ticket %s reopened", ticket["id"])
-        import asyncio
         asyncio.create_task(
             notification_service.notify_company(
                 company_id=company_id,
@@ -1102,7 +1113,6 @@ async def dispatch_all_test_templates(company_id: str, recipients: list[str], au
             logger.exception("Failed to connect or authenticate to SMTP server during test dispatch: %s", e)
             errors.append(f"SMTP Connection Failed: {e}")
 
-    import asyncio
     await asyncio.to_thread(_dispatch_sync)
 
     if errors:

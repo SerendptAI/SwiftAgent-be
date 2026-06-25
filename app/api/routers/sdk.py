@@ -2,6 +2,7 @@
 SDK Router — API endpoints for third-party SDK consumers (mobile/web).
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -334,9 +335,12 @@ async def sdk_reopen_ticket(
         raise HTTPException(status_code=403, detail="Your session is not authorized for this company. Please re-initialize the SDK.")
 
     from app.services import company_email_service
-    result = await company_email_service.reopen_ticket(company_id, ticket_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Ticket not found or not resolved")
+    try:
+        result = await company_email_service.reopen_ticket(company_id, ticket_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Ticket not found or not resolved")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     return {"status": "reopened", "ticket_id": ticket_id}
 
@@ -393,7 +397,6 @@ async def sdk_conversations_websocket(
         # Watch for changes in widget_conversations and email_tickets
         # We use a loop with short timeouts or two separate change streams.
         # But we can just use two tasks.
-        import asyncio
         
         async def watch_chats():
             pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}}}]
@@ -475,7 +478,6 @@ async def sdk_conversation_detail_websocket(
         return
 
     from app.core.database import db
-    import asyncio
 
     try:
         async def watch_chat():

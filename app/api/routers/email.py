@@ -460,9 +460,12 @@ async def reopen_ticket_endpoint(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    result = await company_email_service.reopen_ticket(company_id, ticket_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Ticket not found or not resolved")
+    try:
+        result = await company_email_service.reopen_ticket(company_id, ticket_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Ticket not found or not resolved")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     return {"status": "reopened", "ticket_id": ticket_id}
 
