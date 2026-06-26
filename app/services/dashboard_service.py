@@ -144,6 +144,7 @@ async def get_stats(company_id: str) -> dict:
         }
     )
     chats_stat["pending"] = pending_chats
+    chats_stat["today"] = pending_chats
 
     return {
         "visitors": visitors_stat,
