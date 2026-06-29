@@ -38,6 +38,7 @@ class EmailTicket(BaseModel):
     chat_summary: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
 
 
 class EmailReplyRequest(BaseModel):
@@ -117,6 +118,7 @@ class EmailTicketResponse(BaseModel):
     chat_summary: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
     attributed_chat: Optional[dict] = None
 
 
@@ -132,6 +134,7 @@ class EmailTicketSummary(BaseModel):
     avatar: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
     preview_message: Optional[str] = None
 
 class TestDispatchRequest(BaseModel):

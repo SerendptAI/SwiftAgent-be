@@ -181,6 +181,7 @@ async def list_tickets(
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "created_at": 1,
                 "updated_at": 1,
+                "resolved_at": 1,
                 "type": {"$literal": "ticket"},
                 "seen": {"$literal": False},
                 "preview_message": {
@@ -819,6 +820,7 @@ async def resolve_ticket(token: str) -> dict | None:
             "$set": {
                 "status": "resolved",
                 "updated_at": now,
+                "resolved_at": now,
             }
         },
         return_document=ReturnDocument.AFTER,
@@ -927,6 +929,7 @@ async def resolve_ticket_by_agent(company_id: str, ticket_id: str) -> dict | Non
             "$set": {
                 "status": "resolved",
                 "updated_at": now,
+                "resolved_at": now,
             }
         },
         return_document=ReturnDocument.AFTER,
@@ -979,6 +982,9 @@ async def reopen_ticket(company_id: str, ticket_id: str) -> dict | None:
             "$set": {
                 "status": "open",
                 "updated_at": now,
+            },
+            "$unset": {
+                "resolved_at": "",
             }
         },
         return_document=ReturnDocument.AFTER,

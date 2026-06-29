@@ -263,6 +263,7 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "unseen_count": 1,
                 "created_at": 1,
                 "updated_at": 1,
+                "resolved_at": 1,
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "message_timestamps": "$messages.timestamp",
                 "preview_message": {
