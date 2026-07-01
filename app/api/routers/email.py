@@ -194,7 +194,7 @@ async def tickets_websocket(
     try:
         # Watch for changes in email_tickets collection
         pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace", "delete"]}}}]
-        async with db.email_tickets.watch(pipeline) as stream:
+        async with db.email_tickets.watch(pipeline, full_document="updateLookup") as stream:
             async for change in stream:
                 # Optional: Filter by company_id if it's available in the change document
                 full_doc = change.get("fullDocument")
@@ -276,7 +276,7 @@ async def ticket_detail_websocket(
     try:
         # Watch for changes to this specific ticket
         pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}, "fullDocument.id": ticket_id}}]
-        async with db.email_tickets.watch(pipeline) as stream:
+        async with db.email_tickets.watch(pipeline, full_document="updateLookup") as stream:
             async for change in stream:
                 full_doc = change.get("fullDocument")
                 if full_doc and full_doc.get("company_id") == company_id:

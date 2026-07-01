@@ -166,6 +166,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
             # Save user message to widget_conversations if it's a chat (not purely a ticket session)
             if not ticket:
                 user_msg_doc = {
+                    "id": str(uuid4()),
                     "role": "user",
                     "content": req.message,
                     "timestamp": user_timestamp or now_iso
@@ -193,6 +194,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                     # User is still in the chat view, so stream a quick confirmation.
                     reply_text = f"Your message has been sent to our human support team. We will continue to reach out to you at {email} shortly."
                     assistant_msg_doc = {
+                        "id": str(uuid4()),
                         "role": "assistant",
                         "content": reply_text,
                         "timestamp": datetime.now(tz=timezone.utc).isoformat()
@@ -224,6 +226,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                 reply_text = f"Thank you! Your chat has been escalated to our human support team as Ticket #{new_ticket['id']}. We will reach out to you at {email} shortly."
                 
                 assistant_msg_doc = {
+                    "id": str(uuid4()),
                     "role": "assistant",
                     "content": reply_text,
                     "timestamp": datetime.now(tz=timezone.utc).isoformat()
@@ -306,7 +309,10 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
             session_dict = format_chat_session_dict(conversation)
             session_dict["created_at"] = session_dict["created_at"].isoformat()
             session_dict["updated_at"] = session_dict["updated_at"].isoformat()
-            yield _sse("done", session=session_dict)
+            last_msg_id = None
+            if "messages" in conversation and len(conversation["messages"]) > 0:
+                last_msg_id = conversation["messages"][-1].get("id")
+            yield _sse("done", session=session_dict, message_id=last_msg_id)
         else:
             yield _sse("done")
 
@@ -479,7 +485,7 @@ async def sdk_conversations_websocket(
         
         async def watch_chats():
             pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}}}]
-            async with db.widget_conversations.watch(pipeline) as stream:
+            async with db.widget_conversations.watch(pipeline, full_document="updateLookup") as stream:
                 async for change in stream:
                     full_doc = change.get("fullDocument")
                     if full_doc and full_doc.get("company_id") == company_id and full_doc.get("sdk_user_email") == email:
@@ -488,7 +494,7 @@ async def sdk_conversations_websocket(
 
         async def watch_tickets():
             pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}}}]
-            async with db.email_tickets.watch(pipeline) as stream:
+            async with db.email_tickets.watch(pipeline, full_document="updateLookup") as stream:
                 async for change in stream:
                     full_doc = change.get("fullDocument")
                     if full_doc and full_doc.get("company_id") == company_id and full_doc.get("customer_email") == email:
@@ -558,7 +564,7 @@ async def sdk_conversation_detail_websocket(
     try:
         async def watch_chat():
             pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}, "fullDocument.session_id": conversation_id}}]
-            async with db.widget_conversations.watch(pipeline) as stream:
+            async with db.widget_conversations.watch(pipeline, full_document="updateLookup") as stream:
                 async for change in stream:
                     full_doc = change.get("fullDocument")
                     if full_doc and full_doc.get("company_id") == company_id and full_doc.get("sdk_user_email") == email:
@@ -566,8 +572,8 @@ async def sdk_conversation_detail_websocket(
                         await websocket.send_json({"type": "update", "data": jsonable_encoder(res)})
 
         async def watch_ticket():
-            pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}, "fullDocument.id": conversation_id}}]
-            async with db.email_tickets.watch(pipeline) as stream:
+            pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}, "$or": [{"fullDocument.id": conversation_id}, {"fullDocument.chat_session_id": conversation_id}]}}]
+            async with db.email_tickets.watch(pipeline, full_document="updateLookup") as stream:
                 async for change in stream:
                     full_doc = change.get("fullDocument")
                     if full_doc and full_doc.get("company_id") == company_id and full_doc.get("customer_email") == email:

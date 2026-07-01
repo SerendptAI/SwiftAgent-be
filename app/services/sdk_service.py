@@ -41,6 +41,7 @@ def format_chat_session_dict(c: dict) -> dict:
         "subject": subject,
         "last_message": last_msg,
         "resolved": False,
+        "resolved_at": None,
         "message_count": len(messages),
         "created_at": _ensure_dt(c.get("created_at")),
         "updated_at": _ensure_dt(c.get("updated_at")),
@@ -125,6 +126,7 @@ async def get_conversation_history(
             "subject": t.get("subject"),
             "last_message": last_msg,
             "resolved": t.get("status") == "resolved",
+            "resolved_at": t.get("resolved_at"),
             "message_count": len(messages),
             "created_at": _ensure_dt(t.get("created_at")),
             "updated_at": _ensure_dt(t.get("updated_at")),
@@ -172,13 +174,16 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
         formatted_messages = []
         for m in messages:
             role = m.get("role", "user")
+            is_human_agent = bool(m.get("agent_name"))
             formatted_messages.append({
+                "id": m.get("id"),
                 "role": role,
                 "content": m.get("content", ""),
                 "timestamp": m.get("timestamp"),
                 "attachments": m.get("attachments"),
                 "author_name": ai_name if role == "assistant" else m.get("agent_name"),
-                "avatar_url": ai_avatar_url if role == "assistant" else m.get("agent_avatar_url")
+                "avatar_url": ai_avatar_url if role == "assistant" else m.get("agent_avatar_url"),
+                "author_type": ("agent" if is_human_agent else "ai") if role == "assistant" else "user",
             })
         
         subject = chat.get("subject")
@@ -193,6 +198,7 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
             "type": "chat",
             "subject": subject,
             "resolved": False,
+            "resolved_at": None,
             "messages": formatted_messages,
             "created_at": chat.get("created_at"),
             "updated_at": chat.get("updated_at"),
@@ -209,12 +215,14 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
         messages = ticket.get("messages", [])
         formatted_messages = [
             {
+                "id": m.get("id"),
                 "role": m.get("direction", "user"), # inbound/outbound/system
                 "content": m.get("body_text", ""),
                 "timestamp": m.get("timestamp").isoformat() if isinstance(m.get("timestamp"), datetime) else m.get("timestamp"),
                 "attachments": m.get("attachments"),
                 "author_name": m.get("agent_name"),
-                "avatar_url": m.get("agent_avatar_url")
+                "avatar_url": m.get("agent_avatar_url"),
+                "author_type": "agent" if m.get("direction") == "outbound" else "user",
             }
             for m in messages
         ]
@@ -234,13 +242,16 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
                  attributed_chat = []
                  for m in linked_chat.get("messages", []):
                      role = m.get("role", "user")
+                     is_human_agent = bool(m.get("agent_name"))
                      attributed_chat.append({
+                         "id": m.get("id"),
                          "role": role,
                          "content": m.get("content", ""),
                          "timestamp": m.get("timestamp"),
                          "attachments": m.get("attachments"),
                          "author_name": ai_name if role == "assistant" else m.get("agent_name"),
-                         "avatar_url": ai_avatar_url if role == "assistant" else m.get("agent_avatar_url")
+                         "avatar_url": ai_avatar_url if role == "assistant" else m.get("agent_avatar_url"),
+                         "author_type": ("agent" if is_human_agent else "ai") if role == "assistant" else "user",
                      })
 
         return {
@@ -248,6 +259,7 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
             "type": "ticket",
             "subject": ticket.get("subject"),
             "resolved": ticket.get("status") == "resolved",
+            "resolved_at": ticket.get("resolved_at"),
             "messages": formatted_messages,
             "attributed_chat": attributed_chat,
             "created_at": ticket.get("created_at"),

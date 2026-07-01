@@ -1074,6 +1074,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
     # save conversation
     history.append(
         {
+            "id": str(uuid4()),
             "role": "user",
             "content": user_message,
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -1081,6 +1082,7 @@ async def chat(company_id: str, session_id: str, user_message: str, user_id: str
     )
 
     assistant_msg = {
+        "id": str(uuid4()),
         "role": "assistant",
         "content": reply,
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),
@@ -1332,6 +1334,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
 
     # save conversation
     user_msg_doc = {
+        "id": str(uuid4()),
         "role": "user",
         "content": user_message,
         "timestamp": user_timestamp or datetime.now(tz=timezone.utc).isoformat(),
@@ -1341,6 +1344,7 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
     history.append(user_msg_doc)
 
     assistant_msg = {
+        "id": str(uuid4()),
         "role": "assistant",
         "content": reply,
         "timestamp": datetime.now(tz=timezone.utc).isoformat(),

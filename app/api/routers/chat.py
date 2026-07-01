@@ -55,6 +55,10 @@ from app.services import (
     company_email_service,
     notification_service,
 )
+import logging
+import asyncio
+import re
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +69,7 @@ AgentType = Literal["anthropic", "openrouter", "gemini"]
 
 # Request / response schemas
 
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/heif", "image/heic"}
 ALLOWED_DOC_TYPES = {
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -231,6 +235,7 @@ async def _chat_sse_generator(
                     
             now = datetime.now(tz=timezone.utc).isoformat()
             user_msg_doc = {
+                "id": str(uuid4()),
                 "role": "user",
                 "content": req.message,
                 "timestamp": user_timestamp or now
@@ -298,6 +303,7 @@ async def _chat_sse_generator(
                     reply_text = f"Thank you! Your chat has been escalated to our human support team as Ticket #{ticket['id']}. We will reach out to you at {customer_email} shortly."
                     
                 assistant_msg_doc = {
+                    "id": str(uuid4()),
                     "role": "assistant",
                     "content": reply_text,
                     "timestamp": datetime.now(tz=timezone.utc).isoformat()
@@ -308,11 +314,12 @@ async def _chat_sse_generator(
                 )
                 
                 yield _sse("stream", message=reply_text)
-                yield _sse("done")
+                yield _sse("done", message_id=assistant_msg_doc["id"])
                 return
             else:
                 reply_text = "You are speaking with our human support team! Please provide your email address below so we can track your request and get back to you shortly."
                 assistant_msg_doc = {
+                    "id": str(uuid4()),
                     "role": "assistant",
                     "content": reply_text,
                     "timestamp": datetime.now(tz=timezone.utc).isoformat()
@@ -322,7 +329,7 @@ async def _chat_sse_generator(
                     {"$push": {"messages": assistant_msg_doc}},
                 )
                 yield _sse("stream", message=reply_text)
-                yield _sse("done")
+                yield _sse("done", message_id=assistant_msg_doc["id"])
                 return
 
         stream_fns_to_try = [_AGENT_MAP.get(ak, _AGENT_MAP[_DEFAULT_AGENT]) for ak in agents_to_try]
@@ -408,7 +415,11 @@ async def _chat_sse_generator(
                     {"$set": {"messages": messages}}
                 )
 
-        yield _sse("done")
+        last_msg_id = None
+        convo_doc = await db.widget_conversations.find_one({"company_id": company_id, "session_id": req.session_id})
+        if convo_doc and "messages" in convo_doc and len(convo_doc["messages"]) > 0:
+            last_msg_id = convo_doc["messages"][-1].get("id")
+        yield _sse("done", message_id=last_msg_id)
 
         # generate session memory summary after conversation ends
         if req.user_id:
@@ -652,7 +663,7 @@ async def chat_websocket(
     try:
         async def watch_chat():
             pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}}}]
-            async with db.widget_conversations.watch(pipeline) as stream:
+            async with db.widget_conversations.watch(pipeline, full_document="updateLookup") as stream:
                 async for change in stream:
                     full_doc = change.get("fullDocument")
                     if full_doc and full_doc.get("company_id") == company_id and full_doc.get("session_id") == session_id:
@@ -661,7 +672,7 @@ async def chat_websocket(
 
         async def watch_ticket():
             pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}}}]
-            async with db.email_tickets.watch(pipeline) as stream:
+            async with db.email_tickets.watch(pipeline, full_document="updateLookup") as stream:
                 async for change in stream:
                     full_doc = change.get("fullDocument")
                     if full_doc and full_doc.get("company_id") == company_id and full_doc.get("chat_session_id") == session_id:

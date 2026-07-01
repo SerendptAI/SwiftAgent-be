@@ -83,6 +83,7 @@ class SdkConversationItem(BaseModel):
     subject: Optional[str] = None  # null for chats, string for tickets
     last_message: Optional[str] = None
     resolved: bool = False
+    resolved_at: Optional[datetime] = None
     message_count: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -97,12 +98,14 @@ class SdkConversationListResponse(BaseModel):
 # ── Conversation Detail ───────────────────────────────────────────────
 
 class SdkMessageItem(BaseModel):
+    id: Optional[str] = None
     role: str  # "user" | "assistant" | "system" | "inbound" | "outbound"
     content: str
     timestamp: Optional[str] = None
     attachments: Optional[List[SdkAttachmentMeta]] = None
     author_name: Optional[str] = None
     avatar_url: Optional[str] = None
+    author_type: Optional[str] = None  # "ai" | "agent" | "user"
 
 
 class SdkConversationDetail(BaseModel):
@@ -111,6 +114,7 @@ class SdkConversationDetail(BaseModel):
     type: Literal["chat", "ticket"]
     subject: Optional[str] = None
     resolved: bool = False
+    resolved_at: Optional[datetime] = None
     messages: List[SdkMessageItem] = []
     attributed_chat: Optional[List[SdkMessageItem]] = None  # chat context for escalated tickets
     created_at: Optional[datetime] = None
