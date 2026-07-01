@@ -130,20 +130,21 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
             yield _sse("subject", subject=subject)
             
             # Just ensure sdk_user_email is set
-            await db.widget_conversations.update_one(
-                 {"company_id": company_id, "session_id": req.session_id},
-                 {
-                     "$set": {
-                         "sdk_user_email": email,
-                         "source": "sdk",
+            if not conversation or conversation.get("sdk_user_email") != email or conversation.get("source") != "sdk":
+                await db.widget_conversations.update_one(
+                     {"company_id": company_id, "session_id": req.session_id},
+                     {
+                         "$set": {
+                             "sdk_user_email": email,
+                             "source": "sdk",
+                         }
                      }
-                 }
-            )
+                )
 
         # Link this conversation to the visitor (by IP) so the visitors
         # endpoint can attribute communication duration. Done pre-stream so it
         # persists even if the client disconnects after "done".
-        if visitor_ip:
+        if visitor_ip and (not conversation or conversation.get("visitor_ip") != visitor_ip):
             await db.widget_conversations.update_one(
                 {"company_id": company_id, "session_id": req.session_id},
                 {"$set": {"visitor_ip": visitor_ip}},
@@ -289,22 +290,10 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                 yield _sse("stream", message=friendly)
                 break
 
-        # Overwrite the last user message in the DB history to remove the injected context
-        # so the user doesn't see the system prompt in their history.
+        # Context scrubbing is now handled directly by the agent services,
+        # so we don't need a redundant DB update here anymore.
         conversation = await db.widget_conversations.find_one({"company_id": company_id, "session_id": req.session_id})
-        if conversation and "messages" in conversation:
-            messages = conversation["messages"]
-            for i in range(len(messages) - 1, -1, -1):
-                if messages[i].get("role") == "user" and "System Context:" in messages[i].get("content", ""):
-                    # Restore original user message
-                    messages[i]["content"] = req.message
-                    break
-            
-            await db.widget_conversations.update_one(
-                {"_id": conversation["_id"]},
-                {"$set": {"messages": messages}}
-            )
-
+        if conversation:
             # Format the session dict to return with 'done'
             session_dict = format_chat_session_dict(conversation)
             session_dict["created_at"] = session_dict["created_at"].isoformat()

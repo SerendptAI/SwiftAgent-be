@@ -1162,8 +1162,14 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
         logger.error(f"OpenRouter API error during streaming chat: {e}")
         reply = "I'm sorry, I'm experiencing a temporary issue. Please try again in a moment."
 
+    saved_user_message = user_message
+    if user_message.startswith("[System Context:"):
+        parts = user_message.split("]\n\n", 1)
+        if len(parts) == 2:
+            saved_user_message = parts[1]
+
     # persist conversation
-    user_msg_doc = {"id": str(uuid4()), "role": "user", "content": user_message, "timestamp": user_timestamp or datetime.now(tz=timezone.utc).isoformat()}
+    user_msg_doc = {"id": str(uuid4()), "role": "user", "content": saved_user_message, "timestamp": user_timestamp or datetime.now(tz=timezone.utc).isoformat()}
     if enriched_attachments:
         user_msg_doc["attachments"] = build_persistable_attachments(enriched_attachments)
     history.append(user_msg_doc)

@@ -1227,11 +1227,17 @@ async def chat_stream(company_id: str, session_id: str, user_message: str, user_
         logger.error(f"Gemini API error during streaming chat: {e}")
         raise e
 
+    saved_user_message = user_message
+    if user_message.startswith("[System Context:"):
+        parts = user_message.split("]\n\n", 1)
+        if len(parts) == 2:
+            saved_user_message = parts[1]
+
     # save conversation
     user_msg_doc = {
         "id": str(uuid4()),
         "role": "user",
-        "content": user_message,
+        "content": saved_user_message,
         "timestamp": user_timestamp or datetime.now(tz=timezone.utc).isoformat(),
     }
     if enriched_attachments:

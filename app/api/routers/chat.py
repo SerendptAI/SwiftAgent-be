@@ -204,9 +204,9 @@ async def _chat_sse_generator(
         # endpoint can attribute communication duration. Done pre-stream so it
         # runs reliably even if the client disconnects right after "done".
         update_fields = {}
-        if visitor_ip:
+        if visitor_ip and (not conversation or conversation.get("visitor_ip") != visitor_ip):
             update_fields["visitor_ip"] = visitor_ip
-        if req.user_email:
+        if req.user_email and (not conversation or conversation.get("sdk_user_email") != req.user_email):
             update_fields["sdk_user_email"] = req.user_email
 
         if update_fields:
@@ -399,21 +399,6 @@ async def _chat_sse_generator(
                     response_text = friendly
                 yield _sse("stream", message=friendly)
                 break
-
-        # Remove injected context
-        if req.user_email:
-            conversation = await db.widget_conversations.find_one({"company_id": company_id, "session_id": req.session_id})
-            if conversation and "messages" in conversation:
-                messages = conversation["messages"]
-                for i in range(len(messages) - 1, -1, -1):
-                    if messages[i].get("role") == "user" and "System Context:" in messages[i].get("content", ""):
-                        messages[i]["content"] = req.message
-                        break
-                
-                await db.widget_conversations.update_one(
-                    {"_id": conversation["_id"]},
-                    {"$set": {"messages": messages}}
-                )
 
         last_msg_id = None
         convo_doc = await db.widget_conversations.find_one({"company_id": company_id, "session_id": req.session_id})
