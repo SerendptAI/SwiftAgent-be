@@ -154,6 +154,10 @@ class Settings(BaseSettings):
     OTP_TTL_SIGNUP_MINUTES: int = 15
     OTP_TTL_LOGIN_MINUTES: int = 10
     OTP_GRACE_PERIOD_DAYS: int = 30  # skip OTP if last verified within N days
+    
+    # app reviewer test credentials
+    APP_REVIEWER_EMAIL: str = ""
+    APP_REVIEWER_OTP: str = ""
 
     # pagination defaults
     DEFAULT_PAGE_LIMIT: int = 20

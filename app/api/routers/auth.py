@@ -450,7 +450,10 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
 
     # Dispatch email
     purpose = "email verification" if is_new else "login verification"
-    sent = await send_otp_email(email, otp_code, ttl, purpose_label=purpose)
+    if settings.APP_REVIEWER_EMAIL and email == settings.APP_REVIEWER_EMAIL.lower():
+        sent = True
+    else:
+        sent = await send_otp_email(email, otp_code, ttl, purpose_label=purpose)
 
     if not sent:
         # Rollback partial signups to not pollute the db with unverified garbage
@@ -477,6 +480,10 @@ async def verify_otp(request: Request, body: OTPVerifyRequest, db=Depends(get_da
         raise HTTPException(status_code=404, detail="No account found for this email.")
 
     ok, reason = otp_is_valid(user, body.otp_code)
+    if settings.APP_REVIEWER_EMAIL and settings.APP_REVIEWER_OTP:
+        if email == settings.APP_REVIEWER_EMAIL.lower() and body.otp_code == settings.APP_REVIEWER_OTP:
+            ok = True
+            
     if not ok:
         raise HTTPException(status_code=400, detail=reason)
 
