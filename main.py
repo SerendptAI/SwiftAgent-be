@@ -223,6 +223,15 @@ class WidgetCorsBypassMiddleware:
                             message["headers"] = res_headers
                         await send(message)
 
+                    # Strip the Origin header from the scope so that the downstream
+                    # Starlette CORSMiddleware doesn't block the WebSocket upgrade
+                    # with a 403 Forbidden when origin isn't whitelisted.
+                    if "headers" in scope:
+                        scope["headers"] = [
+                            (k, v) for k, v in scope["headers"]
+                            if k.lower() != b"origin"
+                        ]
+
                     await self.app(scope, receive, custom_send)
                     return
 
