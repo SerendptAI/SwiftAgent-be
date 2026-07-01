@@ -709,7 +709,7 @@ async def _execute_tool(name: str, args: dict, company: dict = None, session_id:
                     customer_email=customer_email,
                     subject=subject,
                     chat_summary=summary,
-                    chat_session_id=args.get("_session_id"),
+                    chat_session_id=session_id,
                     customer_name=customer_name,
                 )
                 return {
