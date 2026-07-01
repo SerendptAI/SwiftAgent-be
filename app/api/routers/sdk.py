@@ -151,8 +151,14 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                 upsert=True,
             )
 
-        # Check if the session_id is a ticket_id
-        ticket = await db.email_tickets.find_one({"id": req.session_id, "company_id": company_id})
+        # Check if the session_id is a ticket_id or escalated chat
+        ticket = await db.email_tickets.find_one({
+            "company_id": company_id,
+            "$or": [
+                {"id": req.session_id},
+                {"chat_session_id": req.session_id}
+            ]
+        })
         ticket_id = ticket["id"] if ticket else None
         
         is_escalated = False
@@ -164,8 +170,8 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
         if company.get("route_to_human") or is_escalated or ticket_id:
             now_iso = datetime.now(tz=timezone.utc).isoformat()
             
-            # Save user message to widget_conversations if it's a chat (not purely a ticket session)
-            if not ticket:
+            # Save user message to widget_conversations if it's a chat that is NOT YET escalated
+            if not is_escalated and not ticket:
                 user_msg_doc = {
                     "id": str(uuid4()),
                     "role": "user",
@@ -191,7 +197,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                     yield _sse("done")
                     return
                     
-                if not ticket:
+                if not ticket or is_escalated:
                     # User is still in the chat view, so stream a quick confirmation.
                     reply_text = f"Your message has been sent to our human support team. We will continue to reach out to you at {email} shortly."
                     assistant_msg_doc = {
@@ -200,10 +206,11 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                         "content": reply_text,
                         "timestamp": datetime.now(tz=timezone.utc).isoformat()
                     }
-                    await db.widget_conversations.update_one(
-                        {"company_id": company_id, "session_id": req.session_id},
-                        {"$push": {"messages": assistant_msg_doc}},
-                    )
+                    if not is_escalated:
+                        await db.widget_conversations.update_one(
+                            {"company_id": company_id, "session_id": req.session_id},
+                            {"$push": {"messages": assistant_msg_doc}},
+                        )
                     yield _sse("stream", message=reply_text)
                     
             else:

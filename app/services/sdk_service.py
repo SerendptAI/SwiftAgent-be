@@ -121,7 +121,7 @@ async def get_conversation_history(
         last_msg = messages[-1].get("body_text") if messages and isinstance(messages[-1], dict) else None
         
         items.append({
-            "id": t.get("id"),
+            "id": t.get("chat_session_id") or t.get("id"),
             "type": "ticket",
             "subject": t.get("subject"),
             "last_message": last_msg,
@@ -165,7 +165,7 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
         "session_id": conversation_id
     })
     
-    if chat:
+    if chat and not chat.get("escalated"):
         company = await db.companies.find_one({"id": company_id})
         ai_name = company.get("name") if company else "AI Assistant"
         ai_avatar_url = company.get("logo_url") if company else None
@@ -208,7 +208,10 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
     ticket = await db.email_tickets.find_one({
         "company_id": company_id,
         "customer_email": email,
-        "id": conversation_id
+        "$or": [
+            {"id": conversation_id},
+            {"chat_session_id": conversation_id}
+        ]
     })
 
     if ticket:
@@ -255,7 +258,7 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
                      })
 
         return {
-            "id": ticket.get("id"),
+            "id": ticket.get("chat_session_id") or ticket.get("id"),
             "type": "ticket",
             "subject": ticket.get("subject"),
             "resolved": ticket.get("status") == "resolved",
