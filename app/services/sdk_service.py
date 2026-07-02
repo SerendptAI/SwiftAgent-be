@@ -116,14 +116,25 @@ async def get_conversation_history(
     for c in raw_chats:
         items.append(format_chat_session_dict(c))
 
+    # Fetch linked chat subjects to preserve original titles
+    session_ids = [t.get("chat_session_id") for t in raw_tickets if t.get("chat_session_id")]
+    linked_chats = {}
+    if session_ids:
+        chats = await db.widget_conversations.find({"session_id": {"$in": session_ids}}).to_list(None)
+        for c in chats:
+            linked_chats[c.get("session_id")] = c.get("subject")
+
     for t in raw_tickets:
         messages = t.get("messages", [])
         last_msg = messages[-1].get("body_text") if messages and isinstance(messages[-1], dict) else None
         
+        chat_session_id = t.get("chat_session_id")
+        original_subject = linked_chats.get(chat_session_id) if chat_session_id else None
+
         items.append({
-            "id": t.get("chat_session_id") or t.get("id"),
+            "id": chat_session_id or t.get("id"),
             "type": "ticket",
-            "subject": t.get("subject"),
+            "subject": original_subject or t.get("subject"),
             "last_message": last_msg,
             "resolved": t.get("status") == "resolved",
             "resolved_at": t.get("resolved_at"),
@@ -231,7 +242,8 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
         ]
         
         # Attach attributed chat if this ticket was escalated
-        attributed_chat = None
+        attributed_chat = []
+        original_subject = None
         if ticket.get("chat_session_id"):
              linked_chat = await db.widget_conversations.find_one({
                  "company_id": company_id,
@@ -241,8 +253,8 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
                  company = await db.companies.find_one({"id": company_id})
                  ai_name = company.get("name") if company else "AI Assistant"
                  ai_avatar_url = company.get("logo_url") if company else None
+                 original_subject = linked_chat.get("subject")
 
-                 attributed_chat = []
                  for m in linked_chat.get("messages", []):
                      role = m.get("role", "user")
                      is_human_agent = bool(m.get("agent_name"))
@@ -250,21 +262,27 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
                          "id": m.get("id"),
                          "role": role,
                          "content": m.get("content", ""),
-                         "timestamp": m.get("timestamp"),
+                         "timestamp": m.get("timestamp").isoformat() if isinstance(m.get("timestamp"), datetime) else m.get("timestamp"),
                          "attachments": m.get("attachments"),
                          "author_name": ai_name if role == "assistant" else m.get("agent_name"),
                          "avatar_url": ai_avatar_url if role == "assistant" else m.get("agent_avatar_url"),
                          "author_type": ("agent" if is_human_agent else "ai") if role == "assistant" else "user",
                      })
 
+        # Merge attributed_chat (AI/widget messages) with formatted_messages (ticket emails)
+        # into a single chronological array for seamless UI rendering
+        merged_messages = attributed_chat + formatted_messages
+        # Ensure they are sorted chronologically
+        merged_messages.sort(key=lambda x: x.get("timestamp") or "")
+
         return {
             "id": ticket.get("chat_session_id") or ticket.get("id"),
             "type": "ticket",
-            "subject": ticket.get("subject"),
+            "subject": original_subject or ticket.get("subject"),
             "resolved": ticket.get("status") == "resolved",
             "resolved_at": ticket.get("resolved_at"),
-            "messages": formatted_messages,
-            "attributed_chat": attributed_chat,
+            "messages": merged_messages,
+            "attributed_chat": None,
             "created_at": ticket.get("created_at"),
             "updated_at": ticket.get("updated_at"),
         }

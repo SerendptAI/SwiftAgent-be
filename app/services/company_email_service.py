@@ -959,7 +959,11 @@ async def reopen_ticket(company_id: str, ticket_id: str) -> dict | None:
     forty_eight_hours_ago = now - timedelta(hours=48)
 
     # Fetch to check age
-    ticket = await db.email_tickets.find_one({"company_id": company_id, "id": ticket_id, "status": "resolved"})
+    ticket = await db.email_tickets.find_one({
+        "company_id": company_id, 
+        "status": "resolved",
+        "$or": [{"id": ticket_id}, {"chat_session_id": ticket_id}]
+    })
     if not ticket:
         return None
         
@@ -977,7 +981,11 @@ async def reopen_ticket(company_id: str, ticket_id: str) -> dict | None:
                 raise ValueError("Cannot reopen a ticket that has been closed for more than 48 hours.")
 
     ticket = await db.email_tickets.find_one_and_update(
-        {"company_id": company_id, "id": ticket_id, "status": "resolved"},
+        {
+            "company_id": company_id, 
+            "status": "resolved",
+            "$or": [{"id": ticket_id}, {"chat_session_id": ticket_id}]
+        },
         {
             "$set": {
                 "status": "open",

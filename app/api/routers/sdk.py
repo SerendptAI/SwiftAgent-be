@@ -492,6 +492,12 @@ async def sdk_conversations_websocket(
             pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}}}]
             async with db.email_tickets.watch(pipeline, full_document="updateLookup") as stream:
                 async for change in stream:
+                    # If this is an insert (i.e. ticket just created via AI agent tool), 
+                    # we delay sending the update to the frontend by a few seconds.
+                    # This allows the AI agent's ongoing SSE stream to finish sending its final message gracefully.
+                    if change.get("operationType") == "insert":
+                        await asyncio.sleep(2.5)
+                        
                     full_doc = change.get("fullDocument")
                     if full_doc and full_doc.get("company_id") == company_id and full_doc.get("customer_email") == email:
                         res = await sdk_service.get_conversation_history(company_id, email)
@@ -571,6 +577,10 @@ async def sdk_conversation_detail_websocket(
             pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace"]}, "$or": [{"fullDocument.id": conversation_id}, {"fullDocument.chat_session_id": conversation_id}]}}]
             async with db.email_tickets.watch(pipeline, full_document="updateLookup") as stream:
                 async for change in stream:
+                    # Delay sending the insert event so the AI agent's SSE stream can finish gracefully
+                    if change.get("operationType") == "insert":
+                        await asyncio.sleep(2.5)
+
                     full_doc = change.get("fullDocument")
                     if full_doc and full_doc.get("company_id") == company_id and full_doc.get("customer_email") == email:
                         res = await sdk_service.get_conversation_detail(company_id, email, conversation_id)
