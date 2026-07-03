@@ -533,6 +533,7 @@ async def add_inbound_ticket_message(
     body_text_full: str | None = None,
     message_id: str | None = None,
     timestamp: datetime | None = None,
+    attachments: list[dict] | None = None,
 ) -> dict:
     """Append a message to an existing ticket, marking it as inbound."""
     ticket = await get_ticket(company_id, ticket_id)
@@ -565,6 +566,7 @@ async def add_inbound_ticket_message(
         "sender_email": sender_email,
         "message_id": message_id,
         "timestamp": now,
+        "attachments": attachments or [],
         "seen": False,
     }
 

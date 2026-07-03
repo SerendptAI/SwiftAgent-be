@@ -192,8 +192,8 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
                 "content": m.get("content", ""),
                 "timestamp": m.get("timestamp"),
                 "attachments": m.get("attachments"),
-                "author_name": ai_name if role == "assistant" else m.get("agent_name"),
-                "avatar_url": ai_avatar_url if role == "assistant" else m.get("agent_avatar_url"),
+                "author_name": m.get("agent_name") if is_human_agent else (ai_name if role == "assistant" else None),
+                "avatar_url": m.get("agent_avatar_url") if is_human_agent else (ai_avatar_url if role == "assistant" else None),
                 "author_type": ("agent" if is_human_agent else "ai") if role == "assistant" else "user",
             })
         
@@ -264,8 +264,8 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
                          "content": m.get("content", ""),
                          "timestamp": m.get("timestamp").isoformat() if isinstance(m.get("timestamp"), datetime) else m.get("timestamp"),
                          "attachments": m.get("attachments"),
-                         "author_name": ai_name if role == "assistant" else m.get("agent_name"),
-                         "avatar_url": ai_avatar_url if role == "assistant" else m.get("agent_avatar_url"),
+                         "author_name": m.get("agent_name") if is_human_agent else (ai_name if role == "assistant" else None),
+                         "avatar_url": m.get("agent_avatar_url") if is_human_agent else (ai_avatar_url if role == "assistant" else None),
                          "author_type": ("agent" if is_human_agent else "ai") if role == "assistant" else "user",
                      })
 

@@ -167,6 +167,8 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
             if not ticket_id:
                 ticket_id = conversation.get("ticket_id")
 
+        attachments_raw = [a.model_dump() for a in req.attachments] if req.attachments else []
+
         if company.get("route_to_human") or is_escalated or ticket_id:
             now_iso = datetime.now(tz=timezone.utc).isoformat()
             
@@ -176,7 +178,8 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                     "id": str(uuid4()),
                     "role": "user",
                     "content": req.message,
-                    "timestamp": user_timestamp or now_iso
+                    "timestamp": user_timestamp or now_iso,
+                    "attachments": attachments_raw
                 }
                 await db.widget_conversations.update_one(
                     {"company_id": company_id, "session_id": req.session_id},
@@ -190,7 +193,8 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                         ticket_id=ticket_id,
                         sender_email=email,
                         body_text=req.message,
-                        timestamp=datetime.now(tz=timezone.utc)
+                        timestamp=datetime.now(tz=timezone.utc),
+                        attachments=attachments_raw
                     )
                 except ValueError as e:
                     yield _sse("stream", message=f"Sorry, this ticket cannot be replied to: {e}")
@@ -253,8 +257,8 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
         # We don't save this prefix to the DB history, just pass it to the agent this turn.
         injected_message = f"[System Context: The current user's email address is {email}. Do NOT ask for their email address if you need to create a support ticket. Use this email address automatically.]\n\n{req.message}"
 
-        # Serialize attachments for agent services
-        attachments_raw = [a.model_dump() for a in req.attachments] if req.attachments else []
+        # Attachments already serialized above
+        # attachments_raw = [a.model_dump() for a in req.attachments] if req.attachments else []
         
         stream_fns_to_try = [_AGENT_MAP.get(ak, _AGENT_MAP[_DEFAULT_AGENT]) for ak in agents_to_try]
 
