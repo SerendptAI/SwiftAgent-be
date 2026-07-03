@@ -569,16 +569,16 @@ async def get_chat_history(company_id: str, session_id: str):
 
     formatted_messages = []
     
-    # 1. Add messages from the chat session
     for m in chat.get("messages", []):
         role = m.get("role", "user")
+        is_human_agent = bool(m.get("agent_name"))
         formatted_messages.append({
             "role": role,
             "content": m.get("content", ""),
             "timestamp": m.get("timestamp"),
             "attachments": m.get("attachments"),
-            "author_name": ai_name if role == "assistant" else m.get("agent_name"),
-            "avatar_url": ai_avatar_url if role == "assistant" else m.get("agent_avatar_url")
+            "author_name": m.get("agent_name") if is_human_agent else (ai_name if role == "assistant" else None),
+            "avatar_url": m.get("agent_avatar_url") if is_human_agent else (ai_avatar_url if role == "assistant" else None)
         })
 
     # 2. Add messages from the escalated ticket (if any)
