@@ -147,6 +147,11 @@ class FormService:
         doc = await db.form_submissions.find_one({"_id": ObjectId(submission_id), "company_id": company_id})
         if doc:
             return self._map_submission(doc)
-        return None
+    async def delete_submission(self, submission_id: str, company_id: str) -> bool:
+        if not ObjectId.is_valid(submission_id):
+            return False
+        result = await db.form_submissions.delete_one({"_id": ObjectId(submission_id), "company_id": company_id})
+        return result.deleted_count > 0
 
 form_service = FormService()
+

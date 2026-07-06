@@ -132,3 +132,14 @@ async def get_submission(
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
     return submission
+
+@router.delete("/{company_id}/submissions/{submission_id}", status_code=204)
+async def delete_submission(
+    company_id: str,
+    submission_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    await get_authorized_company(company_id, current_user)
+    success = await form_service.delete_submission(submission_id, company_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Submission not found")
