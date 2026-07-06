@@ -7,8 +7,8 @@ import re
 class AttachmentMeta(BaseModel):
     """Metadata for a file attachment (stored in DB, not the file itself)."""
     filename: str
-    content_type: str
-    size: int  # bytes
+    content_type: Optional[str] = None
+    size: Optional[int] = None  # bytes
 
 
 class TicketMessage(BaseModel):
