@@ -8,7 +8,10 @@ from app.models.form_models import (
     OnlineFormCreate,
     FormUpdate,
     FormResponse,
-    FormSubmissionResponse
+    FormSubmissionResponse,
+    WebsiteLabelUpdate,
+    PageLabelUpdate,
+    LabelsResponse
 )
 from app.services.form_service import form_service
 
@@ -143,3 +146,53 @@ async def delete_submission(
     success = await form_service.delete_submission(submission_id, company_id)
     if not success:
         raise HTTPException(status_code=404, detail="Submission not found")
+
+@router.get("/{company_id}/labels", response_model=LabelsResponse)
+async def get_labels(
+    company_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    await get_authorized_company(company_id, current_user)
+    return await form_service.get_labels_for_company(company_id)
+
+@router.put("/{company_id}/websites/label")
+async def update_website_label(
+    company_id: str,
+    payload: WebsiteLabelUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    await get_authorized_company(company_id, current_user)
+    updated = await form_service.rename_website_label(company_id, payload.old_website, payload.new_website)
+    return {"status": "success", "updated_forms": updated}
+
+@router.put("/{company_id}/pages/label")
+async def update_page_label(
+    company_id: str,
+    payload: PageLabelUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    await get_authorized_company(company_id, current_user)
+    updated = await form_service.rename_page_label(company_id, payload.website, payload.old_page, payload.new_page)
+    return {"status": "success", "updated_forms": updated}
+
+@router.delete("/{company_id}/websites")
+async def delete_website(
+    company_id: str,
+    website: str,
+    current_user: dict = Depends(get_current_user)
+):
+    await get_authorized_company(company_id, current_user)
+    deleted = await form_service.delete_website(company_id, website)
+    return {"status": "success", "deleted_forms": deleted}
+
+@router.delete("/{company_id}/pages")
+async def delete_page(
+    company_id: str,
+    website: str,
+    page: str,
+    current_user: dict = Depends(get_current_user)
+):
+    await get_authorized_company(company_id, current_user)
+    deleted = await form_service.delete_page(company_id, website, page)
+    return {"status": "success", "deleted_forms": deleted}
+

@@ -58,3 +58,26 @@ class FormSubmissionResponse(BaseModel):
     is_read: bool = False
     visitor_id: Optional[str] = None
     submitted_at: datetime
+
+class WebsiteLabelUpdate(BaseModel):
+    old_website: str
+    new_website: str
+
+class PageLabelUpdate(BaseModel):
+    website: str
+    old_page: str
+    new_page: str
+
+class WebsiteLabel(BaseModel):
+    website: str
+    form_count: int
+
+class PageLabel(BaseModel):
+    website: str
+    page: str
+    entry_count: int
+
+class LabelsResponse(BaseModel):
+    websites: List[WebsiteLabel]
+    pages: List[PageLabel]
+

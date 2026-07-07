@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 from typing import List, Optional
 from bson import ObjectId
 
@@ -147,11 +148,137 @@ class FormService:
         doc = await db.form_submissions.find_one({"_id": ObjectId(submission_id), "company_id": company_id})
         if doc:
             return self._map_submission(doc)
-    async def delete_submission(self, submission_id: str, company_id: str) -> bool:
-        if not ObjectId.is_valid(submission_id):
-            return False
-        result = await db.form_submissions.delete_one({"_id": ObjectId(submission_id), "company_id": company_id})
-        return result.deleted_count > 0
+    async def get_labels_for_company(self, company_id: str):
+        cursor = db.forms.find({"company_id": company_id})
+        docs = await cursor.to_list(length=None)
+        
+        website_counts = {}
+        page_form_ids = {}
+        
+        for doc in docs:
+            link = doc.get("website_link")
+            if not link:
+                continue
+            try:
+                parsed = urlparse(link)
+                website = f"{parsed.scheme}://{parsed.netloc}"
+                page = parsed.path if parsed.path else "/"
+            except:
+                continue
+                
+            website_counts[website] = website_counts.get(website, 0) + 1
+            
+            page_key = (website, page)
+            if page_key not in page_form_ids:
+                page_form_ids[page_key] = []
+            page_form_ids[page_key].append(str(doc["_id"]))
+            
+        websites_list = [{"website": w, "form_count": c} for w, c in website_counts.items()]
+        pages_list = []
+        for (website, page), form_ids in page_form_ids.items():
+            entry_count = await db.form_submissions.count_documents({
+                "company_id": company_id,
+                "form_id": {"$in": form_ids}
+            })
+            pages_list.append({
+                "website": website,
+                "page": page,
+                "entry_count": entry_count
+            })
+            
+        return {
+            "websites": websites_list,
+            "pages": pages_list
+        }
+
+    async def rename_website_label(self, company_id: str, old_website: str, new_website: str) -> int:
+        cursor = db.forms.find({"company_id": company_id, "website_link": {"$regex": f"^{old_website}"}})
+        docs = await cursor.to_list(length=None)
+        updated = 0
+        for doc in docs:
+            link = doc.get("website_link", "")
+            if link.startswith(old_website):
+                new_link = new_website + link[len(old_website):]
+                await db.forms.update_one(
+                    {"_id": doc["_id"]},
+                    {"$set": {"website_link": new_link, "updated_at": datetime.now(timezone.utc)}}
+                )
+                updated += 1
+        return updated
+
+    async def rename_page_label(self, company_id: str, website: str, old_page: str, new_page: str) -> int:
+        cursor = db.forms.find({"company_id": company_id})
+        docs = await cursor.to_list(length=None)
+        updated = 0
+        for doc in docs:
+            link = doc.get("website_link")
+            if not link:
+                continue
+            try:
+                parsed = urlparse(link)
+                w = f"{parsed.scheme}://{parsed.netloc}"
+                p = parsed.path if parsed.path else "/"
+                if w == website and p == old_page:
+                    new_link = f"{w}{new_page}"
+                    if parsed.query:
+                        new_link += f"?{parsed.query}"
+                    if parsed.fragment:
+                        new_link += f"#{parsed.fragment}"
+                        
+                    await db.forms.update_one(
+                        {"_id": doc["_id"]},
+                        {"$set": {"website_link": new_link, "updated_at": datetime.now(timezone.utc)}}
+                    )
+                    updated += 1
+            except:
+                continue
+        return updated
+
+    async def delete_website(self, company_id: str, website: str) -> int:
+        cursor = db.forms.find({"company_id": company_id})
+        docs = await cursor.to_list(length=None)
+        form_ids = []
+        for doc in docs:
+            link = doc.get("website_link")
+            if not link:
+                continue
+            try:
+                parsed = urlparse(link)
+                w = f"{parsed.scheme}://{parsed.netloc}"
+                if w == website:
+                    form_ids.append(str(doc["_id"]))
+            except:
+                continue
+        if form_ids:
+            await db.form_submissions.delete_many({"company_id": company_id, "form_id": {"$in": form_ids}})
+            obj_ids = [ObjectId(fid) for fid in form_ids]
+            result = await db.forms.delete_many({"company_id": company_id, "_id": {"$in": obj_ids}})
+            return result.deleted_count
+        return 0
+
+    async def delete_page(self, company_id: str, website: str, page: str) -> int:
+        cursor = db.forms.find({"company_id": company_id})
+        docs = await cursor.to_list(length=None)
+        form_ids = []
+        for doc in docs:
+            link = doc.get("website_link")
+            if not link:
+                continue
+            try:
+                parsed = urlparse(link)
+                w = f"{parsed.scheme}://{parsed.netloc}"
+                p = parsed.path if parsed.path else "/"
+                if w == website and p == page:
+                    form_ids.append(str(doc["_id"]))
+            except:
+                continue
+        if form_ids:
+            await db.form_submissions.delete_many({"company_id": company_id, "form_id": {"$in": form_ids}})
+            obj_ids = [ObjectId(fid) for fid in form_ids]
+            result = await db.forms.delete_many({"company_id": company_id, "_id": {"$in": obj_ids}})
+            return result.deleted_count
+        return 0
 
 form_service = FormService()
+
 
