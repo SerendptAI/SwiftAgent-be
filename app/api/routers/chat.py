@@ -37,7 +37,8 @@ import re
 import asyncio
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
+from app.core.utils import format_timestamp_iso
 from pydantic import BaseModel, field_validator, Field
 from typing import List, Literal, Optional
 
@@ -575,7 +576,7 @@ async def get_chat_history(company_id: str, session_id: str):
         formatted_messages.append({
             "role": role,
             "content": m.get("content", ""),
-            "timestamp": m.get("timestamp"),
+            "timestamp": format_timestamp_iso(m.get("timestamp")),
             "attachments": m.get("attachments"),
             "author_name": m.get("agent_name") if is_human_agent else (ai_name if role == "assistant" else None),
             "avatar_url": m.get("agent_avatar_url") if is_human_agent else (ai_avatar_url if role == "assistant" else None)
@@ -605,7 +606,7 @@ async def get_chat_history(company_id: str, session_id: str):
                 formatted_messages.append({
                     "role": role,
                     "content": m.get("body_text", ""),
-                    "timestamp": m.get("timestamp").isoformat() if isinstance(m.get("timestamp"), datetime) else m.get("timestamp"),
+                    "timestamp": format_timestamp_iso(m.get("timestamp")),
                     "attachments": m.get("attachments"),
                     "author_name": m.get("agent_name") or (ai_name if role == "assistant" else None),
                     "avatar_url": m.get("agent_avatar_url") or (ai_avatar_url if role == "assistant" else None)

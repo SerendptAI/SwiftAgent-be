@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.core.database import db
+from app.core.utils import format_timestamp_iso
 
 def _ensure_dt(val: Any) -> datetime:
     if isinstance(val, datetime):
@@ -190,7 +191,7 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
                 "id": m.get("id"),
                 "role": role,
                 "content": m.get("content", ""),
-                "timestamp": m.get("timestamp"),
+                "timestamp": format_timestamp_iso(m.get("timestamp")),
                 "attachments": m.get("attachments"),
                 "author_name": m.get("agent_name") if is_human_agent else (ai_name if role == "assistant" else None),
                 "avatar_url": m.get("agent_avatar_url") if is_human_agent else (ai_avatar_url if role == "assistant" else None),
@@ -232,7 +233,7 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
                 "id": m.get("id"),
                 "role": m.get("direction", "user"), # inbound/outbound/system
                 "content": m.get("body_text", ""),
-                "timestamp": m.get("timestamp").isoformat() if isinstance(m.get("timestamp"), datetime) else m.get("timestamp"),
+                "timestamp": format_timestamp_iso(m.get("timestamp")),
                 "attachments": m.get("attachments"),
                 "author_name": m.get("agent_name"),
                 "avatar_url": m.get("agent_avatar_url"),
@@ -262,7 +263,7 @@ async def get_conversation_detail(company_id: str, email: str, conversation_id: 
                          "id": m.get("id"),
                          "role": role,
                          "content": m.get("content", ""),
-                         "timestamp": m.get("timestamp").isoformat() if isinstance(m.get("timestamp"), datetime) else m.get("timestamp"),
+                         "timestamp": format_timestamp_iso(m.get("timestamp")),
                          "attachments": m.get("attachments"),
                          "author_name": m.get("agent_name") if is_human_agent else (ai_name if role == "assistant" else None),
                          "avatar_url": m.get("agent_avatar_url") if is_human_agent else (ai_avatar_url if role == "assistant" else None),
