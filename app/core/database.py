@@ -116,6 +116,21 @@ async def create_indexes():
     await db.form_submissions.create_index([("company_id", 1), ("is_read", 1)])
     await db.form_submissions.create_index([("form_id", 1), ("submitted_at", -1)])
 
+    # Form keys (SDPK key pairs for widget auth)
+    await db.form_keys.create_index("form_id", unique=True)
+    await db.form_keys.create_index("public_key_hash")
+    await db.form_keys.create_index("api_key_hash")
+
+    # Form group names (custom names for auto-detected forms on pages)
+    await db.form_group_names.create_index(
+        [("form_id", 1), ("page_path", 1), ("form_identifier", 1)],
+        unique=True,
+    )
+
+    # Form submissions — page/form level queries for hierarchy view
+    await db.form_submissions.create_index([("form_id", 1), ("page_url", 1), ("submitted_at", -1)])
+    await db.form_submissions.create_index([("form_id", 1), ("page_url", 1), ("form_identifier", 1)])
+
     # Company API Integrations
     await db.company_integrations.create_index("company_id")
     await db.company_integrations.create_index(

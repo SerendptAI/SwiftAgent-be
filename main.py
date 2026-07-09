@@ -172,6 +172,7 @@ class WidgetCorsBypassMiddleware:
         "/api/v1/voice",
         "/api/v1/chat",
         "/api/v1/public/stroll",
+        "/api/v1/public/forms",
         # NOTE: /api/v1/stroll is intentionally excluded — all routes are JWT-protected
         # admin endpoints. Widget origins should not receive CORS access to them.
         "/api/v1/email/inbound",
@@ -287,6 +288,7 @@ app.add_middleware(WidgetCorsBypassMiddleware)
 app.mount("/chat-avatars", StaticFiles(directory="app/chat-avatars"), name="chat-avatars")
 app.mount("/email-fonts", StaticFiles(directory="app/email_templates/fonts"), name="email-fonts")
 app.mount("/images", StaticFiles(directory="app/email_templates/images"), name="images")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(auth.router, prefix="/api/v1/auth")
 app.include_router(knowledge.router, prefix="/api/v1/knowledge")
 app.include_router(diagnosis.router, prefix="/api/v1/diagnosis")
