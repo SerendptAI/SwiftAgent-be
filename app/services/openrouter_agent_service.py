@@ -470,6 +470,8 @@ def _build_system_prompt(company: dict, memory_context: str = "", page_url: str 
     description = company.get("description", "")
     company_type = company.get("company_type", "")
 
+    current_time_str = datetime.now().astimezone().strftime("%A, %B %d, %Y %I:%M %p %Z")
+
     memory_section = ""
     if memory_context:
         memory_section = f"\nMEMORY CONTEXT (from previous conversations):\n{memory_context}\n"
@@ -509,6 +511,9 @@ You MUST adhere to the following absolute rules:
 You are a senior customer support agent for {company_name}. \
 You respond with expertise, empathy, and clarity.
 {context_section}
+
+CURRENT TIME CONTEXT:
+The current date and time is {current_time_str}.
 
 COMPANY CONTEXT:
 - Name: {company_name}
