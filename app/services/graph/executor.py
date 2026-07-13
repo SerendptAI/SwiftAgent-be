@@ -28,6 +28,17 @@ async def chat_stream_graph(
             "session_id": session_id,
         })
         
+        # Load company data
+        company = await db.companies.find_one({"id": company_id}) or {}
+        company_data = {
+            "name": company.get("name", "Unknown Company"),
+            "description": company.get("description", ""),
+            "industry": company.get("industry", ""),
+            "brand_tone": company.get("brand_tone", "professional"),
+            "voice_style": company.get("voice_style", "professional"),
+            "answer_boundaries": company.get("answer_boundaries", [])
+        }
+        
         # We need to construct LangChain messages from DB
         langchain_messages = []
         if convo and "messages" in convo:
@@ -58,6 +69,7 @@ async def chat_stream_graph(
             "messages": langchain_messages,
             "session_id": session_id,
             "company_id": company_id,
+            "company_data": company_data,
             "user_id": user_id,
             "sdk_user_email": sdk_user_email,
             "page_url": page_url,

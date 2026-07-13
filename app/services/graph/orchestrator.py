@@ -4,6 +4,7 @@ from app.core.langfuse import observe
 
 from app.services.graph.state import AgentState
 from app.services.graph.llm_factory import get_llm
+from app.services.graph.prompt_utils import build_company_persona_prompt
 
 @tool
 def transfer_to_knowledge():
@@ -38,8 +39,7 @@ ROUTING_TOOLS = [
     escalate_to_human,
 ]
 
-ORCHESTRATOR_PROMPT = """You are the central Orchestrator for an AI customer support platform.
-Your job is to analyze the conversation and route the user's request to the correct specialized expert.
+ORCHESTRATOR_PROMPT = """Your job is to analyze the conversation and route the user's request to the correct specialized expert.
 
 ROUTING RULES:
 - Read the user's request carefully.
@@ -54,7 +54,10 @@ async def orchestrator_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"], fast_routing=True, streaming=True)
     llm_with_tools = llm.bind_tools(ROUTING_TOOLS)
     
-    messages = [SystemMessage(content=ORCHESTRATOR_PROMPT)] + state["messages"]
+    persona = build_company_persona_prompt(state.get("company_data", {}))
+    full_prompt = f"{persona}\\n\\n{ORCHESTRATOR_PROMPT}"
+    
+    messages = [SystemMessage(content=full_prompt)] + state["messages"]
     
     response = await llm_with_tools.ainvoke(messages, config)
     

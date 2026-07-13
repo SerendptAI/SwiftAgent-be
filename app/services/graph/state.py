@@ -13,6 +13,7 @@ class AgentState(TypedDict):
     # Request Context
     session_id: str
     company_id: str
+    company_data: dict
     user_id: Optional[str]
     sdk_user_email: Optional[str]
     page_url: Optional[str]
