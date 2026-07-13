@@ -48,9 +48,6 @@ from app.core.sdk_auth import verify_api_key
 from app.core.rate_limiter import rate_limit_chat
 from app.core.plan_enforcement import enforce_chat_limit
 from app.services import (
-    anthropic_agent_service,
-    openrouter_agent_service,
-    gemini_agent_service,
     memory_service,
     cloudinary_service,
     company_email_service,
