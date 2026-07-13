@@ -1180,3 +1180,86 @@ async def dispatch_all_test_templates(company_id: str, recipients: list[str], au
     if errors:
         return False, f"Sent {success_count}/10. Errors: {'; '.join(errors)}"
     return True, f"Successfully dispatched all 10 templates to {len(recipients)} recipients!"
+
+
+async def send_form_reply(
+    company_id: str,
+    submission_id: str,
+    reply_text: str,
+    subject: str | None = None,
+    agent_name: str | None = None,
+) -> dict:
+    from app.services.form_service import form_service
+    submission = await form_service.get_submission_by_id(submission_id, company_id)
+    if not submission:
+        raise ValueError(f"Submission {submission_id} not found")
+
+    company = await company_service.get_company(company_id)
+    if not company:
+        raise ValueError(f"Company {company_id} not found")
+
+    email_slug = company.get("email_slug")
+    if not email_slug:
+        raise ValueError("Company has no email slug configured")
+
+    company_name = company.get("name", "Support")
+    from_email = f"{email_slug}@{settings.EMAIL_DOMAIN}"
+
+    # Extract customer email
+    customer_email = None
+    email_keys = ["email", "e-mail", "contact_email", "contact email", "email address", "email_address"]
+    for key in email_keys:
+        for k, v in submission.data.items():
+            if k.lower().replace("-", "_") == key and v:
+                customer_email = str(v).strip()
+                break
+        if customer_email:
+            break
+
+    if not customer_email:
+        # Fallback to checking any string with an @
+        for k, v in submission.data.items():
+            if isinstance(v, str) and "@" in v and "." in v:
+                customer_email = v.strip()
+                break
+
+    if not customer_email:
+        raise ValueError("Could not find a valid customer email address in the form submission")
+
+    agent_display = (agent_name or "").strip() or company_name
+    email_subject = subject or f"Re: Your form submission to {company_name}"
+    outbound_message_id = f"<{uuid4()}@{settings.EMAIL_DOMAIN}>"
+
+    msg = EmailMessage()
+    msg["Subject"] = email_subject
+    msg["From"] = f"{agent_display} <{settings.active_sender_email}>"
+    msg["To"] = customer_email
+    msg["Reply-To"] = from_email
+    msg["Message-ID"] = outbound_message_id
+
+    # Add HTML formatting
+    html_body = f"<p>{reply_text.replace(chr(10), '<br>')}</p>"
+    msg.set_content(reply_text)
+    
+    # We can reuse the TICKET_REPLY_TEMPLATE
+    logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo 2.png"
+    full_html = _build_reply_html(
+        html_body, agent_display, f"{settings.API_BASE_URL}{get_random_avatar()}", f"{settings.FRONTEND_URL}", logo_url, company_name
+    )
+    add_html_with_inline_images(msg, full_html)
+
+    await asyncio.to_thread(_send_smtp_email, msg)
+    logger.info("Sent form reply for submission %s to %s", submission_id, customer_email)
+
+    now = datetime.now(tz=timezone.utc)
+    reply_record = {
+        "body_text": reply_text,
+        "sender_email": from_email,
+        "message_id": outbound_message_id,
+        "timestamp": now,
+        "agent_name": agent_display,
+    }
+
+    await form_service.add_reply_to_submission(submission_id, company_id, reply_record)
+
+    return {"status": "sent", "message_id": outbound_message_id}

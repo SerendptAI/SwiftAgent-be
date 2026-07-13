@@ -22,9 +22,11 @@ from app.models.form_models import (
     LabelsResponse,
     BulkDeleteRequest,
     FormRenameRequest,
+    FormReplyRequest,
 )
 from app.services.form_service import form_service
 from app.services import form_key_service
+from app.services import company_email_service
 
 router = APIRouter()
 
@@ -404,3 +406,33 @@ async def delete_submission(
     success = await form_service.delete_submission(submission_id, company_id)
     if not success:
         raise HTTPException(status_code=404, detail="Submission not found")
+
+
+@router.post("/{company_id}/submissions/{submission_id}/reply", response_model=FormSubmissionResponse)
+async def reply_to_submission(
+    company_id: str,
+    submission_id: str,
+    request: FormReplyRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    company = await get_authorized_company(company_id, current_user)
+    
+    # Send the email
+    try:
+        await company_email_service.send_form_reply(
+            company_id=company_id,
+            submission_id=submission_id,
+            reply_text=request.reply_text,
+            subject=request.subject,
+            agent_name=current_user.get("full_name") or current_user.get("email")
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+    # Fetch and return the updated submission
+    submission = await form_service.get_submission_by_id(submission_id, company_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found after reply")
+    return submission

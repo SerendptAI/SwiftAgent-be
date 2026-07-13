@@ -365,6 +365,21 @@ class FormService:
             return self._map_submission(doc)
         return None
 
+    async def add_reply_to_submission(self, submission_id: str, company_id: str, reply: dict) -> Optional[FormSubmissionResponse]:
+        if not ObjectId.is_valid(submission_id):
+            return None
+        result = await db.form_submissions.find_one_and_update(
+            {"_id": ObjectId(submission_id), "company_id": company_id},
+            {
+                "$push": {"replies": reply},
+                "$set": {"replied_at": datetime.now(timezone.utc), "is_read": True}
+            },
+            return_document=True
+        )
+        if result:
+            return self._map_submission(result)
+        return None
+
     async def delete_submission(self, submission_id: str, company_id: str) -> bool:
         if not ObjectId.is_valid(submission_id):
             return False

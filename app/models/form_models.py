@@ -112,6 +112,13 @@ class FormSubmissionResponse(BaseModel):
     # Auto-extracted from data for inbox list display
     submitter_name: Optional[str] = None      # "John Doe"
     submitter_preview: Optional[str] = None   # "Good day, I lost my sister in a flood and I'd..."
+    replied_at: Optional[datetime] = None
+    replies: List[Dict[str, Any]] = []
+
+class FormReplyRequest(BaseModel):
+    reply_text: str
+    subject: Optional[str] = None
+
 
 # ── Page & Form Hierarchy (for dashboard overview) ──
 

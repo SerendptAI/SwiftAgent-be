@@ -23,9 +23,15 @@ from app.models.email_models import (
     EmailSlugCheckResponse,
     EmailSlugUpdate,
 )
-from app.services import company_service, cloudinary_service
+from app.services import company_service, cloudinary_service, page_reader_service
+from app.services.website_scraper_service import extract_company_info
 from app.core.plan_enforcement import enforce_company_limit, enforce_member_limit
 from fastapi import UploadFile, File, Form
+from pydantic import BaseModel, HttpUrl
+
+class ScrapeWebsiteRequest(BaseModel):
+    url: HttpUrl
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +57,29 @@ async def create_company(
 
     company = await company_service.create_company(user_id, data.model_dump())
     return company
+
+
+@router.post("/scrape-website")
+async def scrape_website(
+    request: ScrapeWebsiteRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Scrape a website and extract structured onboarding data."""
+    url_str = str(request.url)
+    
+    # Extract raw text from the website
+    page_data = await page_reader_service.read_website_page(url_str)
+    
+    if "error" in page_data:
+        # We don't raise an HTTPException so the frontend can handle gracefully without breaking the flow
+        return {"status": "error", "message": page_data["error"], "data": {}}
+        
+    content = page_data.get("content", "")
+    
+    # Use Gemini to extract structured fields
+    extracted_data = await extract_company_info(content)
+    
+    return {"status": "success", "data": extracted_data}
 
 
 @router.get("/", response_model=List[CompanySummary])
