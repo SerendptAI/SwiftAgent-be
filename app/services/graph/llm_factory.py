@@ -19,14 +19,14 @@ def get_llm(provider: str, fast_routing: bool = False, streaming: bool = True) -
     if fast_routing:
         if provider == "gemini" and settings.GEMINI_API_KEY:
             return ChatGoogleGenerativeAI(
-                model="gemini-2.5-flash",
+                model=settings.GEMINI_MODEL,
                 api_key=settings.GEMINI_API_KEY,
                 streaming=streaming,
                 temperature=0.0
             )
         elif provider == "anthropic" and settings.ANTHROPIC_API_KEY:
             return ChatAnthropic(
-                model="claude-3-5-haiku-20241022",
+                model=settings.ANTHROPIC_MODEL,
                 api_key=settings.ANTHROPIC_API_KEY,
                 streaming=streaming,
                 temperature=0.0
