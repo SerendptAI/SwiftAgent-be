@@ -1,5 +1,6 @@
 from langchain_core.messages import SystemMessage, AIMessage
 from langchain_core.tools import tool
+from app.core.langfuse import observe
 
 from app.services.graph.state import AgentState
 from app.services.graph.llm_factory import get_llm
@@ -47,6 +48,7 @@ ROUTING RULES:
 - If the user says a simple greeting (e.g. "hi", "hello") or something that requires no tools, respond directly and conversationally.
 """
 
+@observe(as_type="generation")
 async def orchestrator_node(state: AgentState, config):
     # Use fast routing model for the orchestrator
     llm = get_llm(state["agent_provider"], fast_routing=True, streaming=True)

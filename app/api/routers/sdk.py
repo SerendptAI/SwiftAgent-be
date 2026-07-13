@@ -22,9 +22,11 @@ from app.models.sdk_models import (
     SdkInitRequest,
     SdkInitResponse,
 )
-from app.services import sdk_service, anthropic_agent_service, openrouter_agent_service, gemini_agent_service, company_email_service
+from app.services import sdk_service, company_email_service
 from app.services.sdk_service import format_chat_session_dict
-from app.api.routers.chat import _AGENT_MAP, _TITLE_MAP, _DEFAULT_AGENT, _sse, upload_chat_files
+from app.api.routers.chat import _DEFAULT_AGENT, _sse, upload_chat_files
+from app.services.graph.executor import chat_stream_graph
+from app.services.graph.title_generator import generate_chat_title
 from app.core.utils import get_random_avatar
 
 logger = logging.getLogger(__name__)
@@ -100,11 +102,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
         subject = conversation.get("subject") if conversation else None
         
         if not subject:
-            for ak in agents_to_try:
-                title_fn = _TITLE_MAP.get(ak, _TITLE_MAP[_DEFAULT_AGENT])
-                subject = await title_fn(req.message)
-                if subject and subject != "New Chat":
-                    break
+            subject = await generate_chat_title(req.message, agent_key)
             
             if not subject:
                 subject = "New Chat"
@@ -260,13 +258,21 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
         # Attachments already serialized above
         # attachments_raw = [a.model_dump() for a in req.attachments] if req.attachments else []
         
-        stream_fns_to_try = [_AGENT_MAP.get(ak, _AGENT_MAP[_DEFAULT_AGENT]) for ak in agents_to_try]
-
-        for idx, stream_fn in enumerate(stream_fns_to_try):
+        for idx, provider_key in enumerate(agents_to_try):
             try:
                 response_text = ""
-                # Call stream_fn with the injected message
-                async for event in stream_fn(company_id, req.session_id, injected_message, user_id=None, attachments=attachments_raw, user_timestamp=user_timestamp):
+                # Call chat_stream_graph with the injected message
+                async for event in chat_stream_graph(
+                    company_id=company_id,
+                    session_id=req.session_id,
+                    message=injected_message,
+                    user_id=None,
+                    page_url=None,
+                    attachments=attachments_raw,
+                    user_timestamp=user_timestamp,
+                    agent_provider=provider_key,
+                    sdk_user_email=email,
+                ):
                     event_type = event.get("type")
 
                     if event_type == "thinking":
@@ -289,7 +295,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                 break
 
             except Exception as e:
-                if idx < len(stream_fns_to_try) - 1 and not response_text.strip():
+                if idx < len(agents_to_try) - 1 and not response_text.strip():
                     logger.warning(f"SDK Agent stream failed: {e}. Falling back to next agent...")
                     yield _sse("thinking", message="Switching AI providers...")
                     continue

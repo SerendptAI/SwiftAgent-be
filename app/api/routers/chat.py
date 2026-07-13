@@ -122,30 +122,11 @@ def _sse(stage: str, **kwargs) -> str:
 # Global default agent — change here to swap the platform default.
 _DEFAULT_AGENT: AgentType = "anthropic"
 
-_AGENT_MAP = {
-    "openrouter": openrouter_agent_service.chat_stream,
-    "anthropic": anthropic_agent_service.chat_stream,
-    "gemini": gemini_agent_service.chat_stream,
-}
-
-_TITLE_MAP = {
-    "openrouter": openrouter_agent_service.generate_chat_title,
-    "anthropic": anthropic_agent_service.generate_chat_title,
-    "gemini": gemini_agent_service.generate_chat_title,
-}
+from app.services.graph.executor import chat_stream_graph
+from app.services.graph.title_generator import generate_chat_title
 
 
-def _resolve_agent(req: ChatRequest, company: dict):
-    """
-    Pick the streaming function to use.
 
-    Priority (highest → lowest):
-      1. req.agent   — explicitly set by the frontend/caller
-      2. company.ai_provider — per-company setting stored in MongoDB
-      3. _DEFAULT_AGENT — platform-wide fallback
-    """
-    agent_key = req.agent or company.get("ai_provider") or _DEFAULT_AGENT
-    return _AGENT_MAP.get(agent_key, _AGENT_MAP[_DEFAULT_AGENT])
 
 
 async def _chat_sse_generator(
@@ -183,11 +164,7 @@ async def _chat_sse_generator(
         subject = conversation.get("subject") if conversation else None
         
         if not subject:
-            for ak in agents_to_try:
-                title_fn = _TITLE_MAP.get(ak, _TITLE_MAP[_DEFAULT_AGENT])
-                subject = await title_fn(req.message)
-                if subject and subject != "New Chat":
-                    break
+            subject = await generate_chat_title(req.message, agent_key)
             
             if not subject:
                 subject = "New Chat"
@@ -333,24 +310,28 @@ async def _chat_sse_generator(
                 yield _sse("done", message_id=assistant_msg_doc["id"])
                 return
 
-        stream_fns_to_try = [_AGENT_MAP.get(ak, _AGENT_MAP[_DEFAULT_AGENT]) for ak in agents_to_try]
+        # Serialize attachments for agent services
+        attachments_raw = [a.model_dump() for a in req.attachments] if req.attachments else []
 
         actual_message_to_send = req.message
         if req.user_email:
             actual_message_to_send = f"[System Context: The current user's email address is {req.user_email}. Do NOT ask for their email address if you need to create a support ticket. Use this email address automatically.]\n\n{req.message}"
 
-        # Serialize attachments for agent services
-        attachments_raw = [a.model_dump() for a in req.attachments] if req.attachments else []
-
         response_text = ""
 
-        for idx, stream_fn in enumerate(stream_fns_to_try):
+        for idx, provider_key in enumerate(agents_to_try):
             try:
                 response_text = ""
-                async for event in stream_fn(
-                    company_id, req.session_id, actual_message_to_send,
-                    req.user_id, req.page_url, attachments_raw,
+                async for event in chat_stream_graph(
+                    company_id=company_id,
+                    session_id=req.session_id,
+                    message=actual_message_to_send,
+                    user_id=req.user_id,
+                    page_url=req.page_url,
+                    attachments=attachments_raw,
                     user_timestamp=user_timestamp,
+                    agent_provider=provider_key,
+                    sdk_user_email=req.user_email,
                 ):
                     event_type = event.get("type")
 
@@ -388,7 +369,7 @@ async def _chat_sse_generator(
 
             except Exception as e:
                 # If we have another fallback agent and haven't sent real text yet
-                if idx < len(stream_fns_to_try) - 1 and not response_text.strip():
+                if idx < len(agents_to_try) - 1 and not response_text.strip():
                     logger.warning(f"Agent stream failed: {e}. Falling back to next agent...")
                     yield _sse("thinking", message="Switching AI providers...")
                     continue
