@@ -129,10 +129,20 @@ async def chat_stream_graph(
                 result = event["data"].get("output", {})
                 
                 try:
-                    if hasattr(result, "content"):
-                        result = json.loads(result.content)
+                    if hasattr(result, "artifact") and isinstance(result.artifact, dict):
+                        result = result.artifact
+                    elif hasattr(result, "content"):
+                        try:
+                            result = json.loads(result.content)
+                        except json.JSONDecodeError:
+                            import ast
+                            result = ast.literal_eval(result.content)
                     elif isinstance(result, str):
-                        result = json.loads(result)
+                        try:
+                            result = json.loads(result)
+                        except json.JSONDecodeError:
+                            import ast
+                            result = ast.literal_eval(result)
                 except Exception:
                     pass
                     
