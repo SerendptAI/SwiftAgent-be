@@ -13,12 +13,12 @@ def transfer_to_knowledge():
 
 @tool
 def transfer_to_navigation():
-    """Transfer to the navigation agent for UI questions, "how to", screenshots, visual directions, and dashboard guides. THIS IS CRITICAL FOR ALL "WHERE IS X" QUESTIONS."""
+    """Transfer to the navigation agent for UI questions, dashboard guides, visual directions, and "how to" questions (e.g. "how do I generate an API key", "where do I find X"). Use this for ALL questions about navigating the dashboard or performing actions in the UI."""
     pass
 
 @tool
 def transfer_to_api():
-    """Transfer to the API agent to look up real-time data, transactions, or verify a status."""
+    """Transfer to the API agent ONLY to look up real-time data, transactions, or verify a status (e.g. "what is the status of my order"). Do NOT use this if the user is asking how to create/generate an API key in the UI."""
     pass
 
 @tool
@@ -46,12 +46,14 @@ ROUTING RULES:
 - If it requires a specific expert, call the corresponding transfer tool IMMEDIATELY.
 - DO NOT answer the question yourself if an expert is needed.
 - If the user says a simple greeting (e.g. "hi", "hello") or something that requires no tools, respond directly and conversationally.
+- CRITICAL: If the user's request is ambiguous, lacks necessary context, or you are confused about which expert to route to, DO NOT GUESS. Instead, respond directly by asking the user a clarifying question to better understand their needs.
 """
 
 @observe(name="orchestrator_node")
 async def orchestrator_node(state: AgentState, config):
-    # Use fast routing model for the orchestrator
-    llm = get_llm(state["agent_provider"], fast_routing=True, streaming=True)
+    # Use fast routing model for the orchestrator. Streaming is disabled to prevent
+    # pre-tool conversational filler from leaking to the frontend before a handoff.
+    llm = get_llm(state["agent_provider"], fast_routing=True, streaming=False)
     llm_with_tools = llm.bind_tools(ROUTING_TOOLS)
     
     persona = build_company_persona_prompt(state.get("company_data", {}))
