@@ -95,6 +95,7 @@ class ChatRequest(BaseModel):
         None, 
         description="Select the AI provider to use. Provide 'openrouter' to route through the OpenRouter service, or 'anthropic' for Claude. If omitted, falls back to the company's ai_provider setting or the platform default."
     )
+    user_timezone: Optional[str] = Field(None, description="The local timezone of the user (e.g. 'America/New_York').")
     page_url: Optional[str] = Field(None, description="The URL the user is currently viewing.")
     attachments: Optional[List[ChatAttachment]] = Field(
         None,
@@ -329,6 +330,7 @@ async def _chat_sse_generator(
                     user_timestamp=user_timestamp,
                     agent_provider=provider_key,
                     sdk_user_email=req.user_email,
+                    user_timezone=req.user_timezone,
                 ):
                     event_type = event.get("type")
 

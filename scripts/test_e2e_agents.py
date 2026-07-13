@@ -9,10 +9,10 @@ from app.core.database import db
 # Silence excessive logs
 logging.basicConfig(level=logging.WARNING)
 
-async def test_query(test_name: str, message: str, company_id: str):
-    print(f"\\n{'='*50}")
+async def test_query(test_name: str, query: str, company_id: str, timezone: str = "America/New_York"):
+    print(f"\n{'='*50}")
     print(f"TEST: {test_name}")
-    print(f"QUERY: '{message}'")
+    print(f"QUERY: '{query}'")
     print(f"{'='*50}")
     
     session_id = f"test-session-{uuid.uuid4()}"
@@ -24,7 +24,8 @@ async def test_query(test_name: str, message: str, company_id: str):
         async for event in chat_stream_graph(
             company_id=company_id,
             session_id=session_id,
-            message=message,
+            message=query,
+            user_timezone=timezone,
             agent_provider="anthropic" # Defaulting to anthropic for tests
         ):
             event_type = event.get("type")

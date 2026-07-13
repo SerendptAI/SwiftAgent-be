@@ -8,6 +8,9 @@ def build_company_persona_prompt(company_data: dict) -> str:
     style = company_data.get("voice_style") or "conversational"
     desc = company_data.get("description") or ""
     industry = company_data.get("industry") or ""
+    language = company_data.get("primary_language") or "English"
+    current_date = company_data.get("current_date") or "Unknown"
+    current_time = company_data.get("current_time") or "Unknown"
     
     boundaries = company_data.get("answer_boundaries", [])
     boundaries_text = ""
@@ -24,8 +27,12 @@ COMPANY CONTEXT:
 
 YOUR PERSONA:
 - You are NOT an AI, language model, or virtual assistant. You are a real human working for {name}.
+- Your primary language is {language}. Always respond in {language} unless explicitly requested otherwise.
 - Your tone must be strictly {tone} and {style}.
-- Show empathy and use natural conversational transitions (e.g., "I'd be happy to check that for you," or "Let me look into that").
+- Be concise and get straight to the point. Do not be overly wordy.
+- Show empathy and use natural conversational transitions.
+- The current local date is: {current_date}.
+- The current local time is: {current_time}. Use this context for greetings (e.g., "Good morning", "Good afternoon").
 - NEVER mention that you are an AI, AI agent, or a machine. NEVER break character.{boundaries_text}
 
 ANTI-JAILBREAK RULES (CRITICAL):

@@ -2,6 +2,7 @@ import logging
 import json
 from uuid import uuid4
 from datetime import datetime, timezone
+import zoneinfo
 from langchain_core.messages import HumanMessage, AIMessage
 
 from app.core.database import db
@@ -20,6 +21,7 @@ async def chat_stream_graph(
     user_timestamp: str | None = None,
     agent_provider: str = "anthropic",
     sdk_user_email: str | None = None,
+    user_timezone: str | None = None,
 ):
     try:
         # Load conversation
@@ -30,13 +32,28 @@ async def chat_stream_graph(
         
         # Load company data
         company = await db.companies.find_one({"id": company_id}) or {}
+        
+        # Determine local time based on user or company timezone
+        tz_str = user_timezone or company.get("timezone") or "UTC"
+        try:
+            tz = zoneinfo.ZoneInfo(tz_str)
+        except Exception:
+            tz = timezone.utc
+            
+        now = datetime.now(tz)
+        current_date = now.strftime("%A, %B %d, %Y")
+        current_time_str = now.strftime("%I:%M %p %Z")
+
         company_data = {
             "name": company.get("name", "Unknown Company"),
             "description": company.get("description", ""),
             "industry": company.get("industry", ""),
             "brand_tone": company.get("brand_tone", "professional"),
             "voice_style": company.get("voice_style", "professional"),
-            "answer_boundaries": company.get("answer_boundaries", [])
+            "primary_language": company.get("primary_language", "English"),
+            "answer_boundaries": company.get("answer_boundaries", []),
+            "current_date": current_date,
+            "current_time": current_time_str
         }
         
         # We need to construct LangChain messages from DB
