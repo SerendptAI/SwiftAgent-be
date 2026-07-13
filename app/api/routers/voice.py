@@ -18,7 +18,7 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.core.database import db
-from app.services import anthropic_agent_service, openrouter_agent_service, gemini_agent_service
+from app.services.graph.executor import chat_stream_graph
 from app.core.plan_enforcement import enforce_chat_limit
 
 logger = logging.getLogger(__name__)
@@ -101,34 +101,30 @@ async def voice_call(websocket: WebSocket, company_id: str):
 
                 # agent — process through existing chat pipeline
                 await websocket.send_json({"type": "status", "status": "thinking"})
-                try:
-                    result = await anthropic_agent_service.chat(
-                        company_id, session_id, text
-                    )
-                    reply = result.get(
-                        "reply", "I'm sorry, I couldn't generate a response."
-                    )
-                except Exception as e:
-                    logger.warning(f"Anthropic agent chat failed: {e}. Falling back to Gemini...")
+                
+                reply = ""
+                agents_to_try = [company.get("ai_provider", "anthropic")]
+                if agents_to_try[0] == "anthropic" or not company.get("ai_provider"):
+                    agents_to_try.extend(["openrouter", "gemini"])
+                
+                for provider in agents_to_try:
                     try:
-                        result = await gemini_agent_service.chat(
-                            company_id, session_id, text
-                        )
-                        reply = result.get(
-                            "reply", "I'm sorry, I couldn't generate a response."
-                        )
-                    except Exception as gemini_err:
-                        logger.warning(f"Gemini fallback failed: {gemini_err}. Falling back to OpenRouter...")
-                        try:
-                            result = await openrouter_agent_service.chat(
-                                company_id, session_id, text
-                            )
-                            reply = result.get(
-                                "reply", "I'm sorry, I couldn't generate a response."
-                            )
-                        except Exception as fallback_err:
-                            logger.error(f"OpenRouter fallback failed: {fallback_err}")
-                            reply = "I'm sorry, I'm having trouble right now. Please try again."
+                        async for event in chat_stream_graph(
+                            company_id=company_id,
+                            session_id=session_id,
+                            message=text,
+                            agent_provider=provider
+                        ):
+                            if event.get("type") == "text":
+                                reply += event.get("content", "")
+                        
+                        if reply:
+                            break
+                    except Exception as e:
+                        logger.warning(f"Voice agent ({provider}) failed: {e}")
+                        
+                if not reply:
+                    reply = "I'm sorry, I'm having trouble right now. Please try again."
 
                 # send text reply (frontend will handle TTS/audio)
                 await websocket.send_json({"type": "reply_text", "text": reply})
