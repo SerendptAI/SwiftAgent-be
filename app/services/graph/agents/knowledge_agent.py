@@ -10,7 +10,7 @@ Always use the `search_knowledge_base` tool to find answers.
 If the user provides a link and asks you to learn from it, use `scrape_documentation_link`.
 Never guess or hallucinate information. If the answer is not in the knowledge base, say so clearly."""
 
-@observe(as_type="generation")
+@observe(name="knowledge_agent_node")
 async def knowledge_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"])
     llm_with_tools = llm.bind_tools([search_knowledge_base, scrape_documentation_link])

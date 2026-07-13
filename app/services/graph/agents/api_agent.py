@@ -10,7 +10,7 @@ Your job is to query the company's external API integrations to look up real-tim
 2. Use `query_company_api` to execute read-only GET requests based on those endpoints.
 Return the data clearly formatted to the user."""
 
-@observe(as_type="generation")
+@observe(name="api_agent_node")
 async def api_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"])
     llm_with_tools = llm.bind_tools([get_api_documentation, query_company_api])

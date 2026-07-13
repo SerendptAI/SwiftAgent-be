@@ -48,7 +48,7 @@ ROUTING RULES:
 - If the user says a simple greeting (e.g. "hi", "hello") or something that requires no tools, respond directly and conversationally.
 """
 
-@observe(as_type="generation")
+@observe(name="orchestrator_node")
 async def orchestrator_node(state: AgentState, config):
     # Use fast routing model for the orchestrator
     llm = get_llm(state["agent_provider"], fast_routing=True, streaming=True)

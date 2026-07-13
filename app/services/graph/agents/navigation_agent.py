@@ -10,7 +10,7 @@ Use `get_dashboard_navigation` to get a report of the dashboard layout.
 If the user specifically asks for the FULL documentation, use `get_full_dashboard_documentation` and return the `navigation_steps` JSON block EXACTLY as provided.
 Do not guess where things are. Always rely on the tool output."""
 
-@observe(as_type="generation")
+@observe(name="navigation_agent_node")
 async def navigation_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"])
     llm_with_tools = llm.bind_tools([get_dashboard_navigation, get_full_dashboard_documentation])

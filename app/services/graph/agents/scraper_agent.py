@@ -9,7 +9,7 @@ Your job is to read and extract information from public URLs provided by the use
 Use the `read_website_page` tool to fetch the text content and links of the URL.
 Summarize or answer the user's specific questions based ONLY on the content of the page."""
 
-@observe(as_type="generation")
+@observe(name="scraper_agent_node")
 async def scraper_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"])
     llm_with_tools = llm.bind_tools([read_website_page])
