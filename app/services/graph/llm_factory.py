@@ -22,14 +22,16 @@ def get_llm(provider: str, fast_routing: bool = False, streaming: bool = True) -
                 model=settings.GEMINI_MODEL,
                 api_key=settings.GEMINI_API_KEY,
                 streaming=streaming,
-                temperature=0.0
+                temperature=0.0,
+                max_retries=1
             )
         elif provider == "anthropic" and settings.ANTHROPIC_API_KEY:
             return ChatAnthropic(
                 model=settings.ANTHROPIC_MODEL,
                 api_key=settings.ANTHROPIC_API_KEY,
                 streaming=streaming,
-                temperature=0.0
+                temperature=0.0,
+                max_retries=1
             )
         elif provider == "openrouter" and settings.OPENROUTER_API_KEY:
             return ChatOpenAI(
@@ -39,6 +41,7 @@ def get_llm(provider: str, fast_routing: bool = False, streaming: bool = True) -
                 streaming=streaming,
                 temperature=0.0,
                 default_headers={"HTTP-Referer": settings.FRONTEND_URL, "X-Title": "SwiftAgent"},
+                max_retries=1
             )
     # Primary Agents Model Selection
     if provider == "anthropic" and settings.ANTHROPIC_API_KEY:
@@ -46,14 +49,16 @@ def get_llm(provider: str, fast_routing: bool = False, streaming: bool = True) -
             model=settings.ANTHROPIC_MODEL,
             api_key=settings.ANTHROPIC_API_KEY,
             streaming=streaming,
-            temperature=0.0
+            temperature=0.0,
+            max_retries=1
         )
     elif provider == "gemini" and settings.GEMINI_API_KEY:
         return ChatGoogleGenerativeAI(
             model=settings.GEMINI_MODEL,
             api_key=settings.GEMINI_API_KEY,
             streaming=streaming,
-            temperature=0.0
+            temperature=0.0,
+            max_retries=1
         )
     elif provider == "openrouter" and settings.OPENROUTER_API_KEY:
         return ChatOpenAI(
@@ -63,6 +68,7 @@ def get_llm(provider: str, fast_routing: bool = False, streaming: bool = True) -
             streaming=streaming,
             temperature=0.0,
             default_headers={"HTTP-Referer": settings.FRONTEND_URL, "X-Title": "SwiftAgent"},
+            max_retries=1
         )
     
     # Fallback cascade if requested provider is missing API keys
@@ -71,14 +77,16 @@ def get_llm(provider: str, fast_routing: bool = False, streaming: bool = True) -
             model=settings.ANTHROPIC_MODEL,
             api_key=settings.ANTHROPIC_API_KEY,
             streaming=streaming,
-            temperature=0.0
+            temperature=0.0,
+            max_retries=1
         )
     elif settings.GEMINI_API_KEY:
         return ChatGoogleGenerativeAI(
             model=settings.GEMINI_MODEL,
             api_key=settings.GEMINI_API_KEY,
             streaming=streaming,
-            temperature=0.0
+            temperature=0.0,
+            max_retries=1
         )
         
     raise ValueError(f"No configured API keys found for provider {provider} or fallbacks.")
