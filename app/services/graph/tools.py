@@ -96,7 +96,7 @@ async def get_full_dashboard_documentation(config: RunnableConfig) -> dict:
     if full_docs and full_docs.steps:
         return {
             "found": True,
-            "message": "Please output the following navigation_steps JSON block to the user so the frontend can render it.",
+            "message": "Here are the full navigation steps. Pass this entire array directly to the render_navigation_guide tool.",
             "navigation_steps": [
                 {
                     "page_id": step.page_title,
@@ -157,6 +157,37 @@ async def read_website_page(url: str, force_refresh: bool = False, config: Runna
     return await scrape_page(url, force_refresh=force_refresh)
 
 
+@tool
+async def render_navigation_guide(steps: list[dict], config: RunnableConfig) -> dict:
+    """Renders the navigation guide to the user's screen.
+    Provide a list of steps, each with:
+    - `page_id`: the ID of the page
+    - `instruction`: what the user should do
+    - `element_selector`: the CSS selector of the element to interact with (optional)
+    """
+    state = _get_state(config)
+    company_id = state.get("company_id")
+
+    if not company_id:
+        return {"error": "Company context not available"}
+
+    report_data = await stroll_index_service.generate_navigation_report(company_id)
+    if not report_data:
+        return {"error": "No navigation data available"}
+
+    guide_obj = stroll_index_service.reconstruct_navigation_guide(steps, report_data["page_lookup"])
+    if not guide_obj:
+        return {"error": "Failed to reconstruct guide from provided steps"}
+
+    return {
+        "success": True,
+        "navigation_data": {
+            "steps": [s.model_dump() for s in guide_obj.steps],
+            "path_summary": guide_obj.path_summary
+        }
+    }
+
+
 # Map to lookup tools by name
 ALL_TOOLS = {
     "search_knowledge_base": search_knowledge_base,
@@ -166,4 +197,5 @@ ALL_TOOLS = {
     "get_api_documentation": get_api_documentation,
     "query_company_api": query_company_api,
     "read_website_page": read_website_page,
+    "render_navigation_guide": render_navigation_guide,
 }

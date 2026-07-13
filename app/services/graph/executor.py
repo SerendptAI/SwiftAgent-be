@@ -149,14 +149,25 @@ async def chat_stream_graph(
                 if isinstance(result, dict):
                     if name == "search_knowledge_base" and "results" in result:
                         yield {"type": "sources", "sources": result["results"]}
-                    elif name in ["get_dashboard_navigation", "get_full_dashboard_documentation"]:
-                        guide = {}
-                        if "navigation_report" in result:
-                            guide["steps"] = result.get("navigation_report")
-                        if "navigation_steps" in result:
-                            guide["steps"] = result.get("navigation_steps")
-                        if guide:
-                            yield {"type": "navigation_guide", "guide": guide}
+                    elif name == "render_navigation_guide":
+                        nav_data = result.get("navigation_data")
+                        if nav_data:
+                            yield {"type": "navigation_guide", "guide": nav_data}
+                    elif name == "get_full_dashboard_documentation":
+                        steps = result.get("navigation_steps")
+                        if steps:
+                            from app.services.stroll_index_service import reconstruct_navigation_guide, generate_navigation_report
+                            report_data = await generate_navigation_report(company_id)
+                            if report_data:
+                                guide_obj = reconstruct_navigation_guide(steps, report_data["page_lookup"])
+                                if guide_obj:
+                                    yield {
+                                        "type": "navigation_guide",
+                                        "guide": {
+                                            "steps": [s.model_dump() for s in guide_obj.steps],
+                                            "path_summary": guide_obj.path_summary
+                                        }
+                                    }
 
             elif kind == "on_chain_end":
                 name = event["name"]

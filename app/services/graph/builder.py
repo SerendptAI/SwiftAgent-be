@@ -12,7 +12,7 @@ from app.services.graph.tools import (
     search_knowledge_base, scrape_documentation_link,
     get_dashboard_navigation, get_full_dashboard_documentation,
     get_api_documentation, query_company_api,
-    read_website_page
+    read_website_page, render_navigation_guide
 )
 
 
@@ -93,7 +93,7 @@ def build_graph():
     
     # Tool nodes tailored for each agent (solves routing back ambiguity)
     builder.add_node("knowledge_tools", ToolNode([search_knowledge_base, scrape_documentation_link]))
-    builder.add_node("navigation_tools", ToolNode([get_dashboard_navigation, get_full_dashboard_documentation]))
+    builder.add_node("navigation_tools", ToolNode([get_dashboard_navigation, get_full_dashboard_documentation, render_navigation_guide]))
     builder.add_node("api_tools", ToolNode([get_api_documentation, query_company_api]))
     builder.add_node("scraper_tools", ToolNode([read_website_page]))
     
