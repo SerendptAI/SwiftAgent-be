@@ -76,9 +76,17 @@ async def chat_stream_graph(
             
             if kind == "on_chat_model_stream":
                 chunk = event["data"]["chunk"]
-                if chunk.content and isinstance(chunk.content, str):
-                    final_text += chunk.content
-                    yield {"type": "text", "content": chunk.content}
+                if chunk.content:
+                    text_content = ""
+                    if isinstance(chunk.content, str):
+                        text_content = chunk.content
+                    elif isinstance(chunk.content, list):
+                        text_parts = [c.get("text", "") for c in chunk.content if isinstance(c, dict) and c.get("type") == "text"]
+                        text_content = "".join(text_parts)
+                        
+                    if text_content:
+                        final_text += text_content
+                        yield {"type": "text", "content": text_content}
                     
             elif kind == "on_tool_start":
                 name = event["name"]
@@ -119,8 +127,16 @@ async def chat_stream_graph(
                         msgs = output["messages"]
                         if msgs and not final_text:
                             content = msgs[-1].content
-                            final_text += content
-                            yield {"type": "text", "content": content}
+                            text_content = ""
+                            if isinstance(content, str):
+                                text_content = content
+                            elif isinstance(content, list):
+                                text_parts = [c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text"]
+                                text_content = "".join(text_parts)
+                                
+                            if text_content:
+                                final_text += text_content
+                                yield {"type": "text", "content": text_content}
 
         # Store assistant message in DB
         if final_text:

@@ -5,7 +5,9 @@ import asyncio
 import httpx
 from playwright.async_api import async_playwright
 from app.core.config import settings
+from app.core.database import db
 from urllib.parse import urljoin, urlparse
+from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -75,10 +77,11 @@ async def _resolve_final_url(url: str) -> tuple[bool, str, str]:
         return False, f"Redirect tracing failed: {e}", ""
 
 
-async def read_website_page(url: str) -> dict:
+async def read_website_page(url: str, force_refresh: bool = False) -> dict:
     """
     Loads a URL, extracts visible text, and grabs available links.
     Optimized for speed (quick lookup) to provide agent context.
+    Caches the result in the database for 7 days unless force_refresh is True.
     """
     try:
         # SSRF protection: block private/internal IPs, resolve HTTP redirects safely
@@ -86,6 +89,28 @@ async def read_website_page(url: str) -> dict:
         if not is_safe:
             logger.warning(f"SSRF protection blocked URL: {url} — {reason}")
             return {"error": reason}
+
+        now = datetime.now(tz=timezone.utc)
+        
+        # Check cache if not forcing refresh
+        if not force_refresh:
+            cached = await db.scraped_pages_cache.find_one({"url": final_url})
+            if cached:
+                # Check if it's less than 7 days old
+                cache_time = cached.get("timestamp")
+                if cache_time:
+                    # If naive, make it aware (MongoDB drivers usually return aware UTC datetime if configured, but let's be safe)
+                    if cache_time.tzinfo is None:
+                        cache_time = cache_time.replace(tzinfo=timezone.utc)
+                        
+                    if now - cache_time < timedelta(days=7):
+                        logger.info(f"Returning cached website page for: {final_url}")
+                        return {
+                            "url": cached["url"],
+                            "content": cached["content"],
+                            "links": cached["links"],
+                            "cached": True
+                        }
 
         logger.info(f"Dynamically reading website page: {final_url}")
         async with async_playwright() as p:
@@ -148,11 +173,24 @@ async def read_website_page(url: str) -> dict:
             if not clean_content:
                 return {"error": "Page loaded but no readable text was found."}
                 
-            return {
+            result = {
                 "url": final_url,
                 "content": clean_content,
                 "links": list(valid_links)[:15] # Top 15 links to avoid token overload
             }
+            
+            # Save to cache
+            await db.scraped_pages_cache.update_one(
+                {"url": final_url},
+                {"$set": {
+                    "content": clean_content,
+                    "links": result["links"],
+                    "timestamp": now
+                }},
+                upsert=True
+            )
+            
+            return result
     except Exception as e:
         logger.warning(f"Failed to read page {url}: {e}")
         return {"error": str(e)}

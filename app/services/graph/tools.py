@@ -147,12 +147,14 @@ async def query_company_api(
 
 
 @tool
-async def read_website_page(url: str, config: RunnableConfig) -> dict:
-    """Read and extract text from a public website URL. Use this for general scraping of links."""
-    if not url:
-        return {"error": "No URL provided to read."}
-    result = await page_reader_service.read_website_page(url)
-    return result
+async def read_website_page(url: str, force_refresh: bool = False, config: RunnableConfig = None) -> dict:
+    """
+    Loads a URL, extracts visible text, and grabs available links.
+    Optimized for speed (quick lookup) to provide agent context.
+    The result is cached for 7 days. If you believe the data is stale or the user mentions recent changes, set force_refresh=True.
+    """
+    from app.services.page_reader_service import read_website_page as scrape_page
+    return await scrape_page(url, force_refresh=force_refresh)
 
 
 # Map to lookup tools by name

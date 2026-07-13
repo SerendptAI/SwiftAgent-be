@@ -7,6 +7,7 @@ from app.core.langfuse import observe
 SCRAPER_PROMPT = """You are the Web Scraper Expert Agent.
 Your job is to read and extract information from public URLs provided by the user.
 Use the `read_website_page` tool to fetch the text content and links of the URL.
+The tool caches pages for 7 days. If the user indicates that the data you returned is outdated or specifically asks you to re-read it, set `force_refresh=True` to fetch fresh data.
 Summarize or answer the user's specific questions based ONLY on the content of the page."""
 
 @observe(name="scraper_agent_node")
