@@ -1,358 +1,116 @@
 <!doctype html>
-<html
-    lang="en"
-    xmlns="http://www.w3.org/1999/xhtml"
-    xmlns:v="urn:schemas-microsoft-com:vml"
-    xmlns:o="urn:schemas-microsoft-com:office:office"
->
-    <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="color-scheme" content="light" />
-        <meta name="supported-color-schemes" content="light" />
-        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="x-apple-disable-message-reformatting" />
-        <meta
-            name="format-detection"
-            content="telephone=no,address=no,email=no,date=no,url=no"
-        />
-        <title>Welcome to SwiftAgent</title>
-        <!--[if mso]>
-            <noscript>
-                <xml>
-                    <o:OfficeDocumentSettings>
-                        <o:AllowPNG />
-                        <o:PixelsPerInch>96</o:PixelsPerInch>
-                    </o:OfficeDocumentSettings>
-                </xml>
-            </noscript>
-        <![endif]-->
-        <style>
-
-            :root {
-                color-scheme: only light;
-                supported-color-schemes: light;
-            }
-
-            body,
-            table,
-            td,
-            a {
-                -webkit-text-size-adjust: 100%;
-                -ms-text-size-adjust: 100%;
-            }
-            table,
-            td {
-                mso-table-lspace: 0pt;
-                mso-table-rspace: 0pt;
-            }
-            img {
-                -ms-interpolation-mode: bicubic;
-                border: 0;
-                height: auto;
-                line-height: 100%;
-                outline: none;
-                text-decoration: none;
-            }
-            body {
-                margin: 0;
-                padding: 0;
-                width: 100% !important;
-                height: 100% !important;
-            }
-            table {
-                border-collapse: collapse !important;
-            }
-            *,
-            *::before,
-            *::after {
-                box-sizing: border-box;
-            }
-            a[x-apple-data-detectors] {
-                color: inherit !important;
-                text-decoration: none !important;
-                font-size: inherit !important;
-                font-family: inherit !important;
-                font-weight: inherit !important;
-                line-height: inherit !important;
-            }
-
-            body {
-                background-color: #f5f5f4;
-                color: #c9c3c7;
-                font-family: Tahoma, Geneva, sans-serif;
-                overflow-x: hidden;
-            }
-
-            .email-container {
-                width: 100%;
-                max-width: 600px;
-                margin: 0 auto;
-                background-color: #f5f5f4;
-            }
-
-            .heading-svg {
-                display: block;
-                max-width: 100%;
-                height: auto;
-                margin: 0 auto;
-            }
-
-            .logo-mark {
-                display: block;
-                width: 72px;
-                height: 70px;
-                margin: 0 auto;
-            }
-
-            .hero-frame {
-                width: 100%;
-            }
-
-            .hero-image {
-                display: block;
-                width: 100%;
-                height: auto;
-            }
-
-            .cta-button {
-                display: block;
-                padding: 0 24px;
-                height: 52px;
-                color: #ffffff !important;
-                background-color: #fb492b;
-                border-radius: 8px;
-                font-family: Tahoma, Geneva, sans-serif;
-                font-size: 18px;
-                line-height: 52px;
-                font-weight: 500;
-                letter-spacing: 0;
-                text-align: center;
-                text-decoration: none;
-                text-transform: uppercase;
-            }
-
-            @media only screen and (max-width: 620px) {
-                .email-container {
-                    width: 100% !important;
-                    max-width: 100% !important;
-                }
-                .logo-cell {
-                    padding-top: 78px !important;
-                    padding-bottom: 70px !important;
-                }
-                .heading-cell {
-                    padding: 0 34px 58px !important;
-                }
-                .hero-cell {
-                    padding: 0 28px !important;
-                }
-                .cta-cell {
-                    padding: 54px 42px 94px !important;
-                }
-            }
-
-            @media only screen and (max-width: 480px) {
-                .logo-cell {
-                    padding-top: 59px !important;
-                    padding-bottom: 70px !important;
-                }
-                .logo-mark {
-                    width: 50px !important;
-                    height: 49px !important;
-                }
-                .heading-cell {
-                    padding: 0 18px 40px !important;
-                }
-                .hero-cell {
-                    padding: 0 22px !important;
-                }
-                .cta-cell {
-                    padding: 41px 32px 94px !important;
-                }
-                .cta-button {
-                    font-size: 16px !important;
-                    line-height: 52px !important;
-                    letter-spacing: 0 !important;
-                }
-            }
-
-            @media only screen and (max-width: 375px) {
-                .heading-cell {
-                    padding-left: 12px !important;
-                    padding-right: 12px !important;
-                    padding-bottom: 36px !important;
-                }
-                .hero-cell {
-                    padding-left: 18px !important;
-                    padding-right: 18px !important;
-                }
-                .cta-cell {
-                    padding-left: 26px !important;
-                    padding-right: 26px !important;
-                    padding-bottom: 94px !important;
-                }
-                .cta-button {
-                    font-size: 16px !important;
-                    line-height: 52px !important;
-                    letter-spacing: 0 !important;
-                }
-            }
-        
-            /* ── Force light mode ── */
-            /* Prevent dark-mode inversion in Apple Mail, iOS Mail, Samsung Mail */
-            @media (prefers-color-scheme: dark) {
-                body,
-                center,
-                .email-container {
-                    background-color: #f5f5f4 !important;
-                    color: #111111 !important;
-                }
-                body * {
-                    border-color: transparent !important;
-                }
-                /* Keep image colours untouched */
-                img {
-                    filter: none !important;
-                }
-                /* Preserve white-background cards / pills */
-                .coupon-card {
-                    background-color: #ffffff !important;
-                }
-                .preview-pill,
-                .description-box {
-                    background-color: #ededed !important;
-                    color: #111111 !important;
-                }
-                /* Preserve button colours */
-                .invite-button,
-                .resolve-button,
-                .cta-button,
-                .copy-button,
-                .choice-button,
-                .yes-button,
-                .no-button {
-                    color: #ffffff !important;
-                }
-                .copy-button {
-                    color: #111111 !important;
-                }
-                /* Preserve ticket pill */
-                .button-shell {
-                    background-color: #f3b832 !important;
-                }
-                .ticket-label,
-                .ticket-number {
-                    color: #ffffff !important;
-                }
-                /* Daily updates button */
-                .date-button,
-                .view-button {
-                    color: #ffffff !important;
-                }
-            }
-            /* Outlook dark mode (data-ogsc) */
-            [data-ogsc] body,
-            [data-ogsc] center,
-            [data-ogsc] .email-container {
-                background-color: #f5f5f4 !important;
-                color: #111111 !important;
-            }
-            [data-ogsc] .coupon-card {
-                background-color: #ffffff !important;
-            }
-            [data-ogsc] .preview-pill,
-            [data-ogsc] .description-box {
-                background-color: #ededed !important;
-                color: #111111 !important;
-            }
-        </style>
-    </head>
-    <body style="margin: 0; padding: 0; background-color: #f5f5f4; color-scheme: only light;">
-        <center
-            role="article"
-            aria-roledescription="email"
-            lang="en"
-            style="width: 100%; overflow-x: hidden; background-color: #f5f5f4"
-        >
-            <!--[if mso | IE]>
-    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" align="center" style="width:600px;">
-    <tr>
-    <td>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no" />
+    <title>Welcome to Swift Agents</title>
+    <!--[if mso]>
+      <noscript>
+        <xml>
+          <o:OfficeDocumentSettings>
+            <o:AllowPNG />
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+          </o:OfficeDocumentSettings>
+        </xml>
+      </noscript>
     <![endif]-->
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
-            <table
-                role="presentation"
-                cellspacing="0"
-                cellpadding="0"
-                border="0"
-                align="center"
-                width="100%"
-                style="max-width: 600px; margin: 0 auto"
-                class="email-container"
-            >
-                <tr>
-                    <td
-                        class="logo-cell"
-                        style="padding: 85px 0 70px; text-align: center"
-                    >
-                        <img
-                            src="{{base_url}}/images/logo.png"
-                            width="72"
-                            height="70"
-                            alt="SwiftAgent"
-                            class="logo-mark"
-                        />
+      :root {
+        color-scheme: only light;
+        supported-color-schemes: light;
+      }
+      body, table, td, a {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+      }
+      table, td {
+        mso-table-lspace: 0pt;
+        mso-table-rspace: 0pt;
+      }
+      img {
+        -ms-interpolation-mode: bicubic;
+        border: 0;
+        line-height: 100%;
+        outline: none;
+        text-decoration: none;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100% !important;
+        background-color: #f4f4f4;
+      }
+      @media only screen and (max-width: 620px) {
+        .outer-pad { padding: 20px 12px !important; }
+        .card-pad { padding: 28px 20px !important; }
+        .h1 { font-size: 30px !important; letter-spacing: -0.45px !important; }
+      }
+    </style>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #f4f4f4;">
+    <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">We're thrilled to have you join us.</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f4f4;">
+      <tr>
+        <td align="center" class="outer-pad" style="padding: 40px 20px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="520" style="width: 520px; max-width: 100%; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;">
+            <tr>
+              <td class="card-pad" style="padding: 40px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                  <tr>
+                    <td style="padding: 0 0 32px;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                        <tr>
+                          <td align="center" style="padding: 0 0 24px;"><img src="{{base_url}}/images/logo_compliant.png" width="48" height="47" alt="Swift Agents" style="display: block; width: 48px; height: 47px;" /></td>
+                        </tr>
+                      </table>
                     </td>
-                </tr>
-
-                <tr>
-                    <td
-                        class="heading-cell"
-                        style="padding: 0 45px 63px; text-align: center"
-                    >
-                        <img
-                            class="heading-svg"
-                            src="{{base_url}}/images/headings/welcome_heading.png"
-                            width="514"
-                            height="204"
-                            alt="Welcome to automated customer service." style="max-width: 100%; width: 100%; height: auto;">
+                  </tr>
+                  <tr>
+                    <td style="padding: 0 0 32px;">
+                      <h1 class="h1" style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 42px; font-weight: 700; line-height: 1.1; letter-spacing: -0.63px; color: #1c1818; text-align: center;">Welcome to Swift Agents</h1>
                     </td>
-                </tr>
-
-                <tr>
-                    <td class="hero-cell" style="padding: 0 31px">
-                        <div class="hero-frame">
-                            <img
-                                src="{{base_url}}/images/welcome.png"
-                                width="538"
-                                height="423"
-                                alt="SwiftAgent customer service"
-                                class="hero-image" style="max-width: 100%; width: 100%; height: auto;">
-                        </div>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0 0 32px;">
+                      <p style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 400; line-height: 1.6; color: #1c1818; text-align: left;">We&rsquo;re thrilled to have you join us. Swift Agents is built to automate your customer service workflows so you can focus on building what matters. Get ready to experience autonomous operations.</p>
                     </td>
-                </tr>
-
-                <tr>
-                    <td class="cta-cell" style="padding: 58px 46px 94px">
-                        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: separate; border-spacing: 0;">
-                            <tr>
-                                <td style="background-color: #030303; border-radius: 8px; padding-bottom: 7px; padding-left: 4px;">
-                                    <a href="{{dashboardUrl}}" target="_blank" style="display: block; padding: 0 24px; height: 52px; background-color: #fb492b; border-radius: 8px; color: #ffffff; font-family: Tahoma, Geneva, sans-serif; font-size: 18px; line-height: 52px; font-weight: 500; text-align: center; text-decoration: none; text-transform: uppercase;">
-                                        Head to your dashboard
-                                    </a>
-                                </td>
-                            </tr>
-                        </table>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0 0 32px;">
+                      <img src="{{base_url}}/images/welcome_hero.png" width="440" alt="" style="display: block; width: 100%; height: auto;" />
                     </td>
-                </tr>
-            </table>
-
-            <!--[if mso | IE]>
-    </td>
-    </tr>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0 0 32px;">
+                      <a href="{{dashboardUrl}}" target="_blank" style="display: block; height: 52px; line-height: 52px; background-color: #f2b035; color: #ffffff; border-radius: 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.14px; text-align: center; text-decoration: none; text-transform: uppercase;">Go to Dashboard</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top: 1px solid #e5e7eb;">
+                        <tr>
+                          <td align="center" style="padding: 24px 0 0;">
+                            <p style="margin: 0 0 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 400; line-height: 1.5; color: #6b7280; text-align: center;">You received this email because you signed up for Swift Agents.</p>
+                            <p style="margin: 0 0 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 400; line-height: 1.5; color: #6b7280; text-align: center;">Serendpt AI &middot; Silverstream House, 45 Fitzroy Street, Fitzrovia, London, W1T 6EB, UK</p>
+                            <p style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 400; color: #6b7280; text-align: center;"><a href="https://swiftagents.org/unsubscribe" target="_blank" style="color: #f25430; text-decoration: underline;">Unsubscribe</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="https://swiftagents.org/privacy" target="_blank" style="color: #f25430; text-decoration: underline;">Privacy Policy</a></p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
     </table>
-    <![endif]-->
-    </center>
-    </body>
+  </body>
 </html>

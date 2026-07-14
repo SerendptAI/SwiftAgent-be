@@ -75,6 +75,7 @@ async def resolve_ticket_page(token: str):
         html = _load_template(RESOLVED_TEMPLATE)
         html = html.replace("{{company_name}}", company_name)
         html = html.replace("{{company_logo_url}}", logo_url_fallback)
+        html = html.replace("{{ticket_id}}", ticket["id"])
         return HTMLResponse(content=html, status_code=200)
 
     html = _load_template(RESOLVE_CONFIRM_TEMPLATE)
@@ -95,11 +96,13 @@ async def confirm_resolve_ticket(token: str):
     if result:
         msg = "Your ticket has been confirmed as resolved. Thank you!"
         company_id = result["company_id"]
+        ticket_id = result["id"]
     else:
         ticket = await company_email_service.get_ticket_by_resolve_token(token)
         if ticket and ticket["status"] == "resolved":
             msg = "This ticket was already resolved."
             company_id = ticket["company_id"]
+            ticket_id = ticket["id"]
         else:
             raise HTTPException(status_code=404, detail="Ticket not found")
 
@@ -110,6 +113,7 @@ async def confirm_resolve_ticket(token: str):
 
     html = html.replace("{{company_name}}", company_name)
     html = html.replace("{{company_logo_url}}", logo_url_fallback)
+    html = html.replace("{{ticket_id}}", ticket_id)
     return HTMLResponse(content=html, status_code=200)
 
 
