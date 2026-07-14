@@ -735,9 +735,14 @@ async def _send_new_ticket_email(company: dict, ticket: dict):
         html = _load_template(NEW_TICKET_TEMPLATE)
         customer_email = ticket.get("customer_email", "")
         dashboard_url = f"{settings.FRONTEND_URL}/dashboard/tickets/{ticket['id']}"
+        created_at = ticket.get("created_at")
+        created_date = created_at.strftime("%B %d, %Y") if isinstance(created_at, datetime) else ""
 
         html = html.replace("{{customer_email}}", customer_email)
         html = html.replace("{{dashboard_url}}", dashboard_url)
+        html = html.replace("{{ticket_id}}", ticket.get("id", ""))
+        html = html.replace("{{ticket_subject}}", ticket.get("subject", ""))
+        html = html.replace("{{created_date}}", created_date)
         
         subject = f"New Ticket #{ticket['id']} from {customer_email}"
         company_name = "SwiftAgent"
@@ -1076,7 +1081,8 @@ async def dispatch_all_test_templates(company_id: str, recipients: list[str], au
             "subject": f"Ticket #TEST1234 Resolved",
             "replacements": {
                 "{{company_name}}": company_name,
-                "{{company_logo_url}}": company_logo_url
+                "{{company_logo_url}}": company_logo_url,
+                "{{ticket_id}}": "TEST1234"
             }
         },
         {
@@ -1084,7 +1090,10 @@ async def dispatch_all_test_templates(company_id: str, recipients: list[str], au
             "subject": f"New Ticket #TEST1234 from {recipients[0]}",
             "replacements": {
                 "{{customer_email}}": recipients[0],
-                "{{dashboard_url}}": f"{settings.FRONTEND_URL}/dashboard/tickets/TEST1234"
+                "{{dashboard_url}}": f"{settings.FRONTEND_URL}/dashboard/tickets/TEST1234",
+                "{{ticket_id}}": "TEST1234",
+                "{{ticket_subject}}": "API Gateway latency spike",
+                "{{created_date}}": "March 20, 2026"
             },
             "from_email": "noreply@swiftagents.org",
             "from_name": "SwiftAgent"

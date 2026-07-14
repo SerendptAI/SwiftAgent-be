@@ -1,220 +1,126 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light" />
     <meta name="supported-color-schemes" content="light" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="x-apple-disable-message-reformatting">
-  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
-  <title>Ticket closed</title>
-  <style>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no" />
+    <title>Your Ticket Has Been Closed</title>
+    <!--[if mso]>
+      <noscript>
+        <xml>
+          <o:OfficeDocumentSettings>
+            <o:AllowPNG />
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+          </o:OfficeDocumentSettings>
+        </xml>
+      </noscript>
+    <![endif]-->
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
       :root {
         color-scheme: only light;
         supported-color-schemes: light;
       }
-
-      body,
-      table,
-      td,
-      a {
+      body, table, td, a {
         -webkit-text-size-adjust: 100%;
         -ms-text-size-adjust: 100%;
       }
-      table,
-      td {
+      table, td {
         mso-table-lspace: 0pt;
         mso-table-rspace: 0pt;
       }
       img {
         -ms-interpolation-mode: bicubic;
         border: 0;
-        height: auto;
         line-height: 100%;
         outline: none;
         text-decoration: none;
       }
-    body { margin: 0; padding: 0; width: 100% !important; height: 100% !important; }
-    table { border-collapse: collapse !important; }
-    *, *::before, *::after { box-sizing: border-box; }
-
-    body {
-      background-color: #f5f5f4;
-      color: #111111;
-      font-family: Tahoma, Geneva, sans-serif;
-      overflow-x: hidden;
-    }
-
-    .email-container {
-      width: 100%;
-      max-width: 600px;
-      margin: 0 auto;
-      background-color: #f5f5f4;
-    }
-
-    .heading-svg {
-      display: block;
-      max-width: 100%;
-      height: auto;
-      margin: 0 auto;
-    }
-
-    .logo-mark {
-      display: block;
-      width: 72px;
-      height: 70px;
-      margin: 0 auto;
-    }
-
-    .body-text {
-      margin: 0;
-      color: #111111;
-      font-family: Tahoma, Geneva, sans-serif;
-      font-size: 18px;
-      line-height: 2;
-      font-weight: 400;
-      letter-spacing: 0;
-      text-align: center;
-      text-transform: uppercase;
-    }
-
-    .hero-frame {
-      width: 100%;
-    }
-
-    .hero-image {
-      display: block;
-      width: 100%;
-      height: auto;
-    }
-
-    @media only screen and (max-width: 620px) {
-      .email-container { width: 100% !important; max-width: 100% !important; }
-      .logo-cell { padding-top: 82px !important; padding-bottom: 55px !important; }
-      .heading-cell { padding: 0 58px 122px !important; }
-      .image-cell { padding: 0 58px 94px !important; }
-    }
-
-    @media only screen and (max-width: 480px) {
-      .logo-cell { padding-top: 59px !important; padding-bottom: 55px !important; }
-      .logo-mark { width: 50px !important; height: 49px !important; }
-      .heading-cell { padding: 0 28px 72px !important; }
-      .image-cell { padding: 0 34px 94px !important; }
-    }
-
-    @media only screen and (max-width: 375px) {
-      .heading-cell { padding-left: 20px !important; padding-right: 20px !important; padding-bottom: 72px !important; }
-      .image-cell { padding-left: 24px !important; padding-right: 24px !important; padding-bottom: 94px !important; }
-    }
-  
-            /* ── Force light mode ── */
-            /* Prevent dark-mode inversion in Apple Mail, iOS Mail, Samsung Mail */
-            @media (prefers-color-scheme: dark) {
-                body,
-                center,
-                .email-container {
-                    background-color: #f5f5f4 !important;
-                    color: #111111 !important;
-                }
-                body * {
-                    border-color: transparent !important;
-                }
-                /* Keep image colours untouched */
-                img {
-                    filter: none !important;
-                }
-                /* Preserve white-background cards / pills */
-                .coupon-card {
-                    background-color: #ffffff !important;
-                }
-                .preview-pill,
-                .description-box {
-                    background-color: #ededed !important;
-                    color: #111111 !important;
-                }
-                /* Preserve button colours */
-                .invite-button,
-                .resolve-button,
-                .cta-button,
-                .copy-button,
-                .choice-button,
-                .yes-button,
-                .no-button {
-                    color: #ffffff !important;
-                }
-                .copy-button {
-                    color: #111111 !important;
-                }
-                /* Preserve ticket pill */
-                .button-shell {
-                    background-color: #f3b832 !important;
-                }
-                .ticket-label,
-                .ticket-number {
-                    color: #ffffff !important;
-                }
-                /* Daily updates button */
-                .date-button,
-                .view-button {
-                    color: #ffffff !important;
-                }
-            }
-            /* Outlook dark mode (data-ogsc) */
-            [data-ogsc] body,
-            [data-ogsc] center,
-            [data-ogsc] .email-container {
-                background-color: #f5f5f4 !important;
-                color: #111111 !important;
-            }
-            [data-ogsc] .coupon-card {
-                background-color: #ffffff !important;
-            }
-            [data-ogsc] .preview-pill,
-            [data-ogsc] .description-box {
-                background-color: #ededed !important;
-                color: #111111 !important;
-            }
-        </style>
-</head>
-<body style="margin: 0; padding: 0; background-color: #f5f5f4; color-scheme: only light;">
-  <center role="article" aria-roledescription="email" lang="en" style="width: 100%; overflow-x: hidden; background-color: #f5f5f4;">
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="100%" style="max-width: 600px; margin: 0 auto;" class="email-container">
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100% !important;
+        background-color: #f4f4f4;
+      }
+      @media only screen and (max-width: 620px) {
+        .outer-pad { padding: 20px 12px !important; }
+        .card-pad { padding: 28px 20px !important; }
+        .h1 { font-size: 30px !important; letter-spacing: -0.45px !important; }
+      }
+    </style>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #f4f4f4;">
+    <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">Your support ticket has been closed.</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f4f4;">
       <tr>
-        <td class="logo-cell" style="padding: 82px 0 55px; text-align: center;">
-          <img src="{{company_logo_url}}" width="72" height="70" alt="{{company_name}}" class="logo-mark">
-        </td>
-      </tr>
-
-      <tr>
-        <td class="heading-cell" style="padding: 0 58px 32px; text-align: center;">
-          <img
-            class="heading-svg"
-            src="{{base_url}}/images/headings/resolved_heading.png"
-            width="487"
-            height="125"
-            alt="Your ticket has been closed" style="max-width: 100%; width: 100%; height: auto;">
-        </td>
-      </tr>
-
-      <tr>
-        <td style="padding: 0 58px 80px; text-align: center;">
-          <!-- <p style="margin: 0; color: #22c55e; font-family: Tahoma, Geneva, sans-serif;
-                    font-size: 16px; line-height: 1.8; font-weight: 500; text-transform: uppercase;">
-            Your issue has been marked as resolved. We hope everything was handled to your satisfaction.
-          </p> -->
-        </td>
-      </tr>
-
-      <tr>
-        <td class="image-cell" style="padding: 0 58px 94px;">
-          <div class="hero-frame">
-            <img src="{{base_url}}/images/ticket-closed.png" width="484" height="381" alt="Ticket closed" class="hero-image" style="max-width: 100%; width: 100%; height: auto;">
-          </div>
+        <td align="center" class="outer-pad" style="padding: 40px 20px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="520" style="width: 520px; max-width: 100%; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;">
+            <tr>
+              <td class="card-pad" style="padding: 40px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                  <tr>
+                    <td style="padding: 0 0 32px;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                        <tr>
+                          <td align="center" style="padding: 0 0 24px;"><img src="{{company_logo_url}}" height="48" alt="{{company_name}}" style="display: block; height: 48px; width: auto;" /></td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0 0 32px;">
+                      <h1 class="h1" style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 42px; font-weight: 700; line-height: 1.1; letter-spacing: -0.63px; color: #1c1818; text-align: center;">Your Ticket Has Been Closed</h1>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0 0 32px;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f4f4; border: 1px solid #e5e7eb; border-radius: 8px;">
+                        <tr>
+                          <td style="padding: 24px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                        <tr>
+                          <td valign="middle" style="padding-top: 0; padding-bottom: 15px; border-bottom: 1px solid #e5e7eb; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 400; color: #6b7280; white-space: nowrap;">Ticket ID:</td>
+                          <td valign="middle" align="right" style="padding-top: 0; padding-bottom: 15px; border-bottom: 1px solid #e5e7eb; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; color: #1c1818;">{{ticket_id}}</td>
+                        </tr>
+                        <tr>
+                          <td valign="middle" style="padding-top: 16px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 400; color: #6b7280; white-space: nowrap;">Status:</td>
+                          <td valign="middle" align="right" style="padding-top: 16px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; color: #1c1818;">Resolved</td>
+                        </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0 0 32px;">
+                      <p style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 400; line-height: 1.6; color: #1c1818; text-align: left;">Thank you for choosing {{company_name}}. Your feedback helps us improve our autonomous service operations.</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top: 1px solid #e5e7eb;">
+                        <tr>
+                          <td align="center" style="padding: 24px 0 0;">
+                            <p style="margin: 0 0 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 400; line-height: 1.5; color: #6b7280; text-align: center;">You received this email because you contacted {{company_name}} support.</p>
+                            <p style="margin: 0 0 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 400; line-height: 1.5; color: #6b7280; text-align: center;">Serendpt AI &middot; Silverstream House, 45 Fitzroy Street, Fitzrovia, London, W1T 6EB, UK</p>
+                            <p style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 400; color: #6b7280; text-align: center;"><a href="https://swiftagents.org/unsubscribe" target="_blank" style="color: #f25430; text-decoration: underline;">Unsubscribe</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="https://swiftagents.org/privacy" target="_blank" style="color: #f25430; text-decoration: underline;">Privacy Policy</a></p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
         </td>
       </tr>
     </table>
-    </center>
-</body>
+  </body>
 </html>
