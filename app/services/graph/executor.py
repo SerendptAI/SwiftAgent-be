@@ -53,7 +53,8 @@ async def chat_stream_graph(
             "primary_language": company.get("primary_language", "English"),
             "answer_boundaries": company.get("answer_boundaries", []),
             "current_date": current_date,
-            "current_time": current_time_str
+            "current_time": current_time_str,
+            "sdk_user_email": sdk_user_email
         }
         
         # We need to construct LangChain messages from DB

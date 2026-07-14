@@ -312,8 +312,6 @@ async def _chat_sse_generator(
         attachments_raw = [a.model_dump() for a in req.attachments] if req.attachments else []
 
         actual_message_to_send = req.message
-        if req.user_email:
-            actual_message_to_send = f"[System Context: The current user's email address is {req.user_email}. Do NOT ask for their email address if you need to create a support ticket. Use this email address automatically.]\n\n{req.message}"
 
         response_text = ""
 
