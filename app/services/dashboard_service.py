@@ -136,11 +136,10 @@ async def get_stats(company_id: str) -> dict:
     strolls_stat = await get_stat_group(db.stroll_versions, "timestamp")
 
     chats_stat = await get_stat_group(db.widget_conversations, "created_at", extra_match={"messages.0": {"$exists": True}})
-    pending_chats = await db.widget_conversations.count_documents(
+    pending_chats = await db.email_tickets.count_documents(
         {
             "company_id": company_id,
-            "seen": {"$ne": True},
-            "messages.0": {"$exists": True},
+            "status": {"$ne": "resolved"},
         }
     )
     chats_stat["pending"] = pending_chats
