@@ -740,8 +740,8 @@ async def _send_new_ticket_email(company: dict, ticket: dict):
 
         html = html.replace("{{customer_email}}", customer_email)
         html = html.replace("{{dashboard_url}}", dashboard_url)
-        html = html.replace("{{ticket_id}}", ticket.get("id", ""))
-        html = html.replace("{{ticket_subject}}", ticket.get("subject", ""))
+        html = html.replace("{{ticket_id}}", str(ticket.get("id") or ""))
+        html = html.replace("{{ticket_subject}}", str(ticket.get("subject") or ""))
         html = html.replace("{{created_date}}", created_date)
         
         subject = f"New Ticket #{ticket['id']} from {customer_email}"
