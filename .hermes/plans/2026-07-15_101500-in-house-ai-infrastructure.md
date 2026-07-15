@@ -1,6 +1,5 @@
 # In-House AI Infrastructure Implementation Plan
 
-> **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.
 
 **Goal:** Build six AI infrastructure features in-house — cost observability, model routing by complexity, usage governance (token budgets), context optimization (LLM-based compression), smart per-request provider failover, and cost-attribution dashboards — replacing the need for the proposed external Cencori gateway.
 
