@@ -265,13 +265,14 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                 async for event in chat_stream_graph(
                     company_id=company_id,
                     session_id=req.session_id,
-                    message=injected_message,
+                    message=req.message,
                     user_id=None,
                     page_url=None,
                     attachments=attachments_raw,
                     user_timestamp=user_timestamp,
                     agent_provider=provider_key,
                     sdk_user_email=email,
+                    llm_message=injected_message,
                 ):
                     event_type = event.get("type")
 

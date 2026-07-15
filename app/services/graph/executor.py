@@ -22,6 +22,7 @@ async def chat_stream_graph(
     agent_provider: str = "anthropic",
     sdk_user_email: str | None = None,
     user_timezone: str | None = None,
+    llm_message: str | None = None,
 ):
     try:
         # Load conversation
@@ -67,7 +68,7 @@ async def chat_stream_graph(
                     langchain_messages.append(AIMessage(content=m.get("content", "")))
                     
         # Append current user message
-        langchain_messages.append(HumanMessage(content=message))
+        langchain_messages.append(HumanMessage(content=llm_message or message))
         
         # Insert the message into the DB
         now = datetime.now(tz=timezone.utc).isoformat()
