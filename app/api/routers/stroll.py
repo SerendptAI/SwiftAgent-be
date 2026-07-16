@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from app.core.auth import get_current_user
 from app.core.database import db
 from app.services import stroll_service, company_service
+from app.services.billing_service import billing_service
 from app.core.plan_enforcement import enforce_agent_limit, enforce_stroll_limit
 from app.services.stroll_scheduler import (
     schedule_stroll_job,
@@ -60,6 +61,9 @@ async def _run_stroll_background(company_id: str):
         if version.status != "success":
             logger.error(f"Stroll failed for company {company_id}: {version.status}")
             return
+
+        # Record metered usage since the stroll succeeded
+        await billing_service.ingest_meter_event(company_id, "stroll_used")
 
         # diff against previous
         prev = await stroll_service.get_latest_version(company_id)

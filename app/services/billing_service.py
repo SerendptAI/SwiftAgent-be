@@ -19,20 +19,29 @@ def _build_product_to_tier_map() -> Dict[str, str]:
     the product_id instead.
     """
     mapping = {}
-    # African pricing products
+    # African pricing products (legacy)
     if settings.POLAR_PRODUCT_BASIC_AF:
         mapping[settings.POLAR_PRODUCT_BASIC_AF] = "basic"
     if settings.POLAR_PRODUCT_PRO_AF:
         mapping[settings.POLAR_PRODUCT_PRO_AF] = "pro"
     if settings.POLAR_PRODUCT_ENTERPRISE_AF:
         mapping[settings.POLAR_PRODUCT_ENTERPRISE_AF] = "enterprise"
-    # International pricing products
+    
+    # International pricing products (legacy)
     if settings.POLAR_PRODUCT_BASIC_INTL:
         mapping[settings.POLAR_PRODUCT_BASIC_INTL] = "basic"
     if settings.POLAR_PRODUCT_PRO_INTL:
         mapping[settings.POLAR_PRODUCT_PRO_INTL] = "pro"
     if settings.POLAR_PRODUCT_ENTERPRISE_INTL:
         mapping[settings.POLAR_PRODUCT_ENTERPRISE_INTL] = "enterprise"
+    
+    # Unified global pricing products (new)
+    if getattr(settings, "POLAR_PRODUCT_STARTUP", None):
+        mapping[settings.POLAR_PRODUCT_STARTUP] = "startup"
+    if getattr(settings, "POLAR_PRODUCT_BUSINESS", None):
+        mapping[settings.POLAR_PRODUCT_BUSINESS] = "business"
+    if getattr(settings, "POLAR_PRODUCT_ENTERPRISE_PAYG", None):
+        mapping[settings.POLAR_PRODUCT_ENTERPRISE_PAYG] = "enterprise_payg"
     return mapping
 
 
@@ -64,7 +73,7 @@ class BillingService:
             "Content-Type": "application/json"
         }
 
-        # Pick product ID based on region
+        # Pick product ID based on region for legacy tiers
         if is_african:
             product_map = {
                 "basic": settings.POLAR_PRODUCT_BASIC_AF,
@@ -77,6 +86,13 @@ class BillingService:
                 "pro": settings.POLAR_PRODUCT_PRO_INTL,
                 "enterprise": settings.POLAR_PRODUCT_ENTERPRISE_INTL,
             }
+            
+        # Add the new unified tiers to the product map
+        product_map.update({
+            "startup": getattr(settings, "POLAR_PRODUCT_STARTUP", ""),
+            "business": getattr(settings, "POLAR_PRODUCT_BUSINESS", ""),
+            "enterprise_payg": getattr(settings, "POLAR_PRODUCT_ENTERPRISE_PAYG", ""),
+        })
 
         product_id = product_map.get(tier, product_map["basic"])
 
@@ -394,6 +410,40 @@ class BillingService:
             logger.info(f"Polar webhook ignored: unhandled event type '{event}'")
 
         return False
+
+    async def ingest_meter_event(self, company_id: str, event_name: str) -> None:
+        """Send a metered usage event to Polar's ingest API."""
+        if not settings.POLAR_ACCESS_TOKEN:
+            logger.info(f"Skipping meter ingestion for {event_name} (No Polar Token).")
+            return
+
+        headers = {
+            "Authorization": f"Bearer {settings.POLAR_ACCESS_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "events": [
+                {
+                    "name": event_name,
+                    "external_customer_id": company_id
+                }
+            ]
+        }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{self.polar_api_url}/events/ingest",
+                    headers=headers,
+                    json=payload
+                )
+                if resp.status_code not in (200, 201, 202, 204):
+                    logger.error(f"Failed to ingest Polar meter event '{event_name}' for company {company_id}: {resp.text}")
+                else:
+                    logger.debug(f"Successfully ingested Polar meter event '{event_name}' for company {company_id}.")
+        except Exception as e:
+            logger.error(f"Exception while ingesting Polar meter event '{event_name}': {e}")
 
 
 billing_service = BillingService()

@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from fastapi.responses import RedirectResponse
 import urllib.parse
 from typing import List
@@ -24,6 +24,7 @@ from app.models.email_models import (
     EmailSlugUpdate,
 )
 from app.services import company_service, cloudinary_service, page_reader_service
+from app.services.billing_service import billing_service
 from app.services.website_scraper_service import extract_company_info
 from app.core.plan_enforcement import enforce_company_limit, enforce_member_limit
 from fastapi import UploadFile, File, Form
@@ -340,20 +341,23 @@ async def resend_member_invite(
 @router.post("/invites/accept", response_model=dict)
 async def accept_invite_post(
     data: AcceptInviteRequest,
+    background_tasks: BackgroundTasks,
 ):
     """Accept an invite using a token via frontend POST."""
     try:
         result = await company_service.accept_invite(data.token)
+        background_tasks.add_task(billing_service.ingest_meter_event, result["company_id"], "member_added")
         return {"status": "success", "message": "Invite accepted. You can now log in.", "data": result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/invites/accept")
-async def accept_invite_get(token: str):
+async def accept_invite_get(token: str, background_tasks: BackgroundTasks):
     """Accept an invite via email link click (GET) and redirect to frontend."""
     frontend_url = getattr(settings, "FRONTEND_URL", "https://swiftagents.org").rstrip("/")
     try:
-        await company_service.accept_invite(token)
+        result = await company_service.accept_invite(token)
+        background_tasks.add_task(billing_service.ingest_meter_event, result["company_id"], "member_added")
         query = urllib.parse.urlencode({"invite_status": "success", "message": "Invite accepted. You can now log in."})
         return RedirectResponse(url=f"{frontend_url}?{query}")
     except ValueError as e:

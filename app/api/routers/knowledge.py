@@ -22,6 +22,7 @@ from app.models.knowledge_models import (
     KnowledgeSourceResponse,
 )
 from app.services import knowledge_service, cloudinary_service, text_extraction_service, company_service
+from app.services.billing_service import billing_service
 from app.core.database import get_database
 from app.core.config import settings
 from app.core.plan_enforcement import enforce_document_limit
@@ -207,5 +208,7 @@ async def upload_knowledge_document(
             "file_url": upload_result["secure_url"],
         },
     )
+    
+    background_tasks.add_task(billing_service.ingest_meter_event, company_id, "document_added")
 
     return source_record
