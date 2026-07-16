@@ -312,11 +312,10 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
     merged = chats + tickets
 
     def _normalize_dt(dt):
-        if not dt:
+        parsed = _parse_ts(dt)
+        if not parsed:
             return datetime.min.replace(tzinfo=timezone.utc)
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt
+        return parsed
 
     merged.sort(key=lambda x: _normalize_dt(x.get("updated_at")), reverse=True)
 
