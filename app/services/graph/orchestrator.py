@@ -13,7 +13,7 @@ def transfer_to_knowledge():
 
 @tool
 def transfer_to_navigation():
-    """Transfer to the navigation agent for UI questions, dashboard guides, visual directions, and "how to" questions (e.g. "how do I generate an API key", "where do I find X"). Use this for ALL questions about navigating the dashboard or performing actions in the UI."""
+    """Transfer to the navigation agent for UI questions, dashboard guides, visual directions, and "how to" questions (e.g. "how do I generate an API key", "where do I find X"). Use this for ALL questions about navigating the dashboard or performing actions in the UI. DO NOT use this if the user is asking to create a support ticket or speak to a human."""
     pass
 
 @tool
@@ -28,7 +28,7 @@ def transfer_to_scraper():
 
 @tool
 def escalate_to_human():
-    """Escalate the conversation to a human support agent. Use this if the user explicitly asks for a human."""
+    """Escalate the conversation to a human support agent or create a support ticket. Use this IMMEDIATELY if the user explicitly asks for a human, wants to contact support, or asks to create a ticket."""
     pass
 
 ROUTING_TOOLS = [
@@ -45,8 +45,10 @@ ROUTING RULES:
 - Read the user's request carefully.
 - If it requires a specific expert, call the corresponding transfer tool IMMEDIATELY.
 - DO NOT answer the question yourself if an expert is needed.
+- CRITICAL: If the user explicitly asks to speak to a human, create a ticket, or contact support, you MUST call the `escalate_to_human` tool IMMEDIATELY. Do NOT pretend to be a human, do NOT ask for their email address, and do NOT try to handle the ticket creation yourself.
+- CRITICAL: If the user provides an email address (e.g. name@example.com), and the previous message asked them for their email to create a ticket, you MUST call the `escalate_to_human` tool IMMEDIATELY to complete the escalation.
 - If the user says a simple greeting (e.g. "hi", "hello") or something that requires no tools, respond directly and conversationally.
-- CRITICAL: If the user's request is ambiguous, lacks necessary context, or you are confused about which expert to route to, DO NOT GUESS. Instead, respond directly by asking the user a clarifying question to better understand their needs.
+- If the user's request is ambiguous, lacks necessary context, or you are confused about which expert to route to, DO NOT GUESS. Instead, respond directly by asking the user a clarifying question to better understand their needs.
 """
 
 @observe(name="orchestrator_node")

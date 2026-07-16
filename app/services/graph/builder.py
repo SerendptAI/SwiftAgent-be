@@ -49,8 +49,17 @@ async def human_handoff_node(state: AgentState, config):
     customer_email = state.get("sdk_user_email")
     session_id = state.get("session_id")
     
+    # Try to extract email from the last user message if not already known
+    if not customer_email and state.get("messages"):
+        last_msg = state["messages"][-1]
+        import re
+        if getattr(last_msg, "type", None) == "human":
+            match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', last_msg.content)
+            if match:
+                customer_email = match.group(0)
+    
     if not customer_email:
-        return {"messages": [AIMessage(content="You are speaking with our human support team! Please provide your email address so we can track your request and get back to you shortly.")]}
+        return {"messages": [AIMessage(content="I will escalate your request to our human support team. Please provide your email address below so we can create a ticket and get back to you shortly.")]}
         
     try:
         # Load chat history for summary
