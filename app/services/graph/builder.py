@@ -72,13 +72,19 @@ async def human_handoff_node(state: AgentState, config):
             chat_summary = "\n\n".join(history_texts)
             
         ticket = await company_email_service.create_ticket(
-            company_id=company_id,
+            company_id=state["company_id"],
             customer_email=customer_email,
             subject=subject,
             chat_summary=chat_summary,
             chat_session_id=session_id,
             customer_name=None,
         )
+        
+        await db.widget_conversations.update_one(
+            {"company_id": state["company_id"], "session_id": session_id},
+            {"$set": {"escalated": True, "ticket_id": ticket["id"]}}
+        )
+        
         msg = f"Thank you! Your chat has been escalated to our human support team as Ticket #{ticket['id']}. We will reach out to you at {customer_email} shortly."
     except Exception as e:
         logger.exception("Failed to create support ticket in graph")

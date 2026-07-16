@@ -205,8 +205,18 @@ async def get_chats(company_id: str, limit: int = 50, skip: int = 0) -> list:
                 "id": {"$ifNull": ["$id", "$session_id"]},
                 "company_id": 1,
                 "session_id": 1,
-                "created_at": {"$ifNull": ["$created_at", "$updated_at"]},
-                "updated_at": 1,
+                "created_at": {
+                    "$ifNull": [
+                        "$created_at",
+                        {"$ifNull": ["$updated_at", {"$arrayElemAt": ["$messages.timestamp", 0]}]}
+                    ]
+                },
+                "updated_at": {
+                    "$ifNull": [
+                        "$updated_at",
+                        {"$arrayElemAt": ["$messages.timestamp", -1]}
+                    ]
+                },
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
                 "message_timestamps": "$messages.timestamp",
                 "preview_message": {

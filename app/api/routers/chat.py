@@ -276,6 +276,12 @@ async def _chat_sse_generator(
                         chat_session_id=req.session_id,
                         customer_name=None
                     )
+                    
+                    await db.widget_conversations.update_one(
+                        {"company_id": company_id, "session_id": req.session_id},
+                        {"$set": {"escalated": True, "ticket_id": ticket["id"]}}
+                    )
+                    
                     reply_text = f"Thank you! Your chat has been escalated to our human support team as Ticket #{ticket['id']}. We will reach out to you at {customer_email} shortly."
                     
                 assistant_msg_doc = {
