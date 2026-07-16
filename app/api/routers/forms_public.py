@@ -5,7 +5,7 @@ and external websites to fetch form definitions and submit responses.
 
 import logging
 from pathlib import Path
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from app.core.database import db
@@ -17,6 +17,7 @@ from app.models.form_models import (
 )
 from app.services.form_service import form_service
 from app.services import form_key_service
+import json
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -63,21 +64,33 @@ async def get_widget_js():
 
 @router.post("/widget/submit", summary="Submit Form from Widget")
 async def submit_widget_form(
-    submission: WidgetSubmissionCreate,
+    request: Request,
     background_tasks: BackgroundTasks,
-    x_public_key: str = Header(..., alias="X-Public-Key", description="Public key from the widget snippet")
+    x_public_key: str | None = Header(None, alias="X-Public-Key", description="Public key from the widget snippet"),
+    public_key: str | None = Query(None, description="Public key from query param (avoids CORS preflight)"),
 ):
     """
     Accept a form submission from the embedded JS widget.
-    Authenticated via the X-Public-Key header.
+    Authenticated via the X-Public-Key header or public_key query param.
     """
+    key_to_use = x_public_key or public_key
+    if not key_to_use:
+        raise HTTPException(status_code=401, detail="Missing public key.")
+
     # Verify public key
-    key_info = await form_key_service.verify_public_key(x_public_key)
+    key_info = await form_key_service.verify_public_key(key_to_use)
     if not key_info:
         raise HTTPException(status_code=401, detail="Invalid or revoked public key.")
         
     form_id = key_info["form_id"]
     company_id = key_info["company_id"]
+
+    try:
+        body_bytes = await request.body()
+        data = json.loads(body_bytes)
+        submission = WidgetSubmissionCreate(**data)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid JSON payload.")
 
     # Get form to check for alert email
     form = await _get_published_form(form_id)

@@ -287,8 +287,8 @@
     var formIdentifier = buildFormIdentifier(form);
 
     form.addEventListener("submit", function (e) {
-      // Prevent the default submission so we can fire our request first
-      e.preventDefault();
+      // We do NOT prevent default here (e.preventDefault()). 
+      // This ensures we do not break Single Page Apps (React/Next.js) or standard native submissions.
 
       var payload = {
         page_url: window.location.href,
@@ -298,35 +298,21 @@
         visitor_id: getVisitorId(),
       };
 
-      var endpoint = _apiBase + "/api/v1/public/forms/widget/submit";
-
-      // Fire the beacon — no matter what happens, re-submit the form afterwards
-      function releaseForm() {
-        // Use native submit to avoid re-triggering our listener
-        // HTMLFormElement.prototype.submit bypasses event listeners
-        try {
-          HTMLFormElement.prototype.submit.call(form);
-        } catch (_) {
-          // Last resort: just let it go
-        }
-      }
+      // Pass public key in query string to avoid custom headers
+      var endpoint = _apiBase + "/api/v1/public/forms/widget/submit?public_key=" + encodeURIComponent(_publicKey);
 
       try {
         fetch(endpoint, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Public-Key": _publicKey,
-          },
+          // Send as default text/plain to avoid CORS preflight, allowing keepalive to work.
+          // The backend manually parses the JSON body.
           body: JSON.stringify(payload),
-          // Use keepalive so the request survives page navigation
           keepalive: true,
-        })
-          .then(releaseForm)
-          .catch(releaseForm);
+        }).catch(function () {
+          // Silently ignore network errors to not pollute client console
+        });
       } catch (_) {
-        // fetch itself threw (e.g. CSP blocking) — still release the form
-        releaseForm();
+        // Silently ignore synchronous fetch errors
       }
     });
   }
