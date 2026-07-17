@@ -161,7 +161,7 @@ async def enforce_document_limit(company: dict, is_onboarding: bool = False) -> 
     limits = get_tier_limits(tier)
     max_docs = limits["documents_limit"]
 
-    if is_unlimited(max_docs):
+    if is_unlimited(max_docs) or tier in ("enterprise", "enterprise_payg"):
         return
 
     company_id = company["id"]
@@ -183,7 +183,7 @@ async def enforce_member_limit(company: dict) -> None:
     limits = get_tier_limits(tier)
     max_members = limits["members_per_company"]
 
-    if is_unlimited(max_members):
+    if is_unlimited(max_members) or tier in ("enterprise", "enterprise_payg"):
         return
 
     active_members = len(company.get("members", []))
@@ -261,7 +261,7 @@ async def enforce_stroll_limit(company: dict) -> None:
     limits = get_tier_limits(tier)
     max_strolls = limits.get("strolls_per_month", 0)
 
-    if is_unlimited(max_strolls):
+    if is_unlimited(max_strolls) or tier in ("enterprise", "enterprise_payg"):
         return
 
     company_id = company["id"]

@@ -88,13 +88,16 @@ class BillingService:
             }
             
         # Add the new unified tiers to the product map
-        product_map.update({
-            "startup": getattr(settings, "POLAR_PRODUCT_STARTUP", ""),
-            "business": getattr(settings, "POLAR_PRODUCT_BUSINESS", ""),
-            "enterprise_payg": getattr(settings, "POLAR_PRODUCT_ENTERPRISE_PAYG", ""),
-        })
+        startup_prod = getattr(settings, "POLAR_PRODUCT_STARTUP", None)
+        if startup_prod: product_map["startup"] = startup_prod
+        
+        business_prod = getattr(settings, "POLAR_PRODUCT_BUSINESS", None)
+        if business_prod: product_map["business"] = business_prod
+        
+        payg_prod = getattr(settings, "POLAR_PRODUCT_ENTERPRISE_PAYG", None)
+        if payg_prod: product_map["enterprise_payg"] = payg_prod
 
-        product_id = product_map.get(tier, product_map["basic"])
+        product_id = product_map.get(tier, product_map.get("basic"))
 
         payload = {
             "product_id": product_id,
@@ -318,27 +321,32 @@ class BillingService:
                 tier = "basic"
 
             now = datetime.now(tz=timezone.utc)
-            old_company = await db.companies.find_one_and_update(
-                {"id": company_id},
-                {"$set": {
-                    "subscription_tier": tier,
-                    "subscription_status": "active",
-                    "subscription_started_at": now,
-                    "billing_provider": "polar",
-                    "subscription_id": sub_id,
-                    "customer_id": customer_id,
-                }},
-                return_document=ReturnDocument.BEFORE
-            )
+            old_company = await db.companies.find_one({"id": company_id})
 
             if not old_company:
                 logger.error(
-                    f"BILLING BUG: find_one_and_update matched 0 documents for "
+                    f"BILLING BUG: find_one matched 0 documents for "
                     f"company_id={company_id}. Company may not exist!"
                 )
                 return False
 
             old_tier = old_company.get("subscription_tier")
+
+            update_data = {
+                "subscription_tier": tier,
+                "subscription_status": "active",
+                "billing_provider": "polar",
+                "subscription_id": sub_id,
+                "customer_id": customer_id,
+            }
+
+            if old_tier != tier or not old_company.get("subscription_started_at"):
+                update_data["subscription_started_at"] = now
+
+            await db.companies.update_one(
+                {"id": company_id},
+                {"$set": update_data}
+            )
 
             from app.core.cache import company_cache
             keys_to_delete = [
@@ -416,6 +424,60 @@ class BillingService:
         if not settings.POLAR_ACCESS_TOKEN:
             logger.info(f"Skipping meter ingestion for {event_name} (No Polar Token).")
             return
+            
+        # --- Check Included Allowances ---
+        company = await db.companies.find_one({"id": company_id})
+        if not company:
+            return
+            
+        from app.core.plan_enforcement import get_active_tier, get_tier_limits
+        tier = get_active_tier(company)
+        
+        # Only enterprise tiers use Pay-As-You-Go metering in Polar
+        if tier not in ("enterprise", "enterprise_payg"):
+            return
+            
+        limits = get_tier_limits(tier)
+        should_bill = False
+        
+        if event_name == "document_added":
+            max_docs = limits.get("documents_limit", 0)
+            if max_docs != -1:
+                current_docs = await db.knowledge_sources.count_documents({"company_id": company_id})
+                if current_docs > max_docs:
+                    should_bill = True
+        
+        elif event_name == "member_added":
+            max_members = limits.get("members_per_company", 0)
+            if max_members != -1:
+                active_members = len(company.get("members", []))
+                now = datetime.now(tz=timezone.utc)
+                active_invites = sum(
+                    1 for inv in company.get("pending_invites", [])
+                    if (now - (inv.get("invited_at", now).replace(tzinfo=timezone.utc) if inv.get("invited_at", now).tzinfo is None else inv.get("invited_at", now))).days < 10
+                )
+                if (active_members + active_invites) > max_members:
+                    should_bill = True
+                    
+        elif event_name == "stroll_used":
+            max_strolls = limits.get("strolls_per_month", 0)
+            if max_strolls != -1:
+                now = datetime.now(tz=timezone.utc)
+                month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                current_strolls = await db.stroll_versions.count_documents({
+                    "company_id": company_id,
+                    "timestamp": {"$gte": month_start},
+                    "status": "success"
+                })
+                if current_strolls > max_strolls:
+                    should_bill = True
+        else:
+            should_bill = True
+            
+        if not should_bill:
+            logger.debug(f"Meter event '{event_name}' for {company_id} is within included free limits. Not sending to Polar.")
+            return
+        # ---------------------------------
 
         headers = {
             "Authorization": f"Bearer {settings.POLAR_ACCESS_TOKEN}",

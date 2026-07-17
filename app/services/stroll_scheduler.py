@@ -13,6 +13,7 @@ from app.core.database import db
 from app.services import stroll_service
 from app.core.plan_enforcement import enforce_stroll_limit
 from fastapi import HTTPException
+from app.services.billing_service import billing_service
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,9 @@ async def _scheduled_stroll_task(company_id: str):
             logger.info(f"Scheduled stroll completed for {company_id}")
         else:
             logger.info(f"Scheduled stroll found no changes for {company_id}")
+
+        # Record metered usage since the scheduled stroll succeeded
+        await billing_service.ingest_meter_event(company_id, "stroll_used")
 
     except Exception as e:
         logger.exception(f"Scheduled stroll encountered an error for {company_id}: {e}")
