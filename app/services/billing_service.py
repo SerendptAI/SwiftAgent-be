@@ -361,18 +361,46 @@ class BillingService:
                 f"tier={tier}, sub={sub_id}, customer={customer_id}"
             )
 
-            # Notify dashboard users about the upgrade
-            if old_tier != tier:
+            # Detect tier changes: downgrade enforcement or upgrade notification
+            if old_tier and old_tier != tier:
                 import asyncio
-                from app.services import notification_service
-                asyncio.create_task(
-                    notification_service.notify_company(
-                        company_id=company_id,
-                        title="🎉 Plan Upgraded!",
-                        body=f"Congratulations! Your company plan has been upgraded to {tier.capitalize()}.",
-                        type="plan_upgrade",
-                        data={"tier": tier, "subscription_id": sub_id}
+                from app.core.billing_limits import TIER_LIMITS
+
+                tier_order = {
+                    "none": 0, "business": 1, "basic": 1,
+                    "startup": 2, "pro": 2,
+                    "enterprise": 3, "enterprise_payg": 3,
+                }
+                old_rank = tier_order.get(old_tier, 0)
+                new_rank = tier_order.get(tier, 0)
+
+                if new_rank < old_rank:
+                    # Downgrade — auto-archive excess resources
+                    asyncio.create_task(
+                        self._enforce_downgrade(company_id, tier)
                     )
+                    logger.info(
+                        f"Downgrade detected for {company_id}: "
+                        f"{old_tier} → {tier}. Archiving excess resources."
+                    )
+                else:
+                    # Upgrade notification
+                    from app.services import notification_service
+                    asyncio.create_task(
+                        notification_service.notify_company(
+                            company_id=company_id,
+                            title="🎉 Plan Upgraded!",
+                            body=f"Congratulations! Your company plan has been upgraded to {tier.capitalize()}.",
+                            type="plan_upgrade",
+                            data={"tier": tier, "subscription_id": sub_id}
+                        )
+                    )
+
+            # Detect billing cycle renewal for PAYG tiers
+            if tier in ("enterprise", "enterprise_payg"):
+                import asyncio
+                asyncio.create_task(
+                    self._handle_cycle_renewal(company_id, tier, data)
                 )
 
             return True
@@ -420,92 +448,312 @@ class BillingService:
         return False
 
     async def ingest_meter_event(self, company_id: str, event_name: str) -> None:
-        """Send a metered usage event to Polar's ingest API."""
+        """Send a metered usage event to Polar via the reliable queue.
+
+        This method implements high-water mark tracking to prevent
+        double-billing when users churn (delete + re-add) resources
+        within the same billing cycle.
+        """
         if not settings.POLAR_ACCESS_TOKEN:
             logger.info(f"Skipping meter ingestion for {event_name} (No Polar Token).")
             return
-            
-        # --- Check Included Allowances ---
+
         company = await db.companies.find_one({"id": company_id})
         if not company:
             return
-            
-        from app.core.plan_enforcement import get_active_tier, get_tier_limits
+
+        from app.core.plan_enforcement import get_active_tier
+        from app.core.billing_limits import get_tier_limits
         tier = get_active_tier(company)
-        
+
         # Only enterprise tiers use Pay-As-You-Go metering in Polar
         if tier not in ("enterprise", "enterprise_payg"):
             return
-            
+
         limits = get_tier_limits(tier)
-        should_bill = False
-        
+        now = datetime.now(tz=timezone.utc)
+
+        # --- High-Water Mark Logic ---
+        peaks = company.get("metered_peaks") or {}
+        period_start = peaks.get("period_start")
+
+        # If no period or the period is stale (new billing cycle), reset peaks
+        if not period_start or period_start < now.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        ):
+            peaks = {
+                "documents": limits.get("documents_limit", 0),
+                "members": limits.get("members_per_company", 0),
+                "strolls": limits.get("strolls_per_month", 0),
+                "period_start": now.replace(
+                    day=1, hour=0, minute=0, second=0, microsecond=0
+                ),
+            }
+            await db.companies.update_one(
+                {"id": company_id},
+                {"$set": {"metered_peaks": peaks}},
+            )
+
+        from app.services.meter_queue_service import enqueue_meter_event
+
         if event_name == "document_added":
-            max_docs = limits.get("documents_limit", 0)
-            if max_docs != -1:
-                current_docs = await db.knowledge_sources.count_documents({"company_id": company_id})
-                if current_docs > max_docs:
-                    should_bill = True
-        
-        elif event_name == "member_added":
-            max_members = limits.get("members_per_company", 0)
-            if max_members != -1:
-                active_members = len(company.get("members", []))
-                now = datetime.now(tz=timezone.utc)
-                active_invites = sum(
-                    1 for inv in company.get("pending_invites", [])
-                    if (now - (inv.get("invited_at", now).replace(tzinfo=timezone.utc) if inv.get("invited_at", now).tzinfo is None else inv.get("invited_at", now))).days < 10
+            included = limits.get("documents_limit", 0)
+            if included == -1:
+                return
+            current = await db.knowledge_sources.count_documents(
+                {"company_id": company_id}
+            )
+            if current <= included:
+                return
+            prev_peak = peaks.get("documents", included)
+            if current <= prev_peak:
+                logger.debug(
+                    f"Document count {current} <= peak {prev_peak} for "
+                    f"{company_id}. Churn detected, skipping billing."
                 )
-                if (active_members + active_invites) > max_members:
-                    should_bill = True
-                    
+                return
+            # Bill only for the NEW peak units above the old peak
+            events_to_bill = current - prev_peak
+            for _ in range(events_to_bill):
+                await enqueue_meter_event(company_id, event_name)
+            await db.companies.update_one(
+                {"id": company_id},
+                {"$set": {"metered_peaks.documents": current}},
+            )
+
+        elif event_name == "member_added":
+            included = limits.get("members_per_company", 0)
+            if included == -1:
+                return
+            active_members = len(company.get("members", []))
+            active_invites = sum(
+                1
+                for inv in company.get("pending_invites", [])
+                if (
+                    now
+                    - (
+                        inv.get("invited_at", now).replace(tzinfo=timezone.utc)
+                        if inv.get("invited_at", now).tzinfo is None
+                        else inv.get("invited_at", now)
+                    )
+                ).days
+                < 10
+            )
+            current = active_members + active_invites
+            if current <= included:
+                return
+            prev_peak = peaks.get("members", included)
+            if current <= prev_peak:
+                logger.debug(
+                    f"Member count {current} <= peak {prev_peak} for "
+                    f"{company_id}. Churn detected, skipping billing."
+                )
+                return
+            events_to_bill = current - prev_peak
+            for _ in range(events_to_bill):
+                await enqueue_meter_event(company_id, event_name)
+            await db.companies.update_one(
+                {"id": company_id},
+                {"$set": {"metered_peaks.members": current}},
+            )
+
         elif event_name == "stroll_used":
-            max_strolls = limits.get("strolls_per_month", 0)
-            if max_strolls != -1:
-                now = datetime.now(tz=timezone.utc)
-                month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-                current_strolls = await db.stroll_versions.count_documents({
+            included = limits.get("strolls_per_month", 0)
+            if included == -1:
+                return
+            month_start = now.replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
+            current = await db.stroll_versions.count_documents(
+                {
                     "company_id": company_id,
                     "timestamp": {"$gte": month_start},
-                    "status": "success"
-                })
-                if current_strolls > max_strolls:
-                    should_bill = True
-        else:
-            should_bill = True
-            
-        if not should_bill:
-            logger.debug(f"Meter event '{event_name}' for {company_id} is within included free limits. Not sending to Polar.")
-            return
-        # ---------------------------------
-
-        headers = {
-            "Authorization": f"Bearer {settings.POLAR_ACCESS_TOKEN}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "events": [
-                {
-                    "name": event_name,
-                    "external_customer_id": company_id
+                    "status": "success",
                 }
-            ]
+            )
+            if current <= included:
+                return
+            # Strolls are monotonic (can't delete a stroll), so just bill 1
+            await enqueue_meter_event(company_id, event_name)
+
+        else:
+            # Unknown event type — bill it directly as a safety net
+            await enqueue_meter_event(company_id, event_name)
+
+    # ── Cycle Renewal ────────────────────────────────────────────────────
+
+    async def _handle_cycle_renewal(
+        self, company_id: str, tier: str, data: dict
+    ) -> None:
+        """Detect a new billing cycle and re-sync stateful overage.
+
+        Called from process_polar_webhook when a subscription.active or
+        subscription.updated event arrives.  If Polar's current_period_start
+        has advanced past the company's stored period, we reset the
+        high-water marks and immediately re-bill any still-active overage
+        for the new cycle.
+        """
+        from app.core.billing_limits import get_tier_limits
+        from app.services.meter_queue_service import enqueue_meter_event
+
+        new_period_start_str = data.get("current_period_start")
+        if not new_period_start_str:
+            return
+
+        if isinstance(new_period_start_str, str):
+            new_period_start = datetime.fromisoformat(
+                new_period_start_str.replace("Z", "+00:00")
+            )
+        else:
+            new_period_start = new_period_start_str
+
+        if new_period_start.tzinfo is None:
+            new_period_start = new_period_start.replace(tzinfo=timezone.utc)
+
+        company = await db.companies.find_one({"id": company_id})
+        if not company:
+            return
+
+        peaks = company.get("metered_peaks") or {}
+        old_period = peaks.get("period_start")
+
+        if old_period and new_period_start <= old_period:
+            # Same cycle — nothing to do
+            return
+
+        logger.info(
+            f"New billing cycle detected for company {company_id}: "
+            f"{old_period} → {new_period_start}"
+        )
+
+        limits = get_tier_limits(tier)
+
+        # Reset peaks to the included base limits
+        new_peaks = {
+            "documents": limits.get("documents_limit", 0),
+            "members": limits.get("members_per_company", 0),
+            "strolls": limits.get("strolls_per_month", 0),
+            "period_start": new_period_start,
         }
 
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{self.polar_api_url}/events/ingest",
-                    headers=headers,
-                    json=payload
+        # Snapshot current usage and re-bill overage for the new cycle
+        doc_count = await db.knowledge_sources.count_documents(
+            {"company_id": company_id}
+        )
+        doc_included = limits.get("documents_limit", 0)
+        if doc_included != -1 and doc_count > doc_included:
+            overage = doc_count - doc_included
+            new_peaks["documents"] = doc_count
+            for _ in range(overage):
+                await enqueue_meter_event(company_id, "document_added")
+            logger.info(
+                f"Re-billed {overage} document overage for {company_id}"
+            )
+
+        members = company.get("members", [])
+        member_included = limits.get("members_per_company", 0)
+        if member_included != -1 and len(members) > member_included:
+            overage = len(members) - member_included
+            new_peaks["members"] = len(members)
+            for _ in range(overage):
+                await enqueue_meter_event(company_id, "member_added")
+            logger.info(
+                f"Re-billed {overage} member overage for {company_id}"
+            )
+
+        await db.companies.update_one(
+            {"id": company_id},
+            {"$set": {"metered_peaks": new_peaks}},
+        )
+
+    # ── Downgrade Auto-Archive ───────────────────────────────────────────
+
+    async def _enforce_downgrade(
+        self, company_id: str, new_tier: str
+    ) -> None:
+        """Auto-archive excess documents and disable excess members when
+        a company downgrades to a lower tier.
+        """
+        from app.core.billing_limits import get_tier_limits, is_unlimited
+
+        limits = get_tier_limits(new_tier)
+        now = datetime.now(tz=timezone.utc)
+
+        # ── Archive excess documents ──
+        max_docs = limits["documents_limit"]
+        if not is_unlimited(max_docs):
+            current_docs = await db.knowledge_sources.count_documents(
+                {"company_id": company_id, "archived": {"$ne": True}}
+            )
+            if current_docs > max_docs:
+                excess = current_docs - max_docs
+                # Archive the most recently uploaded documents first
+                to_archive = (
+                    db.knowledge_sources.find(
+                        {"company_id": company_id, "archived": {"$ne": True}}
+                    )
+                    .sort("uploaded_at", -1)
+                    .limit(excess)
                 )
-                if resp.status_code not in (200, 201, 202, 204):
-                    logger.error(f"Failed to ingest Polar meter event '{event_name}' for company {company_id}: {resp.text}")
-                else:
-                    logger.debug(f"Successfully ingested Polar meter event '{event_name}' for company {company_id}.")
-        except Exception as e:
-            logger.error(f"Exception while ingesting Polar meter event '{event_name}': {e}")
+                ids_to_archive = [
+                    doc["_id"] async for doc in to_archive
+                ]
+                if ids_to_archive:
+                    await db.knowledge_sources.update_many(
+                        {"_id": {"$in": ids_to_archive}},
+                        {"$set": {
+                            "archived": True,
+                            "archived_at": now,
+                            "archived_reason": "plan_downgrade",
+                        }},
+                    )
+                    logger.info(
+                        f"Archived {len(ids_to_archive)} excess documents "
+                        f"for company {company_id} (downgrade to {new_tier})"
+                    )
+
+        # ── Disable excess members ──
+        max_members = limits["members_per_company"]
+        if not is_unlimited(max_members):
+            company = await db.companies.find_one({"id": company_id})
+            if not company:
+                return
+
+            members = company.get("members", [])
+            if len(members) > max_members:
+                # Keep the oldest members, archive the newest
+                # Sort by added_at ascending → keep the first max_members
+                sorted_members = sorted(
+                    members,
+                    key=lambda m: m.get("added_at", now),
+                )
+                keep = sorted_members[:max_members]
+                archived = sorted_members[max_members:]
+
+                await db.companies.update_one(
+                    {"id": company_id},
+                    {"$set": {
+                        "members": keep,
+                        "archived_members": archived,
+                        "members_archived_at": now,
+                        "members_archived_reason": "plan_downgrade",
+                    }},
+                )
+                logger.info(
+                    f"Disabled {len(archived)} excess members for "
+                    f"company {company_id} (downgrade to {new_tier})"
+                )
+
+        # Clear cache so dashboard reflects changes immediately
+        from app.core.cache import company_cache
+        keys_to_delete = [
+            key
+            for key in list(company_cache._store.keys())
+            if key.startswith(f"company:{company_id}:")
+        ]
+        for key in keys_to_delete:
+            await company_cache.delete(key)
 
 
 billing_service = BillingService()
+

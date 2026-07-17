@@ -165,7 +165,7 @@ async def enforce_document_limit(company: dict, is_onboarding: bool = False) -> 
         return
 
     company_id = company["id"]
-    current_count = await db.knowledge_sources.count_documents({"company_id": company_id})
+    current_count = await db.knowledge_sources.count_documents({"company_id": company_id, "archived": {"$ne": True}})
 
     if current_count >= max_docs:
         raise HTTPException(
@@ -293,8 +293,8 @@ async def get_usage_summary(company: dict) -> dict:
     # agents (stroll configs)
     agents_count = await db.stroll_configs.count_documents({"company_id": company_id})
 
-    # documents
-    docs_count = await db.knowledge_sources.count_documents({"company_id": company_id})
+    # documents (exclude archived)
+    docs_count = await db.knowledge_sources.count_documents({"company_id": company_id, "archived": {"$ne": True}})
 
     # members
     active_members = len(company.get("members", []))

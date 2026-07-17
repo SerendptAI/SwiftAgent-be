@@ -164,6 +164,19 @@ async def init_scheduler():
     except Exception as e:
         logger.error(f"Failed to load stroll schedules during startup: {e}")
 
+    # Register the meter queue processor (every 5 minutes)
+    try:
+        from app.services.meter_queue_service import process_meter_queue
+        _scheduler.add_job(
+            process_meter_queue,
+            trigger=CronTrigger(minute="*/5"),
+            id="meter_queue_processor",
+            replace_existing=True,
+        )
+        logger.info("Meter queue processor scheduled (every 5 minutes)")
+    except Exception as e:
+        logger.error(f"Failed to schedule meter queue processor: {e}")
+
 
 async def close_scheduler():
     """Stop the scheduler."""
