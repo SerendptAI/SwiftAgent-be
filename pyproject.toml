@@ -44,6 +44,7 @@ dependencies = [
     "langchain-anthropic>=0.1.15",
     "langchain-google-genai>=1.0.6",
     "langchain-openai>=0.1.8",
+    "tiktoken>=0.8.0,<1.0.0",
 ]
 
 [project.optional-dependencies]
