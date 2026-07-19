@@ -54,18 +54,11 @@ async def ingest_document(
     doc["user_id"] = user_id
     doc["id"] = str(uuid4())
     doc["created_at"] = datetime.now(tz=timezone.utc)
+    doc["ingest_status"] = "pending"
 
     await db.documents.insert_one(doc)
 
-    def _on_ingest_error(task):
-        import logging
-
-        if task.exception():
-            logging.getLogger(__name__).error(
-                f"Background knowledge ingestion failed for doc {doc['id']}: {task.exception()}"
-            )
-
-    task = background_tasks.add_task(
+    background_tasks.add_task(
         knowledge_service.ingest_document,
         user_id,
         doc["id"],
@@ -191,6 +184,7 @@ async def upload_knowledge_document(
         "file_url": upload_result["secure_url"],
         "cloudinary_public_id": upload_result["public_id"],
         "uploaded_at": datetime.now(tz=timezone.utc),
+        "ingest_status": "pending",
     }
     await db.knowledge_sources.insert_one(source_record)
 

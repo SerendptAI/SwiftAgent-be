@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Optional
 import logging
 from uuid import uuid4
 from qdrant_client.http import models
-from app.core.database import qdrant_client
+from app.core.database import qdrant_client, db
 from app.core.config import settings
 from google import genai
 
@@ -36,36 +36,74 @@ async def ensure_collection():
 async def ingest_document(
     user_id: str, doc_id: str, title: str, content: str, metadata: dict
 ):
-    await ensure_collection()
-
-    gemini_client = _get_gemini_client()
-
-    # embed using gemini
-    response = await gemini_client.aio.models.embed_content(
-        model="gemini-embedding-001",
-        contents=content,
-        config={"task_type": "RETRIEVAL_DOCUMENT"},
+    logger.info(
+        "kb.ingest.start",
+        extra={"doc_id": doc_id, "user_id": user_id, "content_len": len(content)},
     )
+    try:
+        await ensure_collection()
 
-    vector = response.embeddings[0].values
+        gemini_client = _get_gemini_client()
 
-    await qdrant_client.upsert(
-        collection_name=COLLECTION_NAME,
-        points=[
-            models.PointStruct(
-                id=str(uuid4()),
-                vector=vector,
-                payload={
-                    "doc_id": doc_id,
-                    "title": title,
-                    "user_id": user_id,
-                    "type": "knowledge_doc",
-                    "page_content": content,
-                    **metadata,
-                },
+        # embed using gemini
+        response = await gemini_client.aio.models.embed_content(
+            model="gemini-embedding-001",
+            contents=content,
+            config={"task_type": "RETRIEVAL_DOCUMENT"},
+        )
+
+        vector = response.embeddings[0].values
+        logger.info(
+            "kb.ingest.embedded",
+            extra={"doc_id": doc_id, "vec_dim": len(vector)},
+        )
+
+        await qdrant_client.upsert(
+            collection_name=COLLECTION_NAME,
+            points=[
+                models.PointStruct(
+                    id=str(uuid4()),
+                    vector=vector,
+                    payload={
+                        "doc_id": doc_id,
+                        "title": title,
+                        "user_id": user_id,
+                        "type": "knowledge_doc",
+                        "page_content": content,
+                        **metadata,
+                    },
+                )
+            ],
+        )
+
+        logger.info("kb.ingest.upserted", extra={"doc_id": doc_id})
+        await db.documents.update_one(
+            {"id": doc_id},
+            {"$set": {"ingest_status": "ready", "ingest_error": None}},
+        )
+        # also update knowledge_sources if this was a file upload
+        if metadata.get("source_id"):
+            await db.knowledge_sources.update_one(
+                {"id": doc_id},
+                {"$set": {"ingest_status": "ready", "ingest_error": None}},
             )
-        ],
-    )
+
+    except Exception as exc:
+        logger.exception("kb.ingest.failed", extra={"doc_id": doc_id})
+        try:
+            await db.documents.update_one(
+                {"id": doc_id},
+                {"$set": {"ingest_status": "failed", "ingest_error": str(exc)}},
+            )
+            if metadata.get("source_id"):
+                await db.knowledge_sources.update_one(
+                    {"id": doc_id},
+                    {"$set": {"ingest_status": "failed", "ingest_error": str(exc)}},
+                )
+        except Exception:
+            logger.exception(
+                "kb.ingest.status_update_failed", extra={"doc_id": doc_id}
+            )
 
 
 async def search_knowledge(
