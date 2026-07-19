@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 from uuid import uuid4
 from qdrant_client.http import models
@@ -69,11 +69,11 @@ async def ingest_document(
 
 
 async def search_knowledge(
-    user_id: str,
+    user_id: Optional[str],
     query: str,
     limit: int = 5,
     threshold: float = 0.7,
-    company_id: str = None,
+    company_id: Optional[str] = None,
 ) -> dict:
     # ensure collection exists
     if not await qdrant_client.collection_exists(COLLECTION_NAME):
@@ -93,15 +93,20 @@ async def search_knowledge(
         logger.exception("Embedding error during knowledge search")
         return {"results": [], "confidence": 0.0, "escalate": True}
 
-    must_conditions = [
-        models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id))
-    ]
+    # For SDK/widget users (user_id is None), scope by company only.
+    # The dashboard-owner `user_id` is a tenancy-control column, not a customer filter.
+    must_conditions = []
+    if user_id:
+        must_conditions.append(
+            models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id))
+        )
     if company_id:
         must_conditions.append(
-            models.FieldCondition(
-                key="company_id", match=models.MatchValue(value=company_id)
-            )
+            models.FieldCondition(key="company_id", match=models.MatchValue(value=company_id))
         )
+    if not must_conditions:
+        # last-resort safety: never return unfiltered results
+        return {"results": [], "confidence": 0.0, "escalate": True}
 
     search_result = await qdrant_client.query_points(
         collection_name=COLLECTION_NAME,

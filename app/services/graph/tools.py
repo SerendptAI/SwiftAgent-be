@@ -11,6 +11,7 @@ from app.services import (
     integration_service,
     page_reader_service,
 )
+from app.core.config import settings
 from app.core.database import db
 
 logger = logging.getLogger(__name__)
@@ -25,13 +26,13 @@ async def search_knowledge_base(query: str, config: RunnableConfig) -> dict:
     """Search the company knowledge base for answers to user questions. Use this for policies, pricing, guides, etc."""
     state = _get_state(config)
     company_id = state.get("company_id")
-    user_id = state.get("user_id")
+    user_id = state.get("user_id")  # may be None for SDK/widget anonymous users
 
-    if not company_id or not user_id:
+    if not company_id:
         return {"error": "Company context not available"}
 
     search_result = await knowledge_service.search_knowledge(
-        user_id, query, limit=3, threshold=0.5, company_id=company_id
+        user_id, query, limit=3, threshold=settings.CONFIDENCE_THRESHOLD, company_id=company_id
     )
     results = search_result.get("results", [])
     if not results:
@@ -49,9 +50,9 @@ async def scrape_documentation_link(url: str, config: RunnableConfig) -> dict:
     """Scrape a URL and add its contents to the knowledge base so you can search it later."""
     state = _get_state(config)
     company_id = state.get("company_id")
-    user_id = state.get("user_id")
+    user_id = state.get("user_id")  # may be None for SDK/widget anonymous users
 
-    if not company_id or not user_id:
+    if not company_id:
         return {"error": "Company context not available"}
 
     from app.services.documentation_scraper_service import scrape_and_ingest_docs
