@@ -590,6 +590,6 @@ Expose it on the dashboard. If a tenant's last successful KB search was > 24h ag
 
 ---
 
-## 10. TL;DR for the Parent Agent
+## 10. TL;DR 
 
 The chatbot's "I don't have access to our pricing" message is a hallucination layered on top of a **tool-gate bug**: `search_knowledge_base` in `app/services/graph/tools.py:30` rejects every SDK/widget chat because they have `user_id=None` (set at `app/api/routers/sdk.py:269`), and `knowledge_service.search_knowledge` (`app/services/knowledge_service.py:97-104`) requires a `user_id` filter that the SDK user can't satisfy. Fixing the gate and making the filter conditional on `user_id` immediately unblocks pricing retrieval. Five files, two small logic changes, one prompt rewrite. Add a daily Mongo↔Qdrant drift check so the next silent failure doesn't take weeks to surface.
