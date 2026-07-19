@@ -4,7 +4,6 @@
 **Reporter:** Ebuka (co-founder, SerendptAI)
 **Severity:** P1 — production chatbot leaking hallucinated "I don't have access" answer to paying customers
 **Affected surface:** all `/api/sdk/{company_id}/chat` and `/api/chat/{company_id}/chat` widget/SDK chat endpoints
-**Author:** Hermes subagent investigation
 
 ---
 
