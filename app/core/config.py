@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "https://swiftagents.org"
     CONFIDENCE_THRESHOLD: float = 0.7
     REFERRAL_CODE: str = ""
-    ALLOWED_HOSTS: str = "http://localhost:3000,https://swiftagents.org,https://www.swiftagents.org"
+    ALLOWED_HOSTS: str = "http://localhost:3000,https://swiftagents.org,https://www.swiftagents.org,https://feat.swiftagents.org,https://www.feat.swiftagents.org"
 
     # rate limiting
     RATE_LIMIT_PER_MINUTE: int = 60
