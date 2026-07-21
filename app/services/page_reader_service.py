@@ -4,7 +4,7 @@ import socket
 import asyncio
 import httpx
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth
+from playwright_stealth.stealth import Stealth
 from app.core.config import settings
 from app.core.database import db
 from urllib.parse import urljoin, urlparse
@@ -21,6 +21,9 @@ async def _is_url_safe(url: str) -> tuple[bool, str]:
     Returns (is_safe, reason).
     """
     try:
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+            
         parsed = urlparse(url)
         hostname = parsed.hostname
         if not hostname:
@@ -85,6 +88,9 @@ async def read_website_page(url: str, force_refresh: bool = False) -> dict:
     Caches the result in the database for 7 days unless force_refresh is True.
     """
     try:
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+            
         # SSRF protection: block private/internal IPs, resolve HTTP redirects safely
         is_safe, reason, final_url = await _resolve_final_url(url)
         if not is_safe:
@@ -126,7 +132,7 @@ async def read_website_page(url: str, force_refresh: bool = False) -> dict:
                 
             context = await browser.new_context()
             page = await context.new_page()
-            await stealth(page)
+            await Stealth().apply_stealth_async(page)
             
             # Intercept sub-requests and JS redirects to ensure they don't bypass SSRF protections
             async def route_handler(route):

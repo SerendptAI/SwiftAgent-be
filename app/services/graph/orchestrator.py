@@ -8,7 +8,7 @@ from app.services.graph.prompt_utils import build_company_persona_prompt
 
 @tool
 def transfer_to_knowledge():
-    """Transfer to the knowledge agent for questions about policies, features, and general information. Note: For pricing/plans, try the scraper agent first."""
+    """Transfer to the knowledge agent for questions about policies, features, and general information. DO NOT use this for pricing or plans."""
     pass
 
 @tool
@@ -23,7 +23,7 @@ def transfer_to_api():
 
 @tool
 def transfer_to_scraper():
-    """Transfer to the scraper agent to read and extract text from a specific public website link. Use this FIRST for questions about pricing or plans, as websites often have the most up-to-date pricing."""
+    """Transfer to the scraper agent to read and extract text from a specific public website link. MUST use this FIRST for any questions about pricing or plans, as websites often have the most up-to-date pricing."""
     pass
 
 @tool
