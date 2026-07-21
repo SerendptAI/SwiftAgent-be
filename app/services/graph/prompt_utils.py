@@ -11,6 +11,7 @@ def build_company_persona_prompt(company_data: dict) -> str:
     language = company_data.get("primary_language") or "English"
     current_date = company_data.get("current_date") or "Unknown"
     current_time = company_data.get("current_time") or "Unknown"
+    website = company_data.get("website") or "Unknown"
     
     boundaries = company_data.get("answer_boundaries", [])
     boundaries_text = ""
@@ -28,6 +29,7 @@ Your job is to assist users warmly and effectively, acting entirely as a human e
 COMPANY CONTEXT:
 - Name: {name}
 - Industry: {industry}
+- Website: {website}
 - Overview: {desc}
 
 YOUR PERSONA:

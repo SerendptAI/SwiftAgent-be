@@ -547,7 +547,13 @@ async def get_chat_history(company_id: str, session_id: str):
     })
     
     if not chat:
-        raise HTTPException(status_code=404, detail="Chat session not found")
+        # Return empty state if session hasn't been created yet
+        return {
+            "session_id": session_id,
+            "ticket_id": None,
+            "resolved": False,
+            "messages": []
+        }
 
     ai_name = company.get("name") if company else "AI Assistant"
     ai_avatar_url = company.get("logo_url") if company else None

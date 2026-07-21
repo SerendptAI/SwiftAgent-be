@@ -55,7 +55,8 @@ async def chat_stream_graph(
             "answer_boundaries": company.get("answer_boundaries", []),
             "current_date": current_date,
             "current_time": current_time_str,
-            "sdk_user_email": sdk_user_email
+            "sdk_user_email": sdk_user_email,
+            "website": company.get("website", "")
         }
         
         # We need to construct LangChain messages from DB
@@ -115,9 +116,9 @@ async def chat_stream_graph(
                         text_parts = [c.get("text", "") for c in chunk.content if isinstance(c, dict) and c.get("type") == "text"]
                         text_content = "".join(text_parts)
                         
+                    # We no longer yield text here to prevent thinking streams. We'll yield it at on_chain_end if no tools were called.
                     if text_content:
                         final_text += text_content
-                        yield {"type": "text", "content": text_content}
                     
             elif kind == "on_tool_start":
                 name = event["name"]
@@ -173,11 +174,12 @@ async def chat_stream_graph(
 
             elif kind == "on_chain_end":
                 name = event["name"]
-                if name in ["human_handoff", "orchestrator"]:
+                if name in ["human_handoff", "orchestrator", "knowledge_agent", "navigation_agent", "api_agent", "scraper_agent"]:
                     output = event["data"].get("output", {})
                     if isinstance(output, dict) and "messages" in output:
                         msgs = output["messages"]
-                        if msgs and not final_text:
+                        # ONLY yield the final text if this agent didn't make a tool call (i.e. it's the final answer)
+                        if msgs and not getattr(msgs[-1], "tool_calls", None):
                             content = msgs[-1].content
                             text_content = ""
                             if isinstance(content, str):
@@ -187,7 +189,7 @@ async def chat_stream_graph(
                                 text_content = "".join(text_parts)
                                 
                             if text_content:
-                                final_text += text_content
+                                final_text = text_content # overwrite final_text since we didn't yield during stream
                                 yield {"type": "text", "content": text_content}
 
         # Store assistant message in DB

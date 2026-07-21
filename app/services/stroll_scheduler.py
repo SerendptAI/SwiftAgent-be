@@ -12,6 +12,7 @@ from apscheduler.triggers.cron import CronTrigger
 from app.core.database import db
 from app.services import stroll_service
 from app.core.plan_enforcement import enforce_stroll_limit
+from app.core.config import settings
 from fastapi import HTTPException
 from app.services.billing_service import billing_service
 
@@ -144,6 +145,10 @@ def remove_stroll_job(company_id: str):
 
 async def init_scheduler():
     """Start the scheduler and load all active configs from the DB."""
+    if not settings.ENABLE_STROLL_SCHEDULER:
+        logger.info("Stroll APScheduler is disabled via config")
+        return
+        
     if _scheduler.running:
         return
 

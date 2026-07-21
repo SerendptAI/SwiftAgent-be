@@ -94,6 +94,7 @@ class Settings(BaseSettings):
     # stroll
     STROLL_MAX_PAGES: int = 50
     STROLL_PAGE_TIMEOUT_MS: int = 10000
+    ENABLE_STROLL_SCHEDULER: bool = True
     PLAYWRIGHT_WS_ENDPOINT: Optional[str] = "ws://browserless:3000"
 
     # Expo Push Notifications (optional — push works without it but recommended)

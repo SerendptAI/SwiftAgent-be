@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import re
 from urllib.parse import urlparse
 from typing import List, Optional
 from bson import ObjectId
@@ -423,13 +424,33 @@ class FormService:
         cursor = db.form_submissions.aggregate(pipeline)
         results = await cursor.to_list(length=None)
 
-        # Group by page path
-        pages_dict: dict[str, list[FormGroupInfo]] = {}
+        # Group by page path and form identifier
+        groups_dict: dict[tuple[str, str], dict] = {}
         for r in results:
             page_url = r["_id"].get("page_url") or ""
             page_path = self._parse_page_path(page_url)
             form_identifier = r["_id"].get("form_identifier") or "default"
+            key = (page_path, form_identifier)
 
+            if key not in groups_dict:
+                groups_dict[key] = {
+                    "form_identifier": form_identifier,
+                    "form_name": r.get("form_name") or form_identifier,
+                    "entries_count": 0,
+                    "last_submission": r.get("last_submission"),
+                }
+            
+            groups_dict[key]["entries_count"] += r.get("entries_count", 0)
+            
+            curr_last = groups_dict[key]["last_submission"]
+            new_last = r.get("last_submission")
+            if curr_last and new_last:
+                groups_dict[key]["last_submission"] = max(curr_last, new_last)
+            elif new_last:
+                groups_dict[key]["last_submission"] = new_last
+
+        pages_dict: dict[str, list[FormGroupInfo]] = {}
+        for (page_path, form_identifier), data in groups_dict.items():
             # Check for custom name override
             custom_name_doc = await db.form_group_names.find_one({
                 "form_id": form_id,
@@ -439,14 +460,14 @@ class FormService:
             display_name = (
                 custom_name_doc["custom_name"]
                 if custom_name_doc
-                else r.get("form_name") or form_identifier
+                else data["form_name"]
             )
 
             group = FormGroupInfo(
                 form_identifier=form_identifier,
                 form_name=display_name,
-                entries_count=r["entries_count"],
-                last_submission=r.get("last_submission"),
+                entries_count=data["entries_count"],
+                last_submission=data["last_submission"],
             )
 
             if page_path not in pages_dict:
@@ -499,7 +520,7 @@ class FormService:
             {"$match": {
                 "form_id": form_id,
                 "company_id": company_id,
-                "page_url": {"$regex": f"{page_path}$"},
+                "page_url": {"$regex": re.escape(page_path) + r"([?#].*)?$"},
             }},
             {"$group": {
                 "_id": "$form_identifier",
@@ -543,7 +564,7 @@ class FormService:
         query = {
             "form_id": form_id,
             "company_id": company_id,
-            "page_url": {"$regex": f"{page_path}$"},
+            "page_url": {"$regex": re.escape(page_path) + r"([?#].*)?$"},
             "form_identifier": form_identifier,
         }
         cursor = db.form_submissions.find(query).sort("submitted_at", -1).skip(skip).limit(limit)
@@ -566,7 +587,7 @@ class FormService:
         result = await db.form_submissions.delete_many({
             "form_id": form_id,
             "company_id": company_id,
-            "page_url": {"$regex": f"{page_path}$"},
+            "page_url": {"$regex": re.escape(page_path) + r"([?#].*)?$"},
         })
         return result.deleted_count
 
@@ -577,7 +598,7 @@ class FormService:
         result = await db.form_submissions.delete_many({
             "form_id": form_id,
             "company_id": company_id,
-            "page_url": {"$regex": f"{page_path}$"},
+            "page_url": {"$regex": re.escape(page_path) + r"([?#].*)?$"},
             "form_identifier": form_identifier,
         })
         # Also remove custom name if it exists
