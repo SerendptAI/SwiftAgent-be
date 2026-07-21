@@ -55,7 +55,8 @@ async def chat_stream_graph(
             "answer_boundaries": company.get("answer_boundaries", []),
             "current_date": current_date,
             "current_time": current_time_str,
-            "sdk_user_email": sdk_user_email
+            "sdk_user_email": sdk_user_email,
+            "website": company.get("website", "")
         }
         
         # We need to construct LangChain messages from DB
