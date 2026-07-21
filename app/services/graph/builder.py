@@ -36,8 +36,52 @@ def should_continue(state: AgentState):
     messages = state["messages"]
     last_message = messages[-1]
     if getattr(last_message, "tool_calls", None):
+        tool_name = last_message.tool_calls[0]["name"]
+        if tool_name.startswith("transfer_to_") or tool_name == "escalate_to_human":
+            return "handoff"
         return "tools"
     return END
+
+def handle_handoff_node(state: AgentState):
+    from langchain_core.messages import ToolMessage
+    messages = state["messages"]
+    last_message = messages[-1]
+    tool_call = last_message.tool_calls[0]
+    tool_name = tool_call["name"]
+    tool_call_id = tool_call["id"]
+    
+    intent = "general_chat"
+    escalate = False
+    
+    if tool_name == "transfer_to_knowledge":
+        intent = "knowledge"
+    elif tool_name == "transfer_to_navigation":
+        intent = "navigation"
+    elif tool_name == "transfer_to_api":
+        intent = "api"
+    elif tool_name == "transfer_to_scraper":
+        intent = "scraper"
+    elif tool_name == "escalate_to_human":
+        intent = "human_escalation"
+        escalate = True
+        
+    tool_msg = ToolMessage(content=f"Transferred to {intent} expert successfully.", tool_call_id=tool_call_id)
+    return {"intent": intent, "escalate_to_human": escalate, "messages": [tool_msg]}
+
+def route_from_handoff(state: AgentState):
+    intent = state.get("intent")
+    if intent == "knowledge":
+        return "knowledge_agent"
+    elif intent == "navigation":
+        return "navigation_agent"
+    elif intent == "api":
+        return "api_agent"
+    elif intent == "scraper":
+        return "scraper_agent"
+    elif intent == "human_escalation":
+        return "human_handoff"
+    
+    return "orchestrator"
 
 async def human_handoff_node(state: AgentState, config):
     from app.services import company_email_service
@@ -99,6 +143,7 @@ def build_graph():
     # Core nodes
     builder.add_node("orchestrator", orchestrator_node)
     builder.add_node("human_handoff", human_handoff_node)
+    builder.add_node("handle_handoff", handle_handoff_node)
     
     # Worker agents
     builder.add_node("knowledge_agent", knowledge_agent_node)
@@ -120,17 +165,19 @@ def build_graph():
     builder.add_edge("human_handoff", END)
     
     # Routing for agents to their specific tools and back
-    builder.add_conditional_edges("knowledge_agent", should_continue, {"tools": "knowledge_tools", END: END})
+    builder.add_conditional_edges("knowledge_agent", should_continue, {"tools": "knowledge_tools", "handoff": "handle_handoff", END: END})
     builder.add_edge("knowledge_tools", "knowledge_agent")
     
-    builder.add_conditional_edges("navigation_agent", should_continue, {"tools": "navigation_tools", END: END})
+    builder.add_conditional_edges("navigation_agent", should_continue, {"tools": "navigation_tools", "handoff": "handle_handoff", END: END})
     builder.add_edge("navigation_tools", "navigation_agent")
     
-    builder.add_conditional_edges("api_agent", should_continue, {"tools": "api_tools", END: END})
+    builder.add_conditional_edges("api_agent", should_continue, {"tools": "api_tools", "handoff": "handle_handoff", END: END})
     builder.add_edge("api_tools", "api_agent")
     
-    builder.add_conditional_edges("scraper_agent", should_continue, {"tools": "scraper_tools", END: END})
+    builder.add_conditional_edges("scraper_agent", should_continue, {"tools": "scraper_tools", "handoff": "handle_handoff", END: END})
     builder.add_edge("scraper_tools", "scraper_agent")
+
+    builder.add_conditional_edges("handle_handoff", route_from_handoff)
     
     return builder.compile()
 

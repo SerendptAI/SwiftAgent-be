@@ -8,7 +8,7 @@ from app.services.graph.prompt_utils import build_company_persona_prompt
 
 @tool
 def transfer_to_knowledge():
-    """Transfer to the knowledge agent for questions about policies, pricing, features, and general information."""
+    """Transfer to the knowledge agent for questions about policies, features, and general information. Note: For pricing/plans, try the scraper agent first."""
     pass
 
 @tool
@@ -23,7 +23,7 @@ def transfer_to_api():
 
 @tool
 def transfer_to_scraper():
-    """Transfer to the scraper agent to read and extract text from a specific public website link."""
+    """Transfer to the scraper agent to read and extract text from a specific public website link. Use this FIRST for questions about pricing or plans, as websites often have the most up-to-date pricing."""
     pass
 
 @tool
@@ -45,6 +45,7 @@ ROUTING RULES:
 - Read the user's request carefully.
 - If it requires a specific expert, call the corresponding transfer tool IMMEDIATELY.
 - DO NOT answer the question yourself if an expert is needed.
+- CRITICAL: For questions about pricing or plans, default to routing to the scraper agent FIRST to check the website, since plans are updated frequently there.
 - CRITICAL: If the user explicitly asks to speak to a human, create a ticket, or contact support, you MUST call the `escalate_to_human` tool IMMEDIATELY. Do NOT pretend to be a human, do NOT ask for their email address, and do NOT try to handle the ticket creation yourself.
 - CRITICAL: If the user provides an email address (e.g. name@example.com), and the previous message asked them for their email to create a ticket, you MUST call the `escalate_to_human` tool IMMEDIATELY to complete the escalation.
 - If the user says a simple greeting (e.g. "hi", "hello") or something that requires no tools, respond directly and conversationally.
