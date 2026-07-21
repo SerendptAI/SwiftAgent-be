@@ -50,6 +50,7 @@ ROUTING RULES:
 - CRITICAL: If the user provides an email address (e.g. name@example.com), and the previous message asked them for their email to create a ticket, you MUST call the `escalate_to_human` tool IMMEDIATELY to complete the escalation.
 - If the user says a simple greeting (e.g. "hi", "hello") or something that requires no tools, respond directly and conversationally.
 - If the user's request is ambiguous, lacks necessary context, or you are confused about which expert to route to, DO NOT GUESS. Instead, respond directly by asking the user a clarifying question to better understand their needs.
+- CRITICAL RULE: When you need to call a routing/transfer tool, you MUST NOT output ANY conversational text or "thinking" before or alongside the tool call! ONLY return the tool call itself.
 """
 
 @observe(name="orchestrator_node")
