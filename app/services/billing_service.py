@@ -321,7 +321,29 @@ class BillingService:
                 tier = "basic"
 
             now = datetime.now(tz=timezone.utc)
-            old_company = await db.companies.find_one({"id": company_id})
+            updates = {
+                "subscription_tier": tier,
+                "subscription_status": "active",
+                "subscription_started_at": now,
+                "billing_provider": "polar",
+                "subscription_id": sub_id,
+                "customer_id": customer_id,
+            }
+            
+            current_period_end = data.get("current_period_end")
+            if current_period_end:
+                if isinstance(current_period_end, str) and current_period_end.endswith("Z"):
+                    current_period_end = current_period_end[:-1] + "+00:00"
+                try:
+                    updates["subscription_expires_at"] = datetime.fromisoformat(current_period_end)
+                except Exception:
+                    pass
+
+            old_company = await db.companies.find_one_and_update(
+                {"id": company_id},
+                {"$set": updates},
+                return_document=ReturnDocument.BEFORE
+            )
 
             if not old_company:
                 logger.error(
@@ -414,11 +436,21 @@ class BillingService:
                 )
                 return False
 
+            updates = {
+                "subscription_status": "canceled",
+            }
+            current_period_end = data.get("current_period_end")
+            if current_period_end:
+                if isinstance(current_period_end, str) and current_period_end.endswith("Z"):
+                    current_period_end = current_period_end[:-1] + "+00:00"
+                try:
+                    updates["subscription_expires_at"] = datetime.fromisoformat(current_period_end)
+                except Exception:
+                    pass
+
             await db.companies.update_one(
                 {"id": company_id},
-                {"$set": {
-                    "subscription_status": "canceled",
-                }}
+                {"$set": updates}
             )
             from app.core.cache import company_cache
             keys_to_delete = [
