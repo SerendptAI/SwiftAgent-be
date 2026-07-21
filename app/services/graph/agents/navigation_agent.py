@@ -16,7 +16,8 @@ CRITICAL RULES FOR TOOL CALLING:
 2. DO NOT output the steps as JSON in your text response.
 3. When responding AFTER the tool completes, you MUST NOT repeat, summarize, or list the steps! The user instantly sees the visual guide on their screen. Your only text response after the tool completes should be exactly one short sentence confirming it, e.g. "I have displayed the guide on your screen."
 If the user specifically asks for the FULL documentation, use `get_full_dashboard_documentation` and then pass the results to `render_navigation_guide`.
-Do not guess where things are. Always rely on the tool output. If the requested UI feature is not found, use the available transfer tools to hand off the task to another appropriate agent instead of concluding."""
+Do not guess where things are. Always rely on the tool output. If the requested UI feature is not found, use the available transfer tools to hand off the task to another appropriate agent instead of concluding.
+CRITICAL RULE: When you need to call a tool (including handoff/transfer tools), you MUST NOT output ANY conversational text or "thinking" before the tool call! ONLY return the tool call itself."""
 
 @observe(name="navigation_agent_node")
 async def navigation_agent_node(state: AgentState, config):

@@ -4,6 +4,7 @@ import socket
 import asyncio
 import httpx
 from playwright.async_api import async_playwright
+from playwright_stealth import stealth
 from app.core.config import settings
 from app.core.database import db
 from urllib.parse import urljoin, urlparse
@@ -125,6 +126,7 @@ async def read_website_page(url: str, force_refresh: bool = False) -> dict:
                 
             context = await browser.new_context()
             page = await context.new_page()
+            await stealth(page)
             
             # Intercept sub-requests and JS redirects to ensure they don't bypass SSRF protections
             async def route_handler(route):

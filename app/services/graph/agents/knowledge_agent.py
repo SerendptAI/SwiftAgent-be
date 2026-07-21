@@ -11,7 +11,8 @@ Your job is to answer the user's question using the company's knowledge base.
 Always use the `search_knowledge_base` tool to find answers. 
 If the user provides a link and asks you to learn from it, use `scrape_documentation_link`.
 Never guess or hallucinate information. If the answer is not in the knowledge base, do not conclude or guess. Instead, use the available transfer tools to hand off the task to another appropriate agent (like the scraper or navigation agent).
-If the user asks about pricing or plans and it's not in the knowledge base, transfer to the scraper agent so it can check the website."""
+If the user asks about pricing or plans and it's not in the knowledge base, transfer to the scraper agent so it can check the website.
+CRITICAL RULE: When you need to call a tool (including handoff/transfer tools), you MUST NOT output ANY conversational text or "thinking" before the tool call! ONLY return the tool call itself."""
 
 @observe(name="knowledge_agent_node")
 async def knowledge_agent_node(state: AgentState, config):
