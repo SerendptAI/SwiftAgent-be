@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "https://swiftagents.org"
     CONFIDENCE_THRESHOLD: float = 0.7
     REFERRAL_CODE: str = ""
-    ALLOWED_HOSTS: str = "http://localhost:3000,https://swiftagents.org,https://www.swiftagents.org"
+    ALLOWED_HOSTS: str = "http://localhost:3000,https://swiftagents.org,https://www.swiftagents.org,https://feat.swiftagents.org,https://www.feat.swiftagents.org,https://staging.swiftagents.org,https://www.staging.swiftagents.org"
 
     # rate limiting
     RATE_LIMIT_PER_MINUTE: int = 60
@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     
     # Discount for International Basic (50% off)
     POLAR_DISCOUNT_BASIC_INTL: str = "845c8f40-0c9b-4743-8abb-c5bc944ff829"
+
+    # Polar product IDs — New pricing model (Unified global pricing)
+    POLAR_PRODUCT_STARTUP: str = ""
+    POLAR_PRODUCT_BUSINESS: str = ""
+    POLAR_PRODUCT_ENTERPRISE_PAYG: str = ""
 
     # blockchain
     ETHERSCAN_API_KEY: str = ""

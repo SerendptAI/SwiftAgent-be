@@ -140,3 +140,9 @@ async def create_indexes():
         [("company_id", 1), ("name", 1)],
         unique=True,
     )
+
+    # Pending meter events (reliable billing queue)
+    await db.pending_meter_events.create_index(
+        [("status", 1), ("next_retry_at", 1)]
+    )
+    await db.pending_meter_events.create_index("company_id")

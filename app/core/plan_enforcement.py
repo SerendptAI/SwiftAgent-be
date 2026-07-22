@@ -29,27 +29,21 @@ def _is_subscription_active(company: dict) -> bool:
     """
     Check if the company has a currently-valid subscription.
     A subscription is active when:
-      - subscription_status == "active"
-      - subscription_started_at exists and is within the last SUBSCRIPTION_DURATION_DAYS
+      - subscription_status == "active" (or "canceled" but unexpired)
+      - now < subscription_expires_at
     """
     status = company.get("subscription_status", "inactive")
     if status not in ("active", "canceled"):
         return False
 
-    started_at = company.get("subscription_started_at")
-    if not started_at:
+    expiry = get_subscription_expiry(company)
+    if not expiry:
         # Legacy companies migrated without a start date are assumed active
-        return True
-
-    if isinstance(started_at, str):
-        started_at = datetime.fromisoformat(started_at)
-
-    # Ensure started_at is timezone-aware (assume UTC if naive)
-    if started_at.tzinfo is None:
-        started_at = started_at.replace(tzinfo=timezone.utc)
+        if not company.get("subscription_started_at"):
+            return True
+        return False
 
     now = datetime.now(tz=timezone.utc)
-    expiry = started_at + timedelta(days=SUBSCRIPTION_DURATION_DAYS)
     return now < expiry
 
 
@@ -63,10 +57,22 @@ def get_active_tier(company: dict) -> str:
 
 def get_subscription_expiry(company: dict) -> datetime | None:
     """Return the subscription expiry datetime, or None if no start date."""
+    expires_at = company.get("subscription_expires_at")
+    if expires_at:
+        if isinstance(expires_at, str):
+            if expires_at.endswith("Z"):
+                expires_at = expires_at[:-1] + "+00:00"
+            expires_at = datetime.fromisoformat(expires_at)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return expires_at
+
     started_at = company.get("subscription_started_at")
     if not started_at:
         return None
     if isinstance(started_at, str):
+        if started_at.endswith("Z"):
+            started_at = started_at[:-1] + "+00:00"
         started_at = datetime.fromisoformat(started_at)
     
     # Ensure started_at is timezone-aware (assume UTC if naive)
@@ -161,11 +167,11 @@ async def enforce_document_limit(company: dict, is_onboarding: bool = False) -> 
     limits = get_tier_limits(tier)
     max_docs = limits["documents_limit"]
 
-    if is_unlimited(max_docs):
+    if is_unlimited(max_docs) or tier in ("enterprise", "enterprise_payg"):
         return
 
     company_id = company["id"]
-    current_count = await db.knowledge_sources.count_documents({"company_id": company_id})
+    current_count = await db.knowledge_sources.count_documents({"company_id": company_id, "archived": {"$ne": True}})
 
     if current_count >= max_docs:
         raise HTTPException(
@@ -183,7 +189,7 @@ async def enforce_member_limit(company: dict) -> None:
     limits = get_tier_limits(tier)
     max_members = limits["members_per_company"]
 
-    if is_unlimited(max_members):
+    if is_unlimited(max_members) or tier in ("enterprise", "enterprise_payg"):
         return
 
     active_members = len(company.get("members", []))
@@ -261,7 +267,7 @@ async def enforce_stroll_limit(company: dict) -> None:
     limits = get_tier_limits(tier)
     max_strolls = limits.get("strolls_per_month", 0)
 
-    if is_unlimited(max_strolls):
+    if is_unlimited(max_strolls) or tier in ("enterprise", "enterprise_payg"):
         return
 
     company_id = company["id"]
@@ -293,8 +299,8 @@ async def get_usage_summary(company: dict) -> dict:
     # agents (stroll configs)
     agents_count = await db.stroll_configs.count_documents({"company_id": company_id})
 
-    # documents
-    docs_count = await db.knowledge_sources.count_documents({"company_id": company_id})
+    # documents (exclude archived)
+    docs_count = await db.knowledge_sources.count_documents({"company_id": company_id, "archived": {"$ne": True}})
 
     # members
     active_members = len(company.get("members", []))
