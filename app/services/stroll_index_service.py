@@ -239,6 +239,7 @@ def reconstruct_navigation_guide(
             instruction=instruction,
             screenshot_url=screenshot_url,
             highlight=highlight,
+            element_selector=element_selector,
         ))
 
     if not steps:

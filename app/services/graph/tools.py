@@ -101,7 +101,7 @@ async def get_full_dashboard_documentation(config: RunnableConfig) -> dict:
                 {
                     "page_id": step.page_title,
                     "instruction": step.instruction,
-                    "element_selector": step.highlight.selector if step.highlight else None,
+                    "element_selector": getattr(step, "element_selector", None),
                 }
                 for step in full_docs.steps
             ],

@@ -214,6 +214,7 @@ class NavigationStep(BaseModel):
     instruction: str
     screenshot_url: str
     highlight: Optional[BoundingBox] = None
+    element_selector: Optional[str] = None
 
 
 class FindFeatureResult(BaseModel):
