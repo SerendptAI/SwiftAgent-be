@@ -451,6 +451,9 @@ _OTP_KEYWORDS = [
     "authentication code",
     "security code",
     "confirm your identity",
+    "6-digit code",
+    "sent to your email",
+    "check your email",
 ]
 
 _OTP_SUBMIT_SELECTORS = [
@@ -1676,6 +1679,15 @@ async def commit_stroll(
     if not diff.added and not diff.removed and not diff.moved:
         logger.info(f"No changes for company {company_id} — skipping write")
         return None
+
+    # Regression Guard: if we lose more than 50% of nodes and end up with <= 15 nodes, it's likely a catastrophic login loop failure
+    prev_version = await get_latest_version(company_id)
+    if prev_version:
+        prev_nodes = len(prev_version.graph.nodes)
+        new_nodes = len(version.graph.nodes)
+        if new_nodes <= 15 and new_nodes < (prev_nodes * 0.5):
+            logger.error(f"Catastrophic regression detected for company {company_id}: nodes dropped from {prev_nodes} to {new_nodes}. Aborting commit.")
+            return None
 
     version.diff = diff
 
