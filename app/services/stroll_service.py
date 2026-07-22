@@ -688,10 +688,10 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str, token
         # Read the DOM with Claude vision to identify form fields
         vision_selectors = await _read_login_dom_with_vision(page, login_screenshot, login_url, token_tracker=token_tracker)
 
-        # Find and fill username — prefer vision, then config override, then heuristics
+        # Find and fill username — prefer config override, then vision, then heuristics
         username_el = await _find_element(
             page,
-            vision_selectors.get("username_selector") or creds.username_selector,
+            creds.username_selector or vision_selectors.get("username_selector"),
             _USERNAME_SELECTORS,
         )
         if not username_el:
@@ -701,10 +701,10 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str, token
         await username_el.fill("")
         await username_el.press_sequentially(creds.username, delay=random.randint(30, 80))
 
-        # Find and fill password — prefer vision, then config override, then heuristics
+        # Find and fill password — prefer config override, then vision, then heuristics
         password_el = await _find_element(
             page,
-            vision_selectors.get("password_selector") or creds.password_selector,
+            creds.password_selector or vision_selectors.get("password_selector"),
             _PASSWORD_SELECTORS,
         )
         if password_el:
@@ -713,10 +713,10 @@ async def _authenticate(page: Page, config: StrollConfig, company_id: str, token
         else:
             logger.info(f"No password field found on {login_url} — assuming passwordless/OTP login flow")
 
-        # Find and click submit — prefer vision, then config override, then heuristics
+        # Find and click submit — prefer config override, then vision, then heuristics
         submit_el = await _find_element(
             page,
-            vision_selectors.get("submit_selector") or creds.submit_selector,
+            creds.submit_selector or vision_selectors.get("submit_selector"),
             _SUBMIT_SELECTORS,
         )
         if submit_el:
