@@ -99,56 +99,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
         
         # Handle AI generated chat subject
         conversation = await db.widget_conversations.find_one({"company_id": company_id, "session_id": req.session_id})
-        subject = conversation.get("subject") if conversation else None
         
-        if not subject:
-            subject = await generate_chat_title(req.message, agent_key)
-            
-            if not subject:
-                subject = "New Chat"
-
-            yield _sse("subject", subject=subject)
-            
-            # Update/create the conversation document with sdk_user_email and source BEFORE calling agent
-            await db.widget_conversations.update_one(
-                 {"company_id": company_id, "session_id": req.session_id},
-                 {
-                     "$set": {
-                         "sdk_user_email": email,
-                         "source": "sdk",
-                         "subject": subject,
-                     },
-                     "$setOnInsert": {
-                         "avatar": get_random_avatar(),
-                     }
-                 },
-                 upsert=True
-            )
-        else:
-            yield _sse("subject", subject=subject)
-            
-            # Just ensure sdk_user_email is set
-            if not conversation or conversation.get("sdk_user_email") != email or conversation.get("source") != "sdk":
-                await db.widget_conversations.update_one(
-                     {"company_id": company_id, "session_id": req.session_id},
-                     {
-                         "$set": {
-                             "sdk_user_email": email,
-                             "source": "sdk",
-                         }
-                     }
-                )
-
-        # Link this conversation to the visitor (by IP) so the visitors
-        # endpoint can attribute communication duration. Done pre-stream so it
-        # persists even if the client disconnects after "done".
-        if visitor_ip and (not conversation or conversation.get("visitor_ip") != visitor_ip):
-            await db.widget_conversations.update_one(
-                {"company_id": company_id, "session_id": req.session_id},
-                {"$set": {"visitor_ip": visitor_ip}},
-                upsert=True,
-            )
-
         # Check if the session_id is a ticket_id or escalated chat
         ticket = await db.email_tickets.find_one({
             "company_id": company_id,
@@ -166,24 +117,60 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                 ticket_id = conversation.get("ticket_id")
 
         attachments_raw = [a.model_dump() for a in req.attachments] if req.attachments else []
+        now_utc = datetime.now(tz=timezone.utc)
+        now_iso = now_utc.isoformat()
+
+        subject = conversation.get("subject") if conversation else None
+        
+        update_set = {"updated_at": now_utc}
+        update_setOnInsert = {
+            "avatar": get_random_avatar(),
+            "created_at": now_utc
+        }
+        push_op = {}
+
+        if not subject:
+            subject = await generate_chat_title(req.message, agent_key)
+            if not subject:
+                subject = "New Chat"
+            yield _sse("subject", subject=subject)
+            update_set["sdk_user_email"] = email
+            update_set["source"] = "sdk"
+            update_set["subject"] = subject
+        else:
+            yield _sse("subject", subject=subject)
+            if not conversation or conversation.get("sdk_user_email") != email or conversation.get("source") != "sdk":
+                update_set["sdk_user_email"] = email
+                update_set["source"] = "sdk"
+
+        if visitor_ip and (not conversation or conversation.get("visitor_ip") != visitor_ip):
+            update_set["visitor_ip"] = visitor_ip
+
+        # Save user message to widget_conversations if it's a chat that is NOT YET escalated
+        if not is_escalated and not ticket:
+            user_msg_doc = {
+                "id": str(uuid4()),
+                "role": "user",
+                "content": req.message,
+                "timestamp": user_timestamp or now_iso,
+                "attachments": attachments_raw
+            }
+            push_op["messages"] = user_msg_doc
+
+        update_payload = {"$set": update_set}
+        if push_op:
+            update_payload["$push"] = push_op
+        if not conversation:
+            update_payload["$setOnInsert"] = update_setOnInsert
+
+        await db.widget_conversations.update_one(
+             {"company_id": company_id, "session_id": req.session_id},
+             update_payload,
+             upsert=True
+        )
 
         if company.get("route_to_human") or is_escalated or ticket_id:
-            now_iso = datetime.now(tz=timezone.utc).isoformat()
-            
-            # Save user message to widget_conversations if it's a chat that is NOT YET escalated
-            if not is_escalated and not ticket:
-                user_msg_doc = {
-                    "id": str(uuid4()),
-                    "role": "user",
-                    "content": req.message,
-                    "timestamp": user_timestamp or now_iso,
-                    "attachments": attachments_raw
-                }
-                await db.widget_conversations.update_one(
-                    {"company_id": company_id, "session_id": req.session_id},
-                    {"$push": {"messages": user_msg_doc}},
-                    upsert=True
-                )
+            # User message was already pushed to widget_conversations above if applicable
             if ticket_id:
                 try:
                     await company_email_service.add_inbound_ticket_message(
@@ -211,7 +198,10 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                     if not is_escalated:
                         await db.widget_conversations.update_one(
                             {"company_id": company_id, "session_id": req.session_id},
-                            {"$push": {"messages": assistant_msg_doc}},
+                            {
+                                "$push": {"messages": assistant_msg_doc},
+                                "$set": {"updated_at": datetime.now(tz=timezone.utc)}
+                            },
                         )
                     yield _sse("stream", message=reply_text)
                     
@@ -236,7 +226,11 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                 
                 await db.widget_conversations.update_one(
                     {"company_id": company_id, "session_id": req.session_id},
-                    {"$set": {"escalated": True, "ticket_id": new_ticket["id"]}}
+                    {"$set": {
+                        "escalated": True, 
+                        "ticket_id": new_ticket["id"],
+                        "updated_at": datetime.now(tz=timezone.utc)
+                    }}
                 )
                 
                 reply_text = f"Thank you! Your chat has been escalated to our human support team as Ticket #{new_ticket['id']}. We will reach out to you at {email} shortly."
@@ -249,7 +243,10 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                 }
                 await db.widget_conversations.update_one(
                     {"company_id": company_id, "session_id": req.session_id},
-                    {"$push": {"messages": assistant_msg_doc}},
+                    {
+                        "$push": {"messages": assistant_msg_doc},
+                        "$set": {"updated_at": datetime.now(tz=timezone.utc)}
+                    },
                 )
                 yield _sse("stream", message=reply_text)
                 

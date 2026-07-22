@@ -161,36 +161,57 @@ async def _chat_sse_generator(
         conversation = await db.widget_conversations.find_one({"company_id": company_id, "session_id": req.session_id})
         subject = conversation.get("subject") if conversation else None
         
+        now_utc = datetime.now(tz=timezone.utc)
+        now_iso = now_utc.isoformat()
+        
+        update_set = {"updated_at": now_utc}
+        update_setOnInsert = {
+            "avatar": get_random_avatar(),
+            "created_at": now_utc
+        }
+        push_op = {}
+
         if not subject:
             subject = await generate_chat_title(req.message, agent_key)
-            
             if not subject:
                 subject = "New Chat"
-
             yield _sse("subject", subject=subject)
-            await db.widget_conversations.update_one(
-                {"company_id": company_id, "session_id": req.session_id},
-                {"$set": {"subject": subject}},
-                upsert=True
-            )
+            update_set["subject"] = subject
         else:
             yield _sse("subject", subject=subject)
 
-        # Link this conversation to the visitor (by IP) so the visitors
-        # endpoint can attribute communication duration. Done pre-stream so it
-        # runs reliably even if the client disconnects right after "done".
-        update_fields = {}
         if visitor_ip and (not conversation or conversation.get("visitor_ip") != visitor_ip):
-            update_fields["visitor_ip"] = visitor_ip
+            update_set["visitor_ip"] = visitor_ip
         if req.user_email and (not conversation or conversation.get("sdk_user_email") != req.user_email):
-            update_fields["sdk_user_email"] = req.user_email
+            update_set["sdk_user_email"] = req.user_email
 
-        if update_fields:
-            await db.widget_conversations.update_one(
-                {"company_id": company_id, "session_id": req.session_id},
-                {"$set": update_fields},
-                upsert=True,
-            )
+        # Always push the user message here so we can do it in one atomic update
+        # and not rely on executor.py which we removed it from.
+        ticket_id = conversation.get("ticket_id") if conversation else None
+        is_escalated = conversation.get("escalated") if conversation else False
+        
+        if not is_escalated and not ticket_id:
+            user_msg_doc = {
+                "id": str(uuid4()),
+                "role": "user",
+                "content": req.message,
+                "timestamp": user_timestamp or now_iso
+            }
+            if req.attachments:
+                user_msg_doc["attachments"] = [a.model_dump() for a in req.attachments]
+            push_op["messages"] = user_msg_doc
+
+        update_payload = {"$set": update_set}
+        if push_op:
+            update_payload["$push"] = push_op
+        if not conversation:
+            update_payload["$setOnInsert"] = update_setOnInsert
+
+        await db.widget_conversations.update_one(
+            {"company_id": company_id, "session_id": req.session_id},
+            update_payload,
+            upsert=True,
+        )
 
         if company.get("route_to_human"):
             yield _sse("thinking", message="Routing to a human agent...")
@@ -199,7 +220,6 @@ async def _chat_sse_generator(
             found_email = email_match.group(0) if email_match else None
             
             customer_email = found_email or req.user_email
-            ticket_id = conversation.get("ticket_id") if conversation else None
             
             if not customer_email and conversation:
                 customer_email = conversation.get("sdk_user_email")
@@ -208,19 +228,6 @@ async def _chat_sse_generator(
                 ticket = await db.email_tickets.find_one({"id": ticket_id, "company_id": company_id})
                 if ticket:
                     customer_email = ticket.get("customer_email")
-                    
-            now = datetime.now(tz=timezone.utc).isoformat()
-            user_msg_doc = {
-                "id": str(uuid4()),
-                "role": "user",
-                "content": req.message,
-                "timestamp": user_timestamp or now
-            }
-            await db.widget_conversations.update_one(
-                {"company_id": company_id, "session_id": req.session_id},
-                {"$push": {"messages": user_msg_doc}},
-                upsert=True
-            )
             
             if not conversation:
                 conversation = await db.widget_conversations.find_one({"company_id": company_id, "session_id": req.session_id})
@@ -279,7 +286,11 @@ async def _chat_sse_generator(
                     
                     await db.widget_conversations.update_one(
                         {"company_id": company_id, "session_id": req.session_id},
-                        {"$set": {"escalated": True, "ticket_id": ticket["id"]}}
+                        {"$set": {
+                            "escalated": True, 
+                            "ticket_id": ticket["id"],
+                            "updated_at": datetime.now(tz=timezone.utc)
+                        }}
                     )
                     
                     reply_text = f"Thank you! Your chat has been escalated to our human support team as Ticket #{ticket['id']}. We will reach out to you at {customer_email} shortly."
@@ -292,7 +303,10 @@ async def _chat_sse_generator(
                 }
                 await db.widget_conversations.update_one(
                     {"company_id": company_id, "session_id": req.session_id},
-                    {"$push": {"messages": assistant_msg_doc}},
+                    {
+                        "$push": {"messages": assistant_msg_doc},
+                        "$set": {"updated_at": datetime.now(tz=timezone.utc)}
+                    },
                 )
                 
                 yield _sse("stream", message=reply_text)
@@ -308,7 +322,10 @@ async def _chat_sse_generator(
                 }
                 await db.widget_conversations.update_one(
                     {"company_id": company_id, "session_id": req.session_id},
-                    {"$push": {"messages": assistant_msg_doc}},
+                    {
+                        "$push": {"messages": assistant_msg_doc},
+                        "$set": {"updated_at": datetime.now(tz=timezone.utc)}
+                    },
                 )
                 yield _sse("stream", message=reply_text)
                 yield _sse("done", message_id=assistant_msg_doc["id"])

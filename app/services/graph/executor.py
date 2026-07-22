@@ -71,19 +71,8 @@ async def chat_stream_graph(
         # Append current user message
         langchain_messages.append(HumanMessage(content=llm_message or message))
         
-        # Insert the message into the DB
-        now = datetime.now(tz=timezone.utc).isoformat()
-        user_msg_doc = {
-            "id": str(uuid4()),
-            "role": "user",
-            "content": message,
-            "timestamp": user_timestamp or now
-        }
-        await db.widget_conversations.update_one(
-            {"company_id": company_id, "session_id": session_id},
-            {"$push": {"messages": user_msg_doc}},
-            upsert=True
-        )
+        # Insert the message into the DB is now handled upstream in chat.py and sdk.py
+        # to ensure atomic updates and prevent multiple websocket empty message fires.
 
         state = {
             "messages": langchain_messages,
@@ -202,7 +191,10 @@ async def chat_stream_graph(
             }
             await db.widget_conversations.update_one(
                 {"company_id": company_id, "session_id": session_id},
-                {"$push": {"messages": assistant_msg_doc}}
+                {
+                    "$push": {"messages": assistant_msg_doc},
+                    "$set": {"updated_at": datetime.now(tz=timezone.utc)}
+                }
             )
 
     except Exception as e:

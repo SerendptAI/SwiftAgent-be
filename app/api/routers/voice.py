@@ -102,6 +102,24 @@ async def voice_call(websocket: WebSocket, company_id: str):
                 # agent — process through existing chat pipeline
                 await websocket.send_json({"type": "status", "status": "thinking"})
                 
+                # Push the user message to widget_conversations
+                from uuid import uuid4
+                now_utc = datetime.now(tz=timezone.utc)
+                user_msg_doc = {
+                    "id": str(uuid4()),
+                    "role": "user",
+                    "content": text,
+                    "timestamp": now_utc.isoformat()
+                }
+                await db.widget_conversations.update_one(
+                    {"company_id": company_id, "session_id": session_id},
+                    {
+                        "$push": {"messages": user_msg_doc},
+                        "$set": {"updated_at": now_utc}
+                    },
+                    upsert=True
+                )
+                
                 reply = ""
                 agents_to_try = [company.get("ai_provider", "anthropic")]
                 if agents_to_try[0] == "anthropic" or not company.get("ai_provider"):
