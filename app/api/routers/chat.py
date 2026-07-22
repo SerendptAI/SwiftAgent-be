@@ -38,7 +38,7 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response, StreamingResponse
-from app.core.utils import format_timestamp_iso
+from app.core.utils import format_timestamp_iso, get_random_avatar
 from pydantic import BaseModel, field_validator, Field
 from typing import List, Literal, Optional
 
