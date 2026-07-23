@@ -86,8 +86,9 @@ def estimate_cost(
     """
     Estimate the cost in USD for a single LLM call.
 
-    Returns 0.0 for any non-positive token count. Costs below $0.000001
-    are rounded to 0.0 to avoid float noise in dashboards.
+    Returns 0.0 when both input and output token counts are non-positive
+    (zero or negative). Costs below $0.000001 are rounded to 0.0 to
+    avoid float noise in dashboards.
     """
     if input_tokens <= 0 and output_tokens <= 0:
         return 0.0
