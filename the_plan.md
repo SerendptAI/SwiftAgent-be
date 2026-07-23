@@ -1026,8 +1026,6 @@ async def record_token_usage(
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
                     "total_tokens": input_tokens + output_tokens,
-                },
-                "$inc": {  # noqa: F841 — combined into single op
                     f"model_breakdown.{model}": input_tokens + output_tokens,
                 },
                 "$setOnInsert": {
@@ -1093,7 +1091,7 @@ async def get_company_token_usage(
     }
 ```
 
-> **Note on the duplicate `$inc`:** the implementation combines them into a single dict — adjust during implementation if the patch tool treats them as separate keys. Final form should be a single `$inc` with multiple keys.
+> **Note:** the `$inc` is a single dict with all counter fields — verify during implementation.
 
 **Step 4: Run test to verify pass**
 
