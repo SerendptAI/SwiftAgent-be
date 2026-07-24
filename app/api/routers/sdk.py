@@ -15,6 +15,7 @@ from fastapi.encoders import jsonable_encoder
 from app.core.security import create_access_token, decode_access_token
 from app.core.request_utils import get_client_ip
 from app.core.sdk_auth import get_sdk_session, verify_api_key
+from app.core.plan_enforcement import enforce_chat_limit
 from app.core.database import db
 from app.models.sdk_models import (
     SdkChatRequest,
@@ -51,6 +52,8 @@ async def init_sdk(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="API key does not belong to the requested company_id",
         )
+
+    await enforce_chat_limit(company)
 
     # Find or create SDK user
     user_data = await sdk_service.init_sdk_user(company_id, req.email)
@@ -346,6 +349,11 @@ async def sdk_chat_endpoint(
     """
     if session["company_id"] != company_id:
         raise HTTPException(status_code=403, detail="Your session is not authorized for this company. Please re-initialize the SDK.")
+
+    company = await db.companies.find_one({"id": company_id})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    await enforce_chat_limit(company)
 
     email = session["email"]
     received_at = datetime.now(tz=timezone.utc).isoformat()
