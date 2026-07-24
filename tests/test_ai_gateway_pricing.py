@@ -25,6 +25,23 @@ class TestLookupPricing:
         assert p.input_per_1m >= 0
         assert p.output_per_1m >= 0
 
+    def test_provider_prefixed_match_exact(self):
+        # Model that matches by exact key with correct provider
+        p = lookup_pricing("claude-haiku-4-5-20251001", provider="anthropic")
+        assert p.provider == "anthropic"
+        assert p.model == "claude-haiku-4-5-20251001"
+
+    def test_provider_prefixed_match_wrong_provider(self):
+        # Exact match should still work even with wrong provider hint
+        p = lookup_pricing("claude-haiku-4-5-20251001", provider="wrong_provider")
+        assert p.model == "claude-haiku-4-5-20251001"
+        assert p.provider == "anthropic"
+
+    def test_provider_prefixed_fallback_suffix(self):
+        # Test that suffix fallback works for a model not in registry by exact key
+        p = lookup_pricing("claude-sonnet-4-5-20250929", provider="")
+        assert p.provider == "anthropic"
+
     def test_pricing_is_immutable(self):
         p = lookup_pricing("claude-haiku-4-5-20251001", provider="anthropic")
         with pytest.raises(Exception):

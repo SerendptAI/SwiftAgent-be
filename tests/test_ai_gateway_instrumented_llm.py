@@ -38,8 +38,10 @@ class TestRecordCallCost:
             meta = mock_ctx.update_current_observation.call_args.kwargs["metadata"]
             assert meta["cost_usd"] == 0.0
 
-    def test_swallows_errors_silently(self):
+    def test_swallows_errors_silently(self, caplog):
         # If langfuse raises, should not break the chat flow
+        import logging
+        caplog.set_level(logging.DEBUG)
         with patch("langfuse.decorators.langfuse_context") as mock_ctx:
             mock_ctx.update_current_observation.side_effect = Exception("boom")
             # Should not raise
@@ -48,6 +50,11 @@ class TestRecordCallCost:
                 provider="anthropic",
                 input_tokens=100, output_tokens=50,
             )
+        # Verify the error was logged
+        assert any(
+            "record_call_cost: langfuse context unavailable" in msg
+            for msg in caplog.messages
+        ), "Expected debug log about langfuse context"
 
 
 class TestCostRecord:

@@ -61,7 +61,7 @@ def record_call_cost(
                 "cost_usd": cost_usd,
             }
         )
-    except (ImportError, Exception) as exc:
+    except Exception as exc:
         # Not in an @observe context, or langfuse is disabled — that's fine.
         logger.debug("record_call_cost: langfuse context unavailable: %s", exc)
 
