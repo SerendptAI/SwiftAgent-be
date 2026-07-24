@@ -73,6 +73,7 @@ async def verify_public_key(public_key: str) -> dict | None:
     Updates ``last_used_at`` on success.
     Returns ``{form_id, company_id}`` or None.
     """
+    public_key = public_key.strip(' "\'')
     key_hash = _hash_key(public_key)
     doc = await db.form_keys.find_one(
         {"public_key_hash": key_hash, "active": True},
