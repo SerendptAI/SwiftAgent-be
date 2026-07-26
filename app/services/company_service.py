@@ -244,7 +244,7 @@ async def create_invite(company_id: str, admin_user_id: str, email: str) -> dict
     )
     # Send the user to a backend GET endpoint that handles acceptance and redirects
     accept_link = f"{settings.API_BASE_URL}/api/v1/companies/invites/accept?token={token}"
-    logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo 2.png"
+    logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo_compliant.png"
     await invite_email_service.send_invite_email(email, company.get("name", "A Company"), accept_link, logo_url)
     
     await invalidate_company_cache(company_id)
@@ -281,7 +281,7 @@ async def resend_invite(company_id: str, admin_user_id: str, email: str) -> dict
     )
     
     accept_link = f"{settings.API_BASE_URL}/api/v1/companies/invites/accept?token={token}"
-    logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo 2.png"
+    logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo_compliant.png"
     await invite_email_service.send_invite_email(email, company.get("name", "A Company"), accept_link, logo_url)
     
     await invalidate_company_cache(company_id)

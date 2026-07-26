@@ -296,7 +296,7 @@ async def send_ticket_reply(
     )
 
     # Company logo (next to the agent name).
-    logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo 2.png"
+    logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo_compliant.png"
 
     html_body = body_html or f"<p>{body_text}</p>"
     full_html = _build_reply_html(
@@ -792,7 +792,7 @@ async def _send_ticket_confirmation_email(company: dict, ticket: dict):
         from_email = f"{email_slug}@{settings.EMAIL_DOMAIN}"
         to_email = ticket["customer_email"]
         
-        logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo 2.png"
+        logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo_compliant.png"
         
         html = html.replace("{{company_logo_url}}", logo_url)
         html = html.replace("{{company_name}}", company_name)
@@ -886,7 +886,7 @@ async def _send_resolved_email(ticket: dict):
         to_email = ticket["customer_email"]
         
         html = _load_template(RESOLVED_TEMPLATE)
-        logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo 2.png"
+        logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo_compliant.png"
         
         html = html.replace("{{company_logo_url}}", logo_url)
         html = html.replace("{{company_name}}", company_name)
@@ -1026,10 +1026,10 @@ async def dispatch_all_test_templates(company_id: str, recipients: list[str], au
     company_name = company.get("name", "SwiftAgent")
     company_email = company.get("contact_email") or auth_user.get("email")
     email_slug = company.get("email_slug", "support")
-    company_logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo 2.png"
+    company_logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo_compliant.png"
     
     agent_name = auth_user.get("name", "Support Agent")
-    agent_avatar = auth_user.get("picture") or f"{settings.API_BASE_URL}/images/default_avatar.png"
+    agent_avatar = auth_user.get("picture") or f"{settings.API_BASE_URL}/images/logo_compliant.png"
     
     from_email = f"{email_slug}@{settings.EMAIL_DOMAIN}"
     
@@ -1251,7 +1251,7 @@ async def send_form_reply(
     msg.set_content(reply_text)
     
     # We can reuse the TICKET_REPLY_TEMPLATE
-    logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo 2.png"
+    logo_url = company.get("logo_url") or f"{settings.API_BASE_URL}/images/logo_compliant.png"
     full_html = _build_reply_html(
         html_body, agent_display, f"{settings.API_BASE_URL}{get_random_avatar()}", f"{settings.FRONTEND_URL}", logo_url, company_name
     )

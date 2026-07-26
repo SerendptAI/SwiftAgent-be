@@ -69,7 +69,7 @@ async def resolve_ticket_page(token: str):
     company_name = company.get("name", "Support") if company else "Support"
     logo_url = company.get("logo_url") if company else None
     
-    logo_url_fallback = logo_url or f"{settings.API_BASE_URL}/images/logo 2.png"
+    logo_url_fallback = logo_url or f"{settings.API_BASE_URL}/images/logo_compliant.png"
 
     if ticket["status"] == "resolved":
         html = _load_template(RESOLVED_TEMPLATE)
@@ -109,7 +109,7 @@ async def confirm_resolve_ticket(token: str):
     company = await company_service.get_company(company_id)
     company_name = company.get("name", "Support") if company else "Support"
     logo_url = company.get("logo_url") if company else None
-    logo_url_fallback = logo_url or f"{settings.API_BASE_URL}/images/logo 2.png"
+    logo_url_fallback = logo_url or f"{settings.API_BASE_URL}/images/logo_compliant.png"
 
     html = html.replace("{{company_name}}", company_name)
     html = html.replace("{{company_logo_url}}", logo_url_fallback)
