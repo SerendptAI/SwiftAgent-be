@@ -1039,7 +1039,7 @@ async def dispatch_all_test_templates(company_id: str, recipients: list[str], au
             "subject": "Welcome to SwiftAgent",
             "replacements": {
                 "{{company_name}}": company_name,
-                "{{login_url}}": f"{settings.FRONTEND_URL}/login"
+                "{{dashboardUrl}}": f"{settings.FRONTEND_URL}/dashboard"
             }
         },
         {
