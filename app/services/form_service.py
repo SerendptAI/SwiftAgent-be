@@ -301,6 +301,12 @@ class FormService:
         docs = await cursor.to_list(length=limit)
         return [self._map_submission(doc) for doc in docs]
 
+    async def count_submissions_for_form(self, form_id: str, company_id: str, is_read: Optional[bool] = None) -> int:
+        query = {"form_id": form_id, "company_id": company_id}
+        if is_read is not None:
+            query["is_read"] = is_read
+        return await db.form_submissions.count_documents(query)
+
     async def get_all_submissions_for_company(self, company_id: str, is_read: Optional[bool] = None, skip: int = 0, limit: int = 50) -> List[FormSubmissionResponse]:
         query = {"company_id": company_id}
         if is_read is not None:
@@ -309,6 +315,12 @@ class FormService:
         cursor = db.form_submissions.find(query).sort("submitted_at", -1).skip(skip).limit(limit)
         docs = await cursor.to_list(length=limit)
         return [self._map_submission(doc) for doc in docs]
+
+    async def count_all_submissions_for_company(self, company_id: str, is_read: Optional[bool] = None) -> int:
+        query = {"company_id": company_id}
+        if is_read is not None:
+            query["is_read"] = is_read
+        return await db.form_submissions.count_documents(query)
 
     async def get_submissions_by_page(
         self, form_id: str, company_id: str, page_path: str,

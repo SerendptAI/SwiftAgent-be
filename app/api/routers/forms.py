@@ -1,8 +1,14 @@
+import logging
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
 
 from app.core.auth import get_current_user
+from app.core.security import decode_access_token
+from app.core.database import db
 from app.services.company_service import get_company
+
+logger = logging.getLogger(__name__)
 from app.models.form_models import (
     WebsiteFormCreate,
     OnlineFormCreate,
@@ -436,3 +442,233 @@ async def reply_to_submission(
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found after reply")
     return submission
+
+
+# ── REALTIME WEBSOCKET ENDPOINTS ──
+
+
+async def _verify_ws_auth(websocket: WebSocket, company_id: str, token: str):
+    """Authenticate WebSocket connection via JWT query token."""
+    try:
+        payload = decode_access_token(token)
+        if not payload or not payload.get("sub"):
+            await websocket.send_json({"type": "error", "message": "Invalid or missing token"})
+            await websocket.close(code=1008)
+            return None
+        user_id = payload.get("sub")
+        company = await get_company(company_id, user_id)
+        if not company:
+            await websocket.send_json({"type": "error", "message": "Company not found or unauthorized"})
+            await websocket.close(code=1008)
+            return None
+        return company
+    except Exception as e:
+        logger.error(f"WebSocket auth failed: {e}")
+        await websocket.close(code=1008)
+        return None
+
+
+@router.websocket("/{company_id}/ws")
+async def forms_list_websocket(
+    websocket: WebSocket,
+    company_id: str,
+    token: str = Query(...)
+):
+    """Real-time WebSocket for the list of forms for a company.
+    Pushes the updated form list whenever forms change.
+    Requires a valid JWT token passed as a query parameter (?token=...).
+    """
+    await websocket.accept()
+    if not await _verify_ws_auth(websocket, company_id, token):
+        return
+
+    try:
+        forms = await form_service.get_forms_for_company(company_id, 0, 50)
+        await websocket.send_json({
+            "items": jsonable_encoder(forms),
+            "total": len(forms)
+        })
+    except Exception as e:
+        logger.error(f"Error fetching initial forms for WS: {e}")
+        await websocket.close()
+        return
+
+    try:
+        pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace", "delete"]}}}]
+        async with db.forms.watch(pipeline, full_document="updateLookup") as stream:
+            async for change in stream:
+                full_doc = change.get("fullDocument")
+                if full_doc and full_doc.get("company_id") != company_id:
+                    continue
+
+                forms = await form_service.get_forms_for_company(company_id, 0, 50)
+                await websocket.send_json({
+                    "items": jsonable_encoder(forms),
+                    "total": len(forms)
+                })
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for company {company_id} forms list")
+    except Exception as e:
+        logger.error(f"WebSocket change stream error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
+
+
+@router.websocket("/{company_id}/submissions/ws")
+async def all_submissions_websocket(
+    websocket: WebSocket,
+    company_id: str,
+    token: str = Query(...)
+):
+    """Real-time WebSocket for all form submissions of a company.
+    Pushes the initial list of submissions upon connection, and whenever any submission changes.
+    Requires a valid JWT token passed as a query parameter (?token=...).
+    """
+    await websocket.accept()
+    if not await _verify_ws_auth(websocket, company_id, token):
+        return
+
+    try:
+        submissions = await form_service.get_all_submissions_for_company(company_id, None, 0, 50)
+        total = await form_service.count_all_submissions_for_company(company_id)
+        await websocket.send_json({
+            "items": jsonable_encoder(submissions),
+            "total": total,
+            "limit": 50,
+            "skip": 0,
+            "has_next": len(submissions) < total
+        })
+    except Exception as e:
+        logger.error(f"Error fetching initial submissions for WS: {e}")
+        await websocket.close()
+        return
+
+    try:
+        pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace", "delete"]}}}]
+        async with db.form_submissions.watch(pipeline, full_document="updateLookup") as stream:
+            async for change in stream:
+                full_doc = change.get("fullDocument")
+                if full_doc and full_doc.get("company_id") != company_id:
+                    continue
+
+                submissions = await form_service.get_all_submissions_for_company(company_id, None, 0, 50)
+                total = await form_service.count_all_submissions_for_company(company_id)
+                await websocket.send_json({
+                    "items": jsonable_encoder(submissions),
+                    "total": total,
+                    "limit": 50,
+                    "skip": 0,
+                    "has_next": len(submissions) < total
+                })
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for company {company_id} submissions")
+    except Exception as e:
+        logger.error(f"WebSocket change stream error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
+
+
+@router.websocket("/{company_id}/{form_id}/submissions/ws")
+async def form_submissions_websocket(
+    websocket: WebSocket,
+    company_id: str,
+    form_id: str,
+    token: str = Query(...)
+):
+    """Real-time WebSocket for submissions of a specific form.
+    Pushes the initial list of submissions upon connection, and whenever any submission for this form changes.
+    Requires a valid JWT token passed as a query parameter (?token=...).
+    """
+    await websocket.accept()
+    if not await _verify_ws_auth(websocket, company_id, token):
+        return
+
+    try:
+        submissions = await form_service.get_submissions_for_form(form_id, company_id, None, 0, 50)
+        total = await form_service.count_submissions_for_form(form_id, company_id)
+        await websocket.send_json({
+            "items": jsonable_encoder(submissions),
+            "total": total,
+            "limit": 50,
+            "skip": 0,
+            "has_next": len(submissions) < total
+        })
+    except Exception as e:
+        logger.error(f"Error fetching initial form submissions for WS: {e}")
+        await websocket.close()
+        return
+
+    try:
+        pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace", "delete"]}}}]
+        async with db.form_submissions.watch(pipeline, full_document="updateLookup") as stream:
+            async for change in stream:
+                full_doc = change.get("fullDocument")
+                if full_doc and (full_doc.get("company_id") != company_id or full_doc.get("form_id") != form_id):
+                    continue
+
+                submissions = await form_service.get_submissions_for_form(form_id, company_id, None, 0, 50)
+                total = await form_service.count_submissions_for_form(form_id, company_id)
+                await websocket.send_json({
+                    "items": jsonable_encoder(submissions),
+                    "total": total,
+                    "limit": 50,
+                    "skip": 0,
+                    "has_next": len(submissions) < total
+                })
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for form {form_id} submissions")
+    except Exception as e:
+        logger.error(f"WebSocket change stream error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
+
+
+@router.websocket("/{company_id}/{form_id}/overview/ws")
+async def form_overview_websocket(
+    websocket: WebSocket,
+    company_id: str,
+    form_id: str,
+    token: str = Query(...)
+):
+    """Real-time WebSocket for a website form's overview (pages, forms, submission counts).
+    Pushes the initial overview upon connection, and whenever any submission for this form changes.
+    Requires a valid JWT token passed as a query parameter (?token=...).
+    """
+    await websocket.accept()
+    if not await _verify_ws_auth(websocket, company_id, token):
+        return
+
+    try:
+        overview = await form_service.get_website_overview(form_id, company_id)
+        if overview:
+            await websocket.send_json(jsonable_encoder(overview))
+    except Exception as e:
+        logger.error(f"Error fetching initial form overview for WS: {e}")
+        await websocket.close()
+        return
+
+    try:
+        pipeline = [{"$match": {"operationType": {"$in": ["insert", "update", "replace", "delete"]}}}]
+        async with db.form_submissions.watch(pipeline, full_document="updateLookup") as stream:
+            async for change in stream:
+                full_doc = change.get("fullDocument")
+                if full_doc and (full_doc.get("company_id") != company_id or full_doc.get("form_id") != form_id):
+                    continue
+
+                overview = await form_service.get_website_overview(form_id, company_id)
+                if overview:
+                    await websocket.send_json(jsonable_encoder(overview))
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for form {form_id} overview")
+    except Exception as e:
+        logger.error(f"WebSocket change stream error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
