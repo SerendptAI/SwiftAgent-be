@@ -31,17 +31,24 @@ async def _get_published_form(form_id: str) -> dict:
     return form
 
 
-async def _send_submission_alert(alert_email: str, form_title: str, data: dict):
-    """Background task: send a simple notification email when a form is submitted."""
+async def _send_submission_alert(
+    alert_email: str,
+    form_title: str,
+    data: dict,
+    form_id: str | None = None,
+    submitted_at=None,
+    page_url: str | None = None,
+):
+    """Background task: send a branded notification email when a form is submitted."""
     try:
-        from app.services.email_utils import send_simple_email
-        body_lines = [f"<b>New submission for: {form_title}</b><br><br>"]
-        for key, value in data.items():
-            body_lines.append(f"<b>{key.replace('_', ' ').title()}:</b> {value}<br>")
-        await send_simple_email(
-            to=alert_email,
-            subject=f"New Form Submission — {form_title}",
-            html_body="".join(body_lines),
+        from app.services.company_email_service import send_form_submission_alert
+        await send_form_submission_alert(
+            alert_email=alert_email,
+            form_title=form_title,
+            data=data,
+            form_id=form_id,
+            submitted_at=submitted_at,
+            page_url=page_url,
         )
     except Exception as e:
         logger.warning("Form submission alert email failed: %s", e)
@@ -105,6 +112,9 @@ async def submit_widget_form(
             alert_email=form.alert_email,
             form_title=form.form_title or form.website_link or "Website Form",
             data=submission.data,
+            form_id=form_id,
+            submitted_at=result.submitted_at,
+            page_url=submission.page_url,
         )
 
     return {"submission_id": result.id, "status": "ok"}
@@ -132,6 +142,8 @@ async def submit_online_form(
             alert_email=form.alert_email,
             form_title=form.form_title or "Online Form",
             data=submission.data,
+            form_id=form_id,
+            submitted_at=result.submitted_at,
         )
 
     return result
@@ -159,6 +171,8 @@ async def submit_public_form(
             alert_email=form.alert_email,
             form_title=form.form_title or getattr(form, "website_link", "Form"),
             data=submission.data,
+            form_id=form_id,
+            submitted_at=result.submitted_at,
         )
 
     return result
