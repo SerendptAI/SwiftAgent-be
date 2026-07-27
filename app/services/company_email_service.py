@@ -3,6 +3,7 @@ import base64
 import logging
 import re
 from datetime import datetime, timezone, timedelta
+from html import escape as html_escape
 from pathlib import Path
 from uuid import uuid4
 
@@ -35,6 +36,7 @@ RESOLVED_TEMPLATE = TEMPLATES_DIR / "resolved.html"
 NEW_MESSAGE_TEMPLATE = TEMPLATES_DIR / "new_message.html"
 NEW_TICKET_TEMPLATE = TEMPLATES_DIR / "new_ticket.html"
 TICKET_CONFIRMATION_TEMPLATE = TEMPLATES_DIR / "ticket_confirmation.html"
+FORM_SUBMISSION_TEMPLATE = TEMPLATES_DIR / "form_submission.html"
 
 _TICKET_ID_RE = re.compile(r"\[Ticket\s*#([A-Z0-9]{8})\]", re.IGNORECASE)
 
@@ -813,6 +815,77 @@ async def _send_ticket_confirmation_email(company: dict, ticket: dict):
         logger.info("Sent ticket confirmation email for ticket %s to %s", ticket['id'], to_email)
     except Exception as e:
         logger.exception("Failed to send ticket confirmation email for ticket %s: %s", ticket['id'], e)
+
+
+def _form_detail_row(label: str, value: str, is_first: bool, is_last: bool, stacked: bool = False) -> str:
+    border = "" if is_last else "border-bottom: 1px solid #e5e7eb;"
+    pad_top = "padding-top: 0;" if is_first else "padding-top: 16px;"
+    pad_bottom = "" if is_last else "padding-bottom: 15px;"
+    label = html_escape(label)
+    value = html_escape(value)
+    if stacked:
+        return (
+            f'<tr><td colspan="2" valign="top" style="{pad_top} {pad_bottom} {border} '
+            f'font-family: \'Roboto\', Helvetica, Arial, sans-serif; font-size: 13px;">'
+            f'<p style="margin: 0 0 4px; font-weight: 400; color: #6b7280;">{label}:</p>'
+            f'<p style="margin: 0; font-weight: 400; color: #1c1818; line-height: 1.5; word-break: break-word;">{value}</p>'
+            f'</td></tr>'
+        )
+    return (
+        f'<tr>'
+        f'<td valign="middle" style="{pad_top} {pad_bottom} {border} font-family: \'Roboto\', Helvetica, Arial, sans-serif; '
+        f'font-size: 13px; font-weight: 400; color: #6b7280; white-space: nowrap;">{label}:</td>'
+        f'<td valign="middle" align="right" style="text-align: right; {pad_top} {pad_bottom} {border} '
+        f'font-family: \'Roboto\', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; color: #1c1818; '
+        f'word-break: break-word;">{value}</td>'
+        f'</tr>'
+    )
+
+
+async def send_form_submission_alert(
+    alert_email: str,
+    form_title: str,
+    data: dict,
+    form_id: str | None = None,
+    submitted_at: datetime | None = None,
+    page_url: str | None = None,
+) -> None:
+    """Notify a company that a visitor submitted one of their forms."""
+    try:
+        html = _load_template(FORM_SUBMISSION_TEMPLATE)
+
+        items = [("Form Name", str(form_title or "Untitled Form"), False)]
+        for key, value in data.items():
+            label = str(key).replace("_", " ").replace("-", " ").strip().title() or str(key)
+            value_str = str(value)
+            items.append((label, value_str, len(value_str) > 50))
+        if submitted_at:
+            items.append(("Submitted", submitted_at.strftime("%b %d, %Y · %I:%M %p"), False))
+        if page_url:
+            items.append(("Source URL", page_url, False))
+
+        rows_html = "".join(
+            _form_detail_row(label, value, i == 0, i == len(items) - 1, stacked)
+            for i, (label, value, stacked) in enumerate(items)
+        )
+
+        dashboard_url = f"{settings.FRONTEND_URL}/dashboard/forms/{form_id}" if form_id else f"{settings.FRONTEND_URL}/dashboard/forms"
+
+        html = html.replace("{{detail_rows}}", rows_html)
+        html = html.replace("{{dashboard_url}}", dashboard_url)
+
+        msg = EmailMessage()
+        msg["Subject"] = f"New Form Submission — {form_title}"
+        msg["From"] = f"Swift Agents <{settings.active_sender_email}>"
+        msg["To"] = alert_email
+
+        msg.set_content(f"New form submission for {form_title}. View it on your dashboard: {dashboard_url}")
+        add_html_with_inline_images(msg, html)
+
+        await asyncio.to_thread(_send_smtp_email, msg)
+        logger.info("Sent form submission alert for '%s' to %s", form_title, alert_email)
+    except Exception as e:
+        logger.exception("Failed to send form submission alert for '%s': %s", form_title, e)
 
 
 async def get_ticket_by_resolve_token(token: str) -> dict | None:
