@@ -30,7 +30,7 @@ async def _is_url_safe(url: str) -> tuple[bool, str]:
             return False, "URL has no hostname"
 
         # Explicit blocklist to prevent internal endpoint probing
-        if hostname.lower() in ("api.swiftagents.org", "localhost", "127.0.0.1", "169.254.169.254"):
+        if hostname.lower() in ("localhost", "127.0.0.1", "0.0.0.0", "::1", "169.254.169.254"):
             return False, "Access to internal API domains or restricted hosts is prohibited"
 
         # Resolve all IPs for the hostname using async wrapper
