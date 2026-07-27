@@ -186,7 +186,21 @@ class WidgetCorsBypassMiddleware:
     async def __call__(self, scope, receive, send):
         is_http = scope["type"] == "http"
         is_ws = scope["type"] == "websocket"
-        if is_http or is_ws:
+
+        if is_ws:
+            # Strip the Origin header from the scope for ALL WebSocket connections
+            # so that downstream Starlette CORSMiddleware doesn't block the upgrade
+            # with a bare 403 Forbidden when origin isn't whitelisted.
+            # WebSocket authentication is enforced at each endpoint via JWT / API key.
+            if "headers" in scope:
+                scope["headers"] = [
+                    (k, v) for k, v in scope["headers"]
+                    if k.lower() != b"origin"
+                ]
+            await self.app(scope, receive, send)
+            return
+
+        if is_http:
             path = scope.get("path", "")
             if any(path.startswith(p) for p in self.BYPASS_PREFIXES) or any(
                 path.endswith(s) for s in self.BYPASS_SUFFIXES
@@ -195,7 +209,7 @@ class WidgetCorsBypassMiddleware:
                 # websites — allow any origin. Auth is enforced at the endpoint level
                 # via API key, not CORS. Note: * is incompatible with credentials=true,
                 # which is correct here since widget auth uses API keys, not cookies.
-                if is_http and scope["method"] == "OPTIONS":
+                if scope["method"] == "OPTIONS":
                     from starlette.responses import Response
                     response = Response(
                         status_code=200,
@@ -223,15 +237,6 @@ class WidgetCorsBypassMiddleware:
                             res_headers.append((b"access-control-allow-origin", b"*"))
                             message["headers"] = res_headers
                         await send(message)
-
-                    # Strip the Origin header from the scope so that the downstream
-                    # Starlette CORSMiddleware doesn't block the WebSocket upgrade
-                    # with a 403 Forbidden when origin isn't whitelisted.
-                    if "headers" in scope:
-                        scope["headers"] = [
-                            (k, v) for k, v in scope["headers"]
-                            if k.lower() != b"origin"
-                        ]
 
                     await self.app(scope, receive, custom_send)
                     return
