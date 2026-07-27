@@ -173,6 +173,7 @@ class WidgetCorsBypassMiddleware:
         "/api/v1/chat",
         "/api/v1/public/stroll",
         "/api/v1/public/forms",
+        "/api/v1/forms",
         # NOTE: /api/v1/stroll is intentionally excluded — all routes are JWT-protected
         # admin endpoints. Widget origins should not receive CORS access to them.
         "/api/v1/email/inbound",

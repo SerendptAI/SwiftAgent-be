@@ -447,9 +447,21 @@ async def reply_to_submission(
 # ── REALTIME WEBSOCKET ENDPOINTS ──
 
 
-async def _verify_ws_auth(websocket: WebSocket, company_id: str, token: str):
-    """Authenticate WebSocket connection via JWT query token."""
+async def _verify_ws_auth(websocket: WebSocket, company_id: str, token: Optional[str] = None):
+    """Authenticate WebSocket connection via JWT query token or Authorization header."""
     try:
+        if not token:
+            auth_header = websocket.headers.get("authorization", "")
+            if auth_header.lower().startswith("bearer "):
+                token = auth_header[7:].strip()
+            else:
+                token = websocket.query_params.get("token")
+
+        if not token:
+            await websocket.send_json({"type": "error", "message": "Missing authentication token (?token=... or Authorization: Bearer ...)"})
+            await websocket.close(code=1008)
+            return None
+
         payload = decode_access_token(token)
         if not payload or not payload.get("sub"):
             await websocket.send_json({"type": "error", "message": "Invalid or missing token"})
@@ -472,11 +484,11 @@ async def _verify_ws_auth(websocket: WebSocket, company_id: str, token: str):
 async def forms_list_websocket(
     websocket: WebSocket,
     company_id: str,
-    token: str = Query(...)
+    token: Optional[str] = Query(None)
 ):
     """Real-time WebSocket for the list of forms for a company.
     Pushes the updated form list whenever forms change.
-    Requires a valid JWT token passed as a query parameter (?token=...).
+    Requires a valid JWT token passed as a query parameter (?token=...) or Authorization header.
     """
     await websocket.accept()
     if not await _verify_ws_auth(websocket, company_id, token):
@@ -520,11 +532,11 @@ async def forms_list_websocket(
 async def all_submissions_websocket(
     websocket: WebSocket,
     company_id: str,
-    token: str = Query(...)
+    token: Optional[str] = Query(None)
 ):
     """Real-time WebSocket for all form submissions of a company.
     Pushes the initial list of submissions upon connection, and whenever any submission changes.
-    Requires a valid JWT token passed as a query parameter (?token=...).
+    Requires a valid JWT token passed as a query parameter (?token=...) or Authorization header.
     """
     await websocket.accept()
     if not await _verify_ws_auth(websocket, company_id, token):
@@ -577,11 +589,11 @@ async def form_submissions_websocket(
     websocket: WebSocket,
     company_id: str,
     form_id: str,
-    token: str = Query(...)
+    token: Optional[str] = Query(None)
 ):
     """Real-time WebSocket for submissions of a specific form.
     Pushes the initial list of submissions upon connection, and whenever any submission for this form changes.
-    Requires a valid JWT token passed as a query parameter (?token=...).
+    Requires a valid JWT token passed as a query parameter (?token=...) or Authorization header.
     """
     await websocket.accept()
     if not await _verify_ws_auth(websocket, company_id, token):
@@ -634,11 +646,11 @@ async def form_overview_websocket(
     websocket: WebSocket,
     company_id: str,
     form_id: str,
-    token: str = Query(...)
+    token: Optional[str] = Query(None)
 ):
     """Real-time WebSocket for a website form's overview (pages, forms, submission counts).
     Pushes the initial overview upon connection, and whenever any submission for this form changes.
-    Requires a valid JWT token passed as a query parameter (?token=...).
+    Requires a valid JWT token passed as a query parameter (?token=...) or Authorization header.
     """
     await websocket.accept()
     if not await _verify_ws_auth(websocket, company_id, token):
