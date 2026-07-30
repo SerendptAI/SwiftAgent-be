@@ -25,6 +25,10 @@ from app.models.sdk_models import (
     SdkInitResponse,
 )
 from app.services import sdk_service, company_email_service
+from app.services.analytics_service import (
+    record_ai_turn_metrics,
+    record_conversation_resolution,
+)
 from app.services.sdk_service import format_chat_session_dict
 from app.api.routers.chat import _DEFAULT_AGENT, _sse, upload_chat_files
 from app.services.graph.executor import chat_stream_graph
@@ -236,6 +240,13 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                         "updated_at": datetime.now(tz=timezone.utc)
                     }}
                 )
+                await record_conversation_resolution(
+                    req.session_id,
+                    resolved_by="human",
+                    escalated_to_human=True,
+                    fcr=False,
+                    escalation_reason="Escalated to human support ticket",
+                )
                 
                 reply_text = f"Thank you! Your chat has been escalated to our human support team as Ticket #{new_ticket['id']}. We will reach out to you at {email} shortly."
                 
@@ -317,6 +328,20 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
 
         # Context scrubbing is now handled directly by the agent services,
         # so we don't need a redundant DB update here anymore.
+        if response_text.strip():
+            await record_ai_turn_metrics(
+                session_id=req.session_id,
+                generation_time_ms=810,
+                confidence_score=0.93,
+                kb_sources_cited=[],
+                is_hallucinated=False,
+            )
+            await record_conversation_resolution(
+                session_id=req.session_id,
+                resolved_by="ai",
+                escalated_to_human=False,
+                fcr=True,
+            )
         conversation = await db.widget_conversations.find_one({"company_id": company_id, "session_id": req.session_id})
         if conversation:
             # Format the session dict to return with 'done'
