@@ -117,7 +117,11 @@ async def create_indexes():
     await db.form_submissions.create_index([("form_id", 1), ("submitted_at", -1)])
 
     # Form keys (SDPK key pairs for widget auth)
-    await db.form_keys.create_index("form_id", unique=True)
+    try:
+        await db.form_keys.drop_index("form_id_1")
+    except Exception:
+        pass
+    await db.form_keys.create_index("form_id")
     await db.form_keys.create_index("public_key_hash")
     await db.form_keys.create_index("api_key_hash")
 
