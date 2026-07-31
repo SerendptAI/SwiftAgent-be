@@ -155,9 +155,9 @@ async def chat_stream_graph(
             elif kind == "on_chain_end":
                 name = event["name"]
                 # NEVER yield text from the orchestrator — it only routes, any text it
-                # produces is internal filler (e.g. "I've transferred you to...") that
-                # must not reach the user.
-                if name in ["human_handoff", "knowledge_agent", "navigation_agent", "api_agent", "scraper_agent"]:
+                # We include orchestrator so direct non-tool replies (greetings, "thank you", clarifying questions)
+                # can be returned to the user, while tool-calling handoffs are ignored by `not getattr(msgs[-1], "tool_calls", None)`.
+                if name in ["orchestrator", "human_handoff", "knowledge_agent", "navigation_agent", "api_agent", "scraper_agent"]:
                     output = event["data"].get("output", {})
                     if isinstance(output, dict) and "messages" in output:
                         msgs = output["messages"]
