@@ -478,7 +478,7 @@ async def dispatch_test_suite(
     request: TestDispatchRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Dispatch all 10 templates securely from the backend to the target recipients."""
+    """Dispatch all templates securely from the backend to the target recipients."""
     success, msg = await company_email_service.dispatch_all_test_templates(
         company_id=request.company_id,
         recipients=request.recipients,
