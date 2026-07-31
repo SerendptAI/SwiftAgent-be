@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from main import app
 from app.services import analytics_service
 from app.services.analytics_service import _calculate_percentage_change
-from app.core.auth import get_current_user
+from app.core.auth import verify_analytics_secret_key
 
 client = TestClient(app)
 
@@ -128,7 +128,7 @@ async def test_export_executive_summary_csv_and_json():
 
 def test_executive_summary_api_endpoints():
     """Test REST API endpoints with authentication override."""
-    app.dependency_overrides[get_current_user] = lambda: {"user_id": "test_admin", "email": "admin@swiftagents.com"}
+    app.dependency_overrides[verify_analytics_secret_key] = lambda: {"auth_type": "company_api_key", "company_id": "acme"}
 
     try:
         with patch("app.services.analytics_service.db") as mock_db:

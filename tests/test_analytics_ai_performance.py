@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from main import app
 from app.services import analytics_service
-from app.core.auth import get_current_user
+from app.core.auth import verify_analytics_secret_key
 from app.core.cache import TTLCache
 
 client = TestClient(app)
@@ -123,7 +123,7 @@ def test_ai_performance_api_endpoints():
     """
     Test GET /api/v1/analytics/ai-performance and export endpoint via HTTP TestClient.
     """
-    app.dependency_overrides[get_current_user] = lambda: {"user_id": "test", "company_id": "acme"}
+    app.dependency_overrides[verify_analytics_secret_key] = lambda: {"auth_type": "company_api_key", "company_id": "acme"}
     try:
         with patch("app.services.analytics_service.db") as mock_db:
             mock_db.widget_conversations.count_documents = AsyncMock(return_value=0)

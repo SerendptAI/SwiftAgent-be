@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from main import app
 from app.services import analytics_service
-from app.core.auth import get_current_user
+from app.core.auth import verify_analytics_secret_key
 from app.core.database import get_database
 from app.core.cache import TTLCache
 
@@ -103,7 +103,7 @@ def test_submit_analytics_feedback_endpoint():
     mock_db.email_tickets.find_one = AsyncMock(return_value=None)
     mock_db.email_tickets.update_one = AsyncMock()
 
-    app.dependency_overrides[get_current_user] = lambda: {"user_id": "usr_1", "company_id": "company_acme"}
+    app.dependency_overrides[verify_analytics_secret_key] = lambda: {"auth_type": "company_api_key", "company_id": "company_acme"}
     app.dependency_overrides[get_database] = lambda: mock_db
     try:
         payload = {
