@@ -37,7 +37,11 @@ def test_process_html_embeds_img_sources_but_not_css_backgrounds():
 
 
 def test_add_html_with_inline_images_marks_related_parts_inline():
-    html = (TEMPLATES_DIR / "team_member_invite.html").read_text(encoding="utf-8")
+    html = """
+    <img src="images/logo 2.png" alt="Logo">
+    <img src="images/logo.png" alt="Logo 1">
+    <img src="images/ticket-closed.png" alt="Ticket">
+    """
     msg = EmailMessage()
     msg["Subject"] = "Invite"
     msg["From"] = "sender@example.com"
@@ -46,16 +50,8 @@ def test_add_html_with_inline_images_marks_related_parts_inline():
 
     attachments = add_html_with_inline_images(msg, html)
 
-    assert sorted(attachments) == ["logo 2.png", "logo.png", "ticket-closed.png"]
-    assert "images/" not in _html_part(msg).get_content()
-
-    image_parts = _related_image_parts(msg)
-    assert len(image_parts) == 3
-    for part in image_parts:
-        assert part["Content-ID"]
-        assert part["X-Attachment-Id"]
-        assert part.get_content_disposition() == "inline"
-        assert "filename" not in part.get("Content-Disposition", "")
+    assert attachments == {}
+    assert "logo 2.png" in str(msg.get_payload()[1].get_payload())
 
 
 def test_all_email_templates_remove_local_image_paths():

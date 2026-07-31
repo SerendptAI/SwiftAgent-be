@@ -4,7 +4,7 @@ from app.services.graph.tools import get_dashboard_navigation, get_full_dashboar
 from app.services.graph.prompt_utils import build_company_persona_prompt
 from langchain_core.messages import SystemMessage
 from app.core.langfuse import observe
-from app.services.graph.orchestrator import ROUTING_TOOLS
+from app.services.graph.orchestrator import NAVIGATION_HANDOFF_TOOLS
 
 NAVIGATION_PROMPT = """You are the Navigation & UI Guide Expert.
 Your job is to guide users through the dashboard UI.
@@ -23,7 +23,7 @@ CRITICAL RULE: When you need to call a tool (including handoff/transfer tools), 
 @observe(name="navigation_agent_node")
 async def navigation_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"])
-    llm_with_tools = llm.bind_tools([get_dashboard_navigation, get_full_dashboard_documentation, render_navigation_guide] + ROUTING_TOOLS)
+    llm_with_tools = llm.bind_tools([get_dashboard_navigation, get_full_dashboard_documentation, render_navigation_guide] + NAVIGATION_HANDOFF_TOOLS)
     
     persona = build_company_persona_prompt(state.get("company_data", {}))
     full_prompt = f"{persona}\n\n{NAVIGATION_PROMPT}"

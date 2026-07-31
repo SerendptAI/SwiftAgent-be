@@ -37,7 +37,7 @@ class TestCompanyService:
         from app.core.cache import TTLCache
 
         cache = TTLCache(default_ttl=300)
-        await cache.set(f"company:{sample_company['id']}:user_456", sample_company)
+        await cache.set(f"company:{sample_company['id']}:user_456:False", sample_company)
 
         with patch.object(company_service, "db", mock_db):
             with patch.object(company_service, "company_cache", cache):

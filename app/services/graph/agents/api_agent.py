@@ -4,7 +4,7 @@ from app.services.graph.tools import get_api_documentation, query_company_api
 from app.services.graph.prompt_utils import build_company_persona_prompt
 from langchain_core.messages import SystemMessage
 from app.core.langfuse import observe
-from app.services.graph.orchestrator import ROUTING_TOOLS
+from app.services.graph.orchestrator import API_HANDOFF_TOOLS
 
 API_PROMPT = """You are the API & Integrations Expert.
 Your job is to query the company's external API integrations to look up real-time data for the user.
@@ -17,7 +17,7 @@ CRITICAL RULE: When you need to call a tool (including handoff/transfer tools), 
 @observe(name="api_agent_node")
 async def api_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"])
-    llm_with_tools = llm.bind_tools([get_api_documentation, query_company_api] + ROUTING_TOOLS)
+    llm_with_tools = llm.bind_tools([get_api_documentation, query_company_api] + API_HANDOFF_TOOLS)
     
     persona = build_company_persona_prompt(state.get("company_data", {}))
     full_prompt = f"{persona}\n\n{API_PROMPT}"

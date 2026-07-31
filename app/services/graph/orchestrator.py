@@ -8,7 +8,7 @@ from app.services.graph.prompt_utils import build_company_persona_prompt
 
 @tool
 def transfer_to_knowledge():
-    """Transfer to the knowledge agent for questions about policies, features, and general information. DO NOT use this for pricing or plans."""
+    """Transfer to the knowledge agent to search the internal knowledge base and documentation. Use this whenever information is NOT found on the website, or for general policy/documentation questions."""
     pass
 
 @tool
@@ -23,7 +23,7 @@ def transfer_to_api():
 
 @tool
 def transfer_to_scraper():
-    """Transfer to the scraper agent to read and extract text from a specific public website link. MUST use this FIRST for any questions about pricing or plans, as websites often have the most up-to-date pricing."""
+    """Transfer to the website scraper agent to check the company's official website or public URLs. MUST use this whenever information (such as use cases, features, pricing, plans, eligibility, or general company offerings) is NOT found in the knowledge base, or when the user asks about pricing, plans, or website content."""
     pass
 
 @tool
@@ -38,6 +38,35 @@ ROUTING_TOOLS = [
     transfer_to_scraper,
     escalate_to_human,
 ]
+
+KNOWLEDGE_HANDOFF_TOOLS = [
+    transfer_to_scraper,
+    transfer_to_navigation,
+    transfer_to_api,
+    escalate_to_human,
+]
+
+SCRAPER_HANDOFF_TOOLS = [
+    transfer_to_knowledge,
+    transfer_to_navigation,
+    transfer_to_api,
+    escalate_to_human,
+]
+
+NAVIGATION_HANDOFF_TOOLS = [
+    transfer_to_knowledge,
+    transfer_to_scraper,
+    transfer_to_api,
+    escalate_to_human,
+]
+
+API_HANDOFF_TOOLS = [
+    transfer_to_knowledge,
+    transfer_to_scraper,
+    transfer_to_navigation,
+    escalate_to_human,
+]
+
 
 ORCHESTRATOR_PROMPT = """Your job is to analyze the conversation and route the user's request to the correct specialized expert.
 

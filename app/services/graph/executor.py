@@ -96,18 +96,9 @@ async def chat_stream_graph(
             kind = event["event"]
             
             if kind == "on_chat_model_stream":
-                chunk = event["data"]["chunk"]
-                if chunk.content:
-                    text_content = ""
-                    if isinstance(chunk.content, str):
-                        text_content = chunk.content
-                    elif isinstance(chunk.content, list):
-                        text_parts = [c.get("text", "") for c in chunk.content if isinstance(c, dict) and c.get("type") == "text"]
-                        text_content = "".join(text_parts)
-                        
-                    # We no longer yield text here to prevent thinking streams. We'll yield it at on_chain_end if no tools were called.
-                    if text_content:
-                        final_text += text_content
+                # We do not accumulate or yield text chunks during intermediate model streaming
+                # to prevent pre-tool filler or internal routing thoughts from leaking.
+                pass
                     
             elif kind == "on_tool_start":
                 name = event["name"]
@@ -180,9 +171,15 @@ async def chat_stream_graph(
                                 text_parts = [c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text"]
                                 text_content = "".join(text_parts)
                                 
-                            if text_content:
+                            leak_phrases = ["transferred you", "transferring you", "transferred to", "routing you", "routing to"]
+                            if text_content and not any(phrase in text_content.lower() for phrase in leak_phrases):
                                 final_text = text_content # overwrite final_text since we didn't yield during stream
                                 yield {"type": "text", "content": text_content}
+
+        # Check if final_text contains internal routing leak
+        leak_phrases = ["transferred you", "transferring you", "transferred to", "routing you", "routing to"]
+        if any(phrase in final_text.lower() for phrase in leak_phrases):
+            final_text = ""
 
         # If the graph produced no response at all, yield a fallback so the
         # user is never left staring at a blank screen.

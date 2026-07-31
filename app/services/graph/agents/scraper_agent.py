@@ -4,7 +4,7 @@ from app.services.graph.tools import read_website_page
 from app.services.graph.prompt_utils import build_company_persona_prompt
 from langchain_core.messages import SystemMessage
 from app.core.langfuse import observe
-from app.services.graph.orchestrator import ROUTING_TOOLS
+from app.services.graph.orchestrator import SCRAPER_HANDOFF_TOOLS
 
 SCRAPER_PROMPT = """You are the Web Scraper Expert.
 Your job is to read and extract information from public URLs provided by the user.
@@ -19,14 +19,14 @@ WORKFLOW:
 5. Summarize or answer the user's specific questions based ONLY on the content of the page.
 6. If after retrying with force_refresh and following relevant links you still cannot find the information, use the available transfer tools to hand off the task to another appropriate agent (like the knowledge agent). Do NOT tell the user you don't know without first exhausting these options.
 
-FALLBACK RULE: If the `read_website_page` tool returns an error or no content at all, tell the user clearly: "I'm having trouble loading the page right now. Let me check our knowledge base instead." and then transfer to the knowledge agent. NEVER go silent.
+FALLBACK RULE: If the `read_website_page` tool returns an error, no content, or you cannot find the answer on the website, immediately call `transfer_to_knowledge` to check the knowledge base. Do NOT output any conversational text when transferring. Never go silent.
 
 CRITICAL RULE: When you need to call a tool (including handoff/transfer tools), you MUST NOT output ANY conversational text or "thinking" before the tool call! ONLY return the tool call itself."""
 
 @observe(name="scraper_agent_node")
 async def scraper_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"])
-    llm_with_tools = llm.bind_tools([read_website_page] + ROUTING_TOOLS)
+    llm_with_tools = llm.bind_tools([read_website_page] + SCRAPER_HANDOFF_TOOLS)
     
     persona = build_company_persona_prompt(state.get("company_data", {}))
     website = state.get("company_data", {}).get("website", "")
