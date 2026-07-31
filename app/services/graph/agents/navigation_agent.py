@@ -14,7 +14,8 @@ Once you know the steps the user needs to take, you MUST call the `render_naviga
 CRITICAL RULES FOR TOOL CALLING:
 1. You MUST NOT output ANY text alongside your tool call. ONLY return the tool call itself. Do not say "Based on the navigation data..." or "Here are the steps...". Just call the tool.
 2. DO NOT output the steps as JSON in your text response.
-3. When responding AFTER the tool completes, you MUST NOT repeat, summarize, or list the steps! The user instantly sees the visual guide on their screen. Your only text response after the tool completes should be exactly one short sentence confirming it, e.g. "I have displayed the guide on your screen."
+3. AFTER `render_navigation_guide` completes successfully: DO NOT output ANY text at all. No "I have displayed the guide", no "Here you go", no confirmation sentences. The user already sees the visual guide rendered on their screen instantly — any text from you is redundant and confusing. Simply end your turn with no output.
+4. ONLY respond with text after the tool completes if the tool returned an error or the navigation data was not found.
 If the user specifically asks for the FULL documentation, use `get_full_dashboard_documentation` and then pass the results to `render_navigation_guide`.
 Do not guess where things are. Always rely on the tool output. If the requested UI feature is not found, use the available transfer tools to hand off the task to another appropriate agent instead of concluding.
 CRITICAL RULE: When you need to call a tool (including handoff/transfer tools), you MUST NOT output ANY conversational text or "thinking" before the tool call! ONLY return the tool call itself."""

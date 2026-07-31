@@ -294,9 +294,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                 ):
                     event_type = event.get("type")
 
-                    if event_type == "thinking":
-                        yield _sse("thinking", message=event.get("message", ""))
-                    elif event_type == "tool":
+                    if event_type == "tool":
                         yield _sse("tool", name=event.get("name", ""), label=event.get("label", ""))
                     elif event_type == "text":
                         content = event.get("content", "")

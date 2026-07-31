@@ -366,10 +366,7 @@ async def _chat_sse_generator(
                 ):
                     event_type = event.get("type")
 
-                    if event_type == "thinking":
-                        yield _sse("thinking", message=event.get("message", ""))
-
-                    elif event_type == "tool":
+                    if event_type == "tool":
                         yield _sse("tool", name=event.get("name", ""), label=event.get("label", ""))
 
                     elif event_type == "text":

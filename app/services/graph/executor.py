@@ -111,9 +111,9 @@ async def chat_stream_graph(
                     
             elif kind == "on_tool_start":
                 name = event["name"]
-                if name.startswith("transfer_"):
-                    yield {"type": "thinking", "message": f"Routing to {name.replace('transfer_to_', '').replace('_', ' ')} expert..."}
-                else:
+                # Do NOT yield anything for internal transfer/routing tools — 
+                # these are invisible internal handoffs, not user-facing actions.
+                if not name.startswith("transfer_") and name != "escalate_to_human":
                     yield {"type": "tool", "name": name, "label": name.replace('_', ' ').title() + "..."}
                     
             elif kind == "on_tool_end":
@@ -163,7 +163,10 @@ async def chat_stream_graph(
 
             elif kind == "on_chain_end":
                 name = event["name"]
-                if name in ["human_handoff", "orchestrator", "knowledge_agent", "navigation_agent", "api_agent", "scraper_agent"]:
+                # NEVER yield text from the orchestrator — it only routes, any text it
+                # produces is internal filler (e.g. "I've transferred you to...") that
+                # must not reach the user.
+                if name in ["human_handoff", "knowledge_agent", "navigation_agent", "api_agent", "scraper_agent"]:
                     output = event["data"].get("output", {})
                     if isinstance(output, dict) and "messages" in output:
                         msgs = output["messages"]
@@ -180,6 +183,12 @@ async def chat_stream_graph(
                             if text_content:
                                 final_text = text_content # overwrite final_text since we didn't yield during stream
                                 yield {"type": "text", "content": text_content}
+
+        # If the graph produced no response at all, yield a fallback so the
+        # user is never left staring at a blank screen.
+        if not final_text.strip():
+            final_text = "I'm sorry, I wasn't able to find that information right now. Could you try rephrasing your question?"
+            yield {"type": "text", "content": final_text}
 
         # Store assistant message in DB
         if final_text:
