@@ -91,6 +91,7 @@ async def chat_stream_graph(
         config = {"configurable": {"state": state}}
         
         final_text = ""
+        has_yielded_response = False
         
         async for event in compiled_graph.astream_events(state, config, version="v2"):
             kind = event["event"]
@@ -135,6 +136,7 @@ async def chat_stream_graph(
                     elif name == "render_navigation_guide":
                         nav_data = result.get("navigation_data")
                         if nav_data:
+                            has_yielded_response = True
                             yield {"type": "navigation_guide", "guide": nav_data}
                     elif name == "get_full_dashboard_documentation":
                         steps = result.get("navigation_steps")
@@ -144,6 +146,7 @@ async def chat_stream_graph(
                             if report_data:
                                 guide_obj = reconstruct_navigation_guide(steps, report_data["page_lookup"])
                                 if guide_obj:
+                                    has_yielded_response = True
                                     yield {
                                         "type": "navigation_guide",
                                         "guide": {
@@ -174,6 +177,7 @@ async def chat_stream_graph(
                             leak_phrases = ["transferred you", "transferring you", "transferred to", "routing you", "routing to"]
                             if text_content and not any(phrase in text_content.lower() for phrase in leak_phrases):
                                 final_text = text_content # overwrite final_text since we didn't yield during stream
+                                has_yielded_response = True
                                 yield {"type": "text", "content": text_content}
 
         # Check if final_text contains internal routing leak
@@ -181,11 +185,16 @@ async def chat_stream_graph(
         if any(phrase in final_text.lower() for phrase in leak_phrases):
             final_text = ""
 
-        # If the graph produced no response at all, yield a fallback so the
-        # user is never left staring at a blank screen.
-        if not final_text.strip():
+        # If the graph produced no text AND no visual response (like a navigation guide) was yielded,
+        # yield a fallback so the user is never left staring at a blank screen.
+        if not final_text.strip() and not has_yielded_response:
             final_text = "I'm sorry, I wasn't able to find that information right now. Could you try rephrasing your question?"
             yield {"type": "text", "content": final_text}
+
+        # If we yielded a visual response (e.g. navigation guide) but no text was produced,
+        # set a clean summary so DB history has a record without showing a fallback to the user.
+        if not final_text.strip() and has_yielded_response:
+            final_text = "Displayed interactive navigation guide on screen."
 
         # Store assistant message in DB
         if final_text:
