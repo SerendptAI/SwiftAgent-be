@@ -3628,6 +3628,7 @@ dependencies = [
     { name = "requests" },
     { name = "sendgrid" },
     { name = "streamlit" },
+    { name = "tiktoken" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -3691,6 +3692,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
     { name = "sendgrid", specifier = ">=6.11.0,<7.0.0" },
     { name = "streamlit", specifier = ">=1.56.0" },
+    { name = "tiktoken", specifier = ">=0.8.0,<1.0.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0,<1.0.0" },
 ]
 provides-extras = ["dev"]
