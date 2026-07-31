@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from app.core.auth import get_current_user
+from app.core.auth import verify_analytics_secret_key
 from app.models.analytics_models import (
     ExecutiveSummaryResponse,
     ResolutionPerformanceResponse,
@@ -22,7 +22,7 @@ async def get_executive_summary(
     start_date: Optional[datetime] = Query(default=None, description="Optional start date in ISO format"),
     end_date: Optional[datetime] = Query(default=None, description="Optional end date in ISO format"),
     company_id: Optional[str] = Query(default=None, description="Optional company ID filter. Omitting returns platform-wide aggregate."),
-    current_user: dict = Depends(get_current_user),
+    auth: dict = Depends(verify_analytics_secret_key),
 ):
     """
     Get all Executive Summary metrics, KPIs, historical ARR, channel load distribution,
@@ -35,7 +35,7 @@ async def get_executive_summary(
             days=days,
             start_date=start_date,
             end_date=end_date,
-            company_id=company_id,
+            company_id=company_id or auth.get("company_id"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch executive summary: {str(e)}")
@@ -48,7 +48,7 @@ async def export_executive_summary(
     start_date: Optional[datetime] = Query(default=None, description="Optional start date in ISO format"),
     end_date: Optional[datetime] = Query(default=None, description="Optional end date in ISO format"),
     company_id: Optional[str] = Query(default=None, description="Optional company ID filter"),
-    current_user: dict = Depends(get_current_user),
+    auth: dict = Depends(verify_analytics_secret_key),
 ):
     """
     Export the Executive Summary report as a downloadable CSV or JSON file.
@@ -62,7 +62,7 @@ async def export_executive_summary(
             days=days,
             start_date=start_date,
             end_date=end_date,
-            company_id=company_id,
+            company_id=company_id or auth.get("company_id"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to export executive summary: {str(e)}")
@@ -88,7 +88,7 @@ async def get_resolution_performance(
     start_date: Optional[datetime] = Query(default=None, description="Optional start date in ISO format"),
     end_date: Optional[datetime] = Query(default=None, description="Optional end date in ISO format"),
     company_id: Optional[str] = Query(default=None, description="Optional company ID filter. Omitting returns platform-wide aggregate."),
-    current_user: dict = Depends(get_current_user),
+    auth: dict = Depends(verify_analytics_secret_key),
 ):
     """
     Get Section 2 Resolution Performance metrics, KPI cards, historical trend chart,
@@ -101,7 +101,7 @@ async def get_resolution_performance(
             days=days,
             start_date=start_date,
             end_date=end_date,
-            company_id=company_id,
+            company_id=company_id or auth.get("company_id"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch resolution performance: {str(e)}")
@@ -114,7 +114,7 @@ async def export_resolution_performance(
     start_date: Optional[datetime] = Query(default=None, description="Optional start date in ISO format"),
     end_date: Optional[datetime] = Query(default=None, description="Optional end date in ISO format"),
     company_id: Optional[str] = Query(default=None, description="Optional company ID filter"),
-    current_user: dict = Depends(get_current_user),
+    auth: dict = Depends(verify_analytics_secret_key),
 ):
     """
     Export the Section 2 Resolution Performance report as a downloadable CSV or JSON file.
@@ -128,7 +128,7 @@ async def export_resolution_performance(
             days=days,
             start_date=start_date,
             end_date=end_date,
-            company_id=company_id,
+            company_id=company_id or auth.get("company_id"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to export resolution performance: {str(e)}")
@@ -154,7 +154,7 @@ async def get_ai_performance(
     start_date: Optional[datetime] = Query(default=None, description="Optional start date in ISO format"),
     end_date: Optional[datetime] = Query(default=None, description="Optional end date in ISO format"),
     company_id: Optional[str] = Query(default=None, description="Optional company ID filter. Omitting returns platform-wide aggregate."),
-    current_user: dict = Depends(get_current_user),
+    auth: dict = Depends(verify_analytics_secret_key),
 ):
     """
     Get Section 3 AI Performance metrics, KPI cards, 12-month accuracy/confidence trends,
@@ -167,7 +167,7 @@ async def get_ai_performance(
             days=days,
             start_date=start_date,
             end_date=end_date,
-            company_id=company_id,
+            company_id=company_id or auth.get("company_id"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch AI performance: {str(e)}")
@@ -180,7 +180,7 @@ async def export_ai_performance(
     start_date: Optional[datetime] = Query(default=None, description="Optional start date in ISO format"),
     end_date: Optional[datetime] = Query(default=None, description="Optional end date in ISO format"),
     company_id: Optional[str] = Query(default=None, description="Optional company ID filter"),
-    current_user: dict = Depends(get_current_user),
+    auth: dict = Depends(verify_analytics_secret_key),
 ):
     """
     Export the Section 3 AI Performance report as a downloadable CSV or JSON file.
@@ -194,7 +194,7 @@ async def export_ai_performance(
             days=days,
             start_date=start_date,
             end_date=end_date,
-            company_id=company_id,
+            company_id=company_id or auth.get("company_id"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to export AI performance: {str(e)}")
@@ -220,7 +220,7 @@ async def get_customer_experience(
     start_date: Optional[datetime] = Query(default=None, description="Optional start date in ISO format"),
     end_date: Optional[datetime] = Query(default=None, description="Optional end date in ISO format"),
     company_id: Optional[str] = Query(default=None, description="Optional company ID filter. Omitting returns platform-wide aggregate."),
-    current_user: dict = Depends(get_current_user),
+    auth: dict = Depends(verify_analytics_secret_key),
 ):
     """
     Get Section 4 Customer Experience metrics, KPI cards (CSAT, Positive Sentiment,
@@ -233,7 +233,7 @@ async def get_customer_experience(
             days=days,
             start_date=start_date,
             end_date=end_date,
-            company_id=company_id,
+            company_id=company_id or auth.get("company_id"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch customer experience: {str(e)}")
@@ -246,7 +246,7 @@ async def export_customer_experience(
     start_date: Optional[datetime] = Query(default=None, description="Optional start date in ISO format"),
     end_date: Optional[datetime] = Query(default=None, description="Optional end date in ISO format"),
     company_id: Optional[str] = Query(default=None, description="Optional company ID filter"),
-    current_user: dict = Depends(get_current_user),
+    auth: dict = Depends(verify_analytics_secret_key),
 ):
     """
     Export the Section 4 Customer Experience report as a downloadable CSV or JSON file.
@@ -260,7 +260,7 @@ async def export_customer_experience(
             days=days,
             start_date=start_date,
             end_date=end_date,
-            company_id=company_id,
+            company_id=company_id or auth.get("company_id"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to export customer experience: {str(e)}")
@@ -286,7 +286,7 @@ async def get_business_impact(
     start_date: Optional[datetime] = Query(default=None, description="Optional start date in ISO format"),
     end_date: Optional[datetime] = Query(default=None, description="Optional end date in ISO format"),
     company_id: Optional[str] = Query(default=None, description="Optional company ID filter. Omitting returns platform-wide aggregate."),
-    current_user: dict = Depends(get_current_user),
+    auth: dict = Depends(verify_analytics_secret_key),
 ):
     """
     Get Section 5 Business Impact metrics, KPI cards (Human Hours Saved, Estimated Cost Saved,
@@ -300,7 +300,7 @@ async def get_business_impact(
             days=days,
             start_date=start_date,
             end_date=end_date,
-            company_id=company_id,
+            company_id=company_id or auth.get("company_id"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch business impact: {str(e)}")
@@ -313,7 +313,7 @@ async def export_business_impact(
     start_date: Optional[datetime] = Query(default=None, description="Optional start date in ISO format"),
     end_date: Optional[datetime] = Query(default=None, description="Optional end date in ISO format"),
     company_id: Optional[str] = Query(default=None, description="Optional company ID filter"),
-    current_user: dict = Depends(get_current_user),
+    auth: dict = Depends(verify_analytics_secret_key),
 ):
     """
     Export the Section 5 Business Impact report as a downloadable CSV or JSON file.
@@ -327,7 +327,7 @@ async def export_business_impact(
             days=days,
             start_date=start_date,
             end_date=end_date,
-            company_id=company_id,
+            company_id=company_id or auth.get("company_id"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to export business impact: {str(e)}")
@@ -353,7 +353,7 @@ async def get_conversation_insights(
     start_date: Optional[datetime] = Query(default=None, description="Optional start date in ISO format"),
     end_date: Optional[datetime] = Query(default=None, description="Optional end date in ISO format"),
     company_id: Optional[str] = Query(default=None, description="Optional company ID filter. Omitting returns platform-wide aggregate."),
-    current_user: dict = Depends(get_current_user),
+    auth: dict = Depends(verify_analytics_secret_key),
 ):
     """
     Get Section 6 Conversation Insights metrics, KPI cards (Total Volume, Top Intent,
@@ -367,7 +367,7 @@ async def get_conversation_insights(
             days=days,
             start_date=start_date,
             end_date=end_date,
-            company_id=company_id,
+            company_id=company_id or auth.get("company_id"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch conversation insights: {str(e)}")
@@ -380,7 +380,7 @@ async def export_conversation_insights(
     start_date: Optional[datetime] = Query(default=None, description="Optional start date in ISO format"),
     end_date: Optional[datetime] = Query(default=None, description="Optional end date in ISO format"),
     company_id: Optional[str] = Query(default=None, description="Optional company ID filter"),
-    current_user: dict = Depends(get_current_user),
+    auth: dict = Depends(verify_analytics_secret_key),
 ):
     """
     Export the Section 6 Conversation Insights report as a downloadable CSV or JSON file.
@@ -394,7 +394,7 @@ async def export_conversation_insights(
             days=days,
             start_date=start_date,
             end_date=end_date,
-            company_id=company_id,
+            company_id=company_id or auth.get("company_id"),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to export conversation insights: {str(e)}")

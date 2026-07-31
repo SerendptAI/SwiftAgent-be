@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # analytics server-to-server auth
+    ANALYTICS_SECRET_KEY: str = ""
+
     # app
     API_BASE_URL: str
     FRONTEND_URL: str = "https://swiftagents.org"
