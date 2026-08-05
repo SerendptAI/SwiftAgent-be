@@ -144,6 +144,8 @@ async def _chat_sse_generator(
     reflects true send-time rather than reply-completion time — otherwise a
     single-turn chat would record a near-zero communication duration.
     """
+    delivered = False
+    done_sent = False
     try:
         company = await db.companies.find_one({"id": company_id})
         if not company:
@@ -320,8 +322,10 @@ async def _chat_sse_generator(
                     },
                 )
                 
+                delivered = True
                 yield _sse("stream", message=reply_text)
                 yield _sse("done", message_id=assistant_msg_doc["id"])
+                done_sent = True
                 return
             else:
                 reply_text = "You are speaking with our human support team! Please provide your email address below so we can track your request and get back to you shortly."
@@ -338,8 +342,10 @@ async def _chat_sse_generator(
                         "$set": {"updated_at": datetime.now(tz=timezone.utc)}
                     },
                 )
+                delivered = True
                 yield _sse("stream", message=reply_text)
                 yield _sse("done", message_id=assistant_msg_doc["id"])
+                done_sent = True
                 return
 
         # Serialize attachments for agent services
@@ -372,9 +378,11 @@ async def _chat_sse_generator(
                     elif event_type == "text":
                         content = event.get("content", "")
                         response_text += content
+                        delivered = True
                         yield _sse("stream", message=content)
 
                     elif event_type == "sources":
+                        delivered = True
                         yield _sse(
                             "sources",
                             sources=event.get("sources", []),
@@ -382,6 +390,7 @@ async def _chat_sse_generator(
                         )
 
                     elif event_type == "navigation_guide":
+                        delivered = True
                         guide = event.get("guide", {})
                         yield _sse(
                             "navigation_guide",
@@ -407,6 +416,7 @@ async def _chat_sse_generator(
                 friendly = "I'm having trouble right now. Please try again in a moment."
                 if not response_text.strip():
                     response_text = friendly
+                delivered = True
                 yield _sse("stream", message=friendly)
                 break
 
@@ -429,28 +439,48 @@ async def _chat_sse_generator(
                 fcr=True,
             )
         yield _sse("done", message_id=last_msg_id)
+        done_sent = True
 
-        # generate session memory summary after conversation ends
+        # Generate session memory summary after conversation ends — fire-and-forget
+        # so post-processing failures can never surface an error into the SSE stream.
         if req.user_id:
-            conversation = await db.widget_conversations.find_one(
-                {"company_id": company_id, "session_id": req.session_id}
+            asyncio.create_task(
+                _generate_session_memory(company_id, req.session_id, req.user_id)
             )
-            if conversation and len(conversation.get("messages", [])) > 2:
-                history = conversation.get("messages", [])
-                await memory_service.generate_session_summary(
-                    session_id=req.session_id,
-                    company_id=company_id,
-                    user_id=req.user_id,
-                    messages=history,
-                    tools_used=[],
-                    outcome="completed",
-                )
-                await memory_service.delete_working_memory(req.session_id)
 
     except Exception:
         logger.exception(f"Chat SSE error for company {company_id}")
-        yield _sse("error", message="Something went wrong on our end. Please refresh and try again.")
-        yield _sse("done")
+        # Only surface the error to the client if nothing was delivered yet —
+        # a failure after a successful response must not append an error message.
+        if not delivered:
+            yield _sse("error", message="Something went wrong on our end. Please refresh and try again.")
+        if not done_sent:
+            yield _sse("done")
+
+
+async def _generate_session_memory(company_id: str, session_id: str, user_id: str):
+    """Generate and persist a session memory summary after the chat ends.
+
+    Runs as a fire-and-forget task so its failures never surface in the SSE stream.
+    """
+    try:
+        conversation = await db.widget_conversations.find_one(
+            {"company_id": company_id, "session_id": session_id}
+        )
+        if conversation and len(conversation.get("messages", [])) > 2:
+            history = conversation.get("messages", [])
+            await memory_service.generate_session_summary(
+                session_id=session_id,
+                company_id=company_id,
+                user_id=user_id,
+                messages=history,
+                tools_used=[],
+                outcome="completed",
+            )
+            await memory_service.delete_working_memory(session_id)
+    except Exception:
+        logger.exception(f"Failed to generate session memory for session {session_id}")
+
 
 # Endpoints
 
