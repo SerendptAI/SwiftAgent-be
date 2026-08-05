@@ -1,3 +1,4 @@
+from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -10,7 +11,7 @@ def get_llm(provider: str, fast_routing: bool = False, streaming: bool = True) -
     Returns an instantiated LangChain ChatModel based on the selected provider.
     
     Args:
-        provider: "anthropic" (via Cencori AI Gateway), "gemini", or "openrouter"
+        provider: "anthropic", "gemini", or "openrouter"
         fast_routing: If True, uses a smaller, faster model (e.g., Haiku or Flash) for orchestration.
         streaming: Whether to enable token streaming.
     """
@@ -24,11 +25,10 @@ def get_llm(provider: str, fast_routing: bool = False, streaming: bool = True) -
                 temperature=0.0,
                 max_retries=1
             )
-        elif provider == "anthropic" and (settings.CENCORI_API_KEY or settings.ANTHROPIC_API_KEY):
-            return ChatOpenAI(
+        elif provider == "anthropic" and settings.ANTHROPIC_API_KEY:
+            return ChatAnthropic(
                 model=settings.ANTHROPIC_MODEL,
-                api_key=settings.CENCORI_API_KEY or settings.ANTHROPIC_API_KEY,
-                base_url="https://api.cencori.com/v1",
+                api_key=settings.ANTHROPIC_API_KEY,
                 streaming=streaming,
                 temperature=0.0,
                 max_retries=1
@@ -44,11 +44,10 @@ def get_llm(provider: str, fast_routing: bool = False, streaming: bool = True) -
                 max_retries=1
             )
     # Primary Agents Model Selection
-    if provider == "anthropic" and (settings.CENCORI_API_KEY or settings.ANTHROPIC_API_KEY):
-        return ChatOpenAI(
+    if provider == "anthropic" and settings.ANTHROPIC_API_KEY:
+        return ChatAnthropic(
             model=settings.ANTHROPIC_MODEL,
-            api_key=settings.CENCORI_API_KEY or settings.ANTHROPIC_API_KEY,
-            base_url="https://api.cencori.com/v1",
+            api_key=settings.ANTHROPIC_API_KEY,
             streaming=streaming,
             temperature=0.0,
             max_retries=1
@@ -73,11 +72,10 @@ def get_llm(provider: str, fast_routing: bool = False, streaming: bool = True) -
         )
     
     # Fallback cascade if requested provider is missing API keys
-    if settings.CENCORI_API_KEY or settings.ANTHROPIC_API_KEY:
-        return ChatOpenAI(
+    if settings.ANTHROPIC_API_KEY:
+        return ChatAnthropic(
             model=settings.ANTHROPIC_MODEL,
-            api_key=settings.CENCORI_API_KEY or settings.ANTHROPIC_API_KEY,
-            base_url="https://api.cencori.com/v1",
+            api_key=settings.ANTHROPIC_API_KEY,
             streaming=streaming,
             temperature=0.0,
             max_retries=1
