@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_BYTES: int = 52_428_800  # 50MB
 
     # ai models
+    CENCORI_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.5-flash"
     ANTHROPIC_API_KEY: str = ""
