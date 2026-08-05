@@ -88,6 +88,14 @@ class Settings(BaseSettings):
     POLAR_PRODUCT_BUSINESS: str = ""
     POLAR_PRODUCT_ENTERPRISE_PAYG: str = ""
 
+    # Bachs Billing
+    BACHS_API_URL: str = "https://api.bachs.io/v1"
+    BACHS_API_KEY: str = ""
+    BACHS_WEBHOOK_SECRET: str = ""
+    BACHS_PRODUCT_STARTUP: str = "prod_77e9ff0834a34610bd96"
+    BACHS_PRODUCT_BUSINESS: str = "prod_f07b532e33ef4dca94d0"
+    BACHS_PRODUCT_ENTERPRISE: str = "prod_621f959156c84a37ace8"
+
     # blockchain
     ETHERSCAN_API_KEY: str = ""
 
