@@ -59,6 +59,7 @@ class RegistrationInterestRequest(BaseModel):
     company_email: EmailStr
     company_description: str
     customer_size: str
+    company_website: Optional[str] = None
 
 class RegistrationInterestResponse(BaseModel):
     status: str
