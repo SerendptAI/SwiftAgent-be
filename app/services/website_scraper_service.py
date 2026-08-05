@@ -1,7 +1,7 @@
 import logging
 import json
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from google import genai
 from google.genai import types
 
@@ -19,6 +19,10 @@ class CompanyScrapeResult(BaseModel):
     contact_email: Optional[str] = Field(None, description="The main contact email address found on the site.")
     support_email: Optional[str] = Field(None, description="The support email address found on the site, if any.")
     phone_number: Optional[str] = Field(None, description="The contact phone number found on the site.")
+    country: Optional[str] = Field(None, description="The physical country where the company is located or headquartered.")
+    timezone: Optional[str] = Field(None, description="The inferred primary timezone of the company based on its location or headquarters.")
+    company_type: Optional[str] = Field(None, description="Categorize the company strictly as either 'saas_finance', 'crypto', or 'other'.")
+    suggested_ai_prompts: Optional[List[str]] = Field(None, description="A list of 3-4 common questions or prompts a user might ask an AI agent on this website.")
 
 async def extract_company_info(website_text: str) -> dict:
     """
@@ -41,7 +45,11 @@ async def extract_company_info(website_text: str) -> dict:
         "- primary_language: The primary language of the site text (default 'English').\n"
         "- contact_email: The main contact email.\n"
         "- support_email: The support email (if distinct).\n"
-        "- phone_number: The contact phone number.\n\n"
+        "- phone_number: The contact phone number.\n"
+        "- country: The physical country of the company headquarters.\n"
+        "- timezone: The inferred timezone for the company.\n"
+        "- company_type: Strict categorization as 'saas_finance', 'crypto', or 'other'.\n"
+        "- suggested_ai_prompts: A list of 3-4 sample questions users might ask an AI agent on this site.\n\n"
         f"Website Text:\n---\n{website_text[:12000]}\n---\n\n"
         "Return ONLY a JSON object matching the requested fields. Do not include markdown code blocks or any other text."
     )
