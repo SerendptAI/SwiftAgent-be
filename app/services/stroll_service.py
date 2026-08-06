@@ -92,15 +92,15 @@ async def _call_vision_with_fallback(prompt_text: str, screenshot_bytes: bytes, 
         # Translate Cencori aliases to official Anthropic model names for the direct SDK
         actual_model = settings.ANTHROPIC_MODEL
         if actual_model == "claude-haiku-4.5":
-            actual_model = "claude-3-5-haiku-20241022"
+            actual_model = "claude-haiku-4-5-20251001"
         elif actual_model == "claude-sonnet-4-6":
-            actual_model = "claude-3-5-sonnet-20241022"
+            actual_model = "claude-sonnet-4-5-20250929"
         elif "haiku" in actual_model.lower():
-            actual_model = "claude-3-5-haiku-20241022"
+            actual_model = "claude-haiku-4-5-20251001"
         elif "sonnet" in actual_model.lower():
-            actual_model = "claude-3-5-sonnet-20241022"
+            actual_model = "claude-sonnet-4-5-20250929"
         elif "opus" in actual_model.lower():
-            actual_model = "claude-3-opus-20240229"
+            actual_model = "claude-opus-4-6-20251101" # Best guess for opus
             
         response = await client.messages.create(
             model=actual_model,
