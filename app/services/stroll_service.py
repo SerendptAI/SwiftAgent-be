@@ -88,8 +88,22 @@ async def _call_vision_with_fallback(prompt_text: str, screenshot_bytes: bytes, 
     # 1. Try Anthropic
     try:
         client = _get_anthropic_client()
+        
+        # Translate Cencori aliases to official Anthropic model names for the direct SDK
+        actual_model = settings.ANTHROPIC_MODEL
+        if actual_model == "claude-haiku-4.5":
+            actual_model = "claude-3-5-haiku-20241022"
+        elif actual_model == "claude-sonnet-4-6":
+            actual_model = "claude-3-5-sonnet-20241022"
+        elif "haiku" in actual_model.lower():
+            actual_model = "claude-3-5-haiku-20241022"
+        elif "sonnet" in actual_model.lower():
+            actual_model = "claude-3-5-sonnet-20241022"
+        elif "opus" in actual_model.lower():
+            actual_model = "claude-3-opus-20240229"
+            
         response = await client.messages.create(
-            model=settings.ANTHROPIC_MODEL,
+            model=actual_model,
             max_tokens=4096,
             messages=[{
                 "role": "user",
