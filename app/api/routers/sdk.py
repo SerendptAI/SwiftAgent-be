@@ -85,6 +85,8 @@ async def init_sdk(
 
 async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatRequest, visitor_ip: str | None = None, user_timestamp: str | None = None):
     """SSE generator for SDK chat, injecting user email into context."""
+    delivered = False
+    done_sent = False
     try:
         company = await db.companies.find_one({"id": company_id})
         if not company:
@@ -190,8 +192,10 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                         attachments=attachments_raw
                     )
                 except ValueError as e:
+                    delivered = True
                     yield _sse("stream", message=f"Sorry, this ticket cannot be replied to: {e}")
                     yield _sse("done")
+                    done_sent = True
                     return
                     
                 if not ticket or is_escalated:
@@ -211,6 +215,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                                 "$set": {"updated_at": datetime.now(tz=timezone.utc)}
                             },
                         )
+                    delivered = True
                     yield _sse("stream", message=reply_text)
                     
             else:
@@ -263,9 +268,12 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                         "$set": {"updated_at": datetime.now(tz=timezone.utc)}
                     },
                 )
+                delivered = True
                 yield _sse("stream", message=reply_text)
+                done_sent = True
                 
             yield _sse("done")
+            done_sent = True
             return
 
         # Create a modified user message that reminds the agent of the email address
@@ -299,10 +307,13 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                     elif event_type == "text":
                         content = event.get("content", "")
                         response_text += content
+                        delivered = True
                         yield _sse("stream", message=content)
                     elif event_type == "sources":
+                        delivered = True
                         yield _sse("sources", sources=event.get("sources", []), blockchain_data=event.get("blockchain_data"))
                     elif event_type == "navigation_guide":
+                        delivered = True
                         guide = event.get("guide", {})
                         yield _sse("navigation_guide", steps=guide.get("steps", []), path_summary=guide.get("path_summary", []))
                     elif event_type == "error":
@@ -321,6 +332,7 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
                 friendly = "I'm having trouble right now. Please try again in a moment."
                 if not response_text.strip():
                     response_text = friendly
+                delivered = True
                 yield _sse("stream", message=friendly)
                 break
 
@@ -350,13 +362,19 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
             if "messages" in conversation and len(conversation["messages"]) > 0:
                 last_msg_id = conversation["messages"][-1].get("id")
             yield _sse("done", session=session_dict, message_id=last_msg_id)
+            done_sent = True
         else:
             yield _sse("done")
+            done_sent = True
 
     except Exception as e:
         logger.exception(f"SDK Chat SSE error for company {company_id}")
-        yield _sse("error", message="Something went wrong on our end. Please refresh and try again.")
-        yield _sse("done")
+        # Only surface the error to the client if nothing was delivered yet —
+        # a failure after a successful response must not append an error message.
+        if not delivered:
+            yield _sse("error", message="Something went wrong on our end. Please refresh and try again.")
+        if not done_sent:
+            yield _sse("done")
 
 
 @router.post("/{company_id}/chat", summary="Stream Chat Response (SDK)")
