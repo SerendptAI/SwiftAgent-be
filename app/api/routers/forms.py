@@ -2,6 +2,7 @@ import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel
 
 from app.core.auth import get_current_user
 from app.core.security import decode_access_token
@@ -33,6 +34,11 @@ from app.models.form_models import (
 from app.services.form_service import form_service
 from app.services import form_key_service
 from app.services import company_email_service
+
+class RegeneratedKeys(BaseModel):
+    api_key: str
+    public_key: str
+    snippet: str
 
 router = APIRouter()
 
@@ -104,8 +110,8 @@ async def list_entries_for_delete(
     form_id: str,
     page_path: str,
     form_identifier: str,
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
 ):
     await get_authorized_company(company_id, current_user)
@@ -182,8 +188,8 @@ async def list_form_group_submissions(
     page_path: str,
     form_identifier: str,
     is_read: Optional[bool] = None,
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
 ):
     await get_authorized_company(company_id, current_user)
@@ -196,8 +202,8 @@ async def list_page_submissions(
     form_id: str,
     page_path: str,
     is_read: Optional[bool] = None,
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
 ):
     await get_authorized_company(company_id, current_user)
@@ -219,7 +225,7 @@ async def get_form_keys(
     return keys
 
 
-@router.post("/{company_id}/{form_id}/keys/regenerate")
+@router.post("/{company_id}/{form_id}/keys/regenerate", response_model=RegeneratedKeys)
 async def regenerate_form_keys(
     company_id: str,
     form_id: str,
@@ -282,8 +288,8 @@ async def update_page_label(
 @router.get("/{company_id}", response_model=List[FormResponse])
 async def list_forms(
     company_id: str,
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
 ):
     await get_authorized_company(company_id, current_user)
@@ -294,8 +300,8 @@ async def list_forms(
 async def list_all_submissions(
     company_id: str,
     is_read: Optional[bool] = None,
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
 ):
     await get_authorized_company(company_id, current_user)
@@ -363,13 +369,39 @@ async def delete_form(
     return {"status": "deleted"}
 
 
+@router.post("/{company_id}/{form_id}/pause", response_model=FormResponse)
+async def pause_form_endpoint(
+    company_id: str,
+    form_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    await get_authorized_company(company_id, current_user)
+    form = await form_service.pause_form(form_id, company_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    return form
+
+
+@router.post("/{company_id}/{form_id}/resume", response_model=FormResponse)
+async def resume_form_endpoint(
+    company_id: str,
+    form_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    await get_authorized_company(company_id, current_user)
+    form = await form_service.resume_form(form_id, company_id)
+    if not form:
+        raise HTTPException(status_code=404, detail="Form not found")
+    return form
+
+
 @router.get("/{company_id}/{form_id}/submissions", response_model=List[FormSubmissionResponse])
 async def list_form_submissions(
     company_id: str,
     form_id: str,
     is_read: Optional[bool] = None,
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
 ):
     await get_authorized_company(company_id, current_user)
@@ -435,7 +467,8 @@ async def reply_to_submission(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+        logger.error(f"Failed to send form reply email for submission {submission_id}: {e}")
+        raise HTTPException(status_code=500, detail="An internal error occurred while trying to send the email.")
 
     # Fetch and return the updated submission
     submission = await form_service.get_submission_by_id(submission_id, company_id)

@@ -143,3 +143,15 @@ async def rate_limit_registration(request: Request):
             status_code=429,
             detail="Too many requests. Please try again later."
         )
+
+async def rate_limit_general(request: Request):
+    """Rate limiting dependency for general endpoints (like public form submissions)."""
+    limiter = get_general_limiter()
+    client_ip = request.client.host if request.client else "unknown"
+    allowed = await limiter.acquire(client_ip)
+    if not allowed:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please try again later."
+        )

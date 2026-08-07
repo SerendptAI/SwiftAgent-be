@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl, EmailStr, Field, model_validator
 from datetime import datetime
 
 class FormType(str, Enum):
@@ -10,8 +10,8 @@ class FormType(str, Enum):
 # ── Create Models ──
 
 class WebsiteFormCreate(BaseModel):
-    website_link: str
-    alert_email: str
+    website_link: HttpUrl
+    alert_email: EmailStr
     tags: Optional[List[str]] = []
 
 class OnlineFormCreate(BaseModel):
@@ -20,11 +20,12 @@ class OnlineFormCreate(BaseModel):
     tags: Optional[List[str]] = []
 
 class FormUpdate(BaseModel):
-    website_link: Optional[str] = None
-    alert_email: Optional[str] = None
+    website_link: Optional[HttpUrl] = None
+    alert_email: Optional[EmailStr] = None
     form_image: Optional[str] = None
     form_title: Optional[str] = None
     tags: Optional[List[str]] = None
+    is_active: Optional[bool] = None
 
 # ── Response Models ──
 
@@ -34,6 +35,7 @@ class FormResponse(BaseModel):
     company_id: str
     type: FormType
     tags: List[str] = []
+    is_active: bool = True
     created_at: datetime
     updated_at: datetime
 
@@ -42,6 +44,16 @@ class FormResponse(BaseModel):
     alert_email: Optional[str] = None
 
     # Online form fields
+    form_image: Optional[str] = None
+    form_title: Optional[str] = None
+
+class PublicFormResponse(BaseModel):
+    """Stripped down form response for public fetching."""
+    id: str
+    type: FormType
+    tags: List[str] = []
+    is_active: bool = True
+    website_link: Optional[str] = None
     form_image: Optional[str] = None
     form_title: Optional[str] = None
 
@@ -68,6 +80,7 @@ class OnlineFormCreateResponse(BaseModel):
     form_image: str
     form_title: str
     tags: List[str] = []
+    alert_email: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     form_url: str           # Shareable URL for this online form
@@ -86,15 +99,42 @@ class WidgetSubmissionCreate(BaseModel):
     page_url: str               # e.g. "https://serendptai.com/contact-us"
     form_identifier: str        # CSS selector / form id / name / DOM index
     form_name: Optional[str] = None  # Human-readable: "Contact Form"
-    data: Dict[str, Any]        # {name: "John Doe", email: "john@...", message: "..."}
+    data: Dict[str, Any] = Field(default_factory=dict, max_length=100)
     visitor_id: Optional[str] = None
+    honeypot: Optional[str] = None
+
+    @model_validator(mode='after')
+    def validate_data_size(self):
+        if len(str(self.data)) > 100000:
+            raise ValueError("Payload size too large")
+        for k, v in self.data.items():
+            if len(str(k)) > 200 or len(str(v)) > 10000:
+                raise ValueError("Field key or value too large")
+        return self
 
 # ── Submission Responses ──
 
 class FormSubmissionCreate(BaseModel):
     """Legacy: direct submission (online forms / existing public endpoint)."""
-    data: Dict[str, Any]
+    data: Dict[str, Any] = Field(default_factory=dict, max_length=100)
     visitor_id: Optional[str] = None
+    honeypot: Optional[str] = None
+
+    @model_validator(mode='after')
+    def validate_data_size(self):
+        if len(str(self.data)) > 100000:
+            raise ValueError("Payload size too large")
+        for k, v in self.data.items():
+            if len(str(k)) > 200 or len(str(v)) > 10000:
+                raise ValueError("Field key or value too large")
+        return self
+
+class FormReply(BaseModel):
+    reply_text: str
+    subject: Optional[str] = None
+    sent_at: datetime
+    agent_name: Optional[str] = None
+    message_id: Optional[str] = None
 
 class FormSubmissionResponse(BaseModel):
     """Submission shown in the inbox — includes submitter info for display."""
@@ -113,7 +153,7 @@ class FormSubmissionResponse(BaseModel):
     submitter_name: Optional[str] = None      # "John Doe"
     submitter_preview: Optional[str] = None   # "Good day, I lost my sister in a flood and I'd..."
     replied_at: Optional[datetime] = None
-    replies: List[Dict[str, Any]] = []
+    replies: List[FormReply] = []
 
 class FormReplyRequest(BaseModel):
     reply_text: str

@@ -60,7 +60,11 @@ async def generate_form_keys(form_id: str, company_id: str) -> dict:
         "last_used_at": None,
     }
 
-    await db.form_keys.insert_one(doc)
+    await db.form_keys.update_one(
+        {"form_id": form_id, "active": True},
+        {"$set": doc},
+        upsert=True
+    )
     logger.info("Created form keys for form %s (company %s)", form_id, company_id)
 
     return {"api_key": raw_api_key, "public_key": raw_public_key}
@@ -124,7 +128,6 @@ async def regenerate_keys(form_id: str, company_id: str) -> dict:
 
     Returns the new raw keys as ``{api_key, public_key}``.
     """
-    await revoke_keys(form_id)
     return await generate_form_keys(form_id, company_id)
 
 

@@ -5,7 +5,7 @@ and external websites to fetch form definitions and submit responses.
 
 import logging
 from pathlib import Path
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, Request, Depends
 from fastapi.responses import Response
 
 from app.core.database import db
@@ -14,9 +14,11 @@ from app.models.form_models import (
     FormSubmissionCreate, 
     FormSubmissionResponse,
     WidgetSubmissionCreate,
+    PublicFormResponse,
 )
 from app.services.form_service import form_service
 from app.services import form_key_service
+from app.core.rate_limiter import rate_limit_general
 import json
 
 router = APIRouter()
@@ -28,6 +30,8 @@ async def _get_published_form(form_id: str) -> dict:
     form = await form_service.get_form_by_id(form_id)
     if not form:
         raise HTTPException(status_code=404, detail="Form not found.")
+    if not getattr(form, "is_active", True):
+        raise HTTPException(status_code=403, detail="This form is currently paused and not accepting responses.")
     return form
 
 
@@ -69,7 +73,7 @@ async def get_widget_js():
     )
 
 
-@router.post("/widget/submit", summary="Submit Form from Widget")
+@router.post("/widget/submit", summary="Submit Form from Widget", dependencies=[Depends(rate_limit_general)])
 async def submit_widget_form(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -99,6 +103,9 @@ async def submit_widget_form(
     except Exception:
         raise HTTPException(status_code=422, detail="Invalid JSON payload.")
 
+    if getattr(submission, "honeypot", None):
+        return {"submission_id": "ok", "status": "ok"}
+
     # Get form to check for alert email
     form = await _get_published_form(form_id)
 
@@ -120,19 +127,25 @@ async def submit_widget_form(
     return {"submission_id": result.id, "status": "ok"}
 
 
-@router.get("/online/{form_id}", response_model=FormResponse, summary="Get Online Form")
+@router.get("/online/{form_id}", response_model=PublicFormResponse, summary="Get Online Form", dependencies=[Depends(rate_limit_general)])
 async def get_online_form(form_id: str):
     """Get published online form definition."""
     return await _get_published_form(form_id)
 
 
-@router.post("/online/{form_id}/submit", response_model=FormSubmissionResponse, summary="Submit Online Form")
+@router.post("/online/{form_id}/submit", response_model=FormSubmissionResponse, summary="Submit Online Form", dependencies=[Depends(rate_limit_general)])
 async def submit_online_form(
     form_id: str,
     submission: FormSubmissionCreate,
     background_tasks: BackgroundTasks,
 ):
     """Accept an online form submission."""
+    if getattr(submission, "honeypot", None):
+        return FormSubmissionResponse(
+            id="ok", form_id=form_id, company_id="ok", data=submission.data,
+            submitted_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+        )
+
     form = await _get_published_form(form_id)
     result = await form_service.submit_form(form_id, form.company_id, submission)
 
@@ -149,19 +162,25 @@ async def submit_online_form(
     return result
 
 
-@router.get("/{form_id}", response_model=FormResponse, summary="Get Published Form")
+@router.get("/{form_id}", response_model=PublicFormResponse, summary="Get Published Form", dependencies=[Depends(rate_limit_general)])
 async def get_public_form(form_id: str):
     """Legacy: Retrieve a form definition by its ID."""
     return await _get_published_form(form_id)
 
 
-@router.post("/{form_id}/submit", response_model=FormSubmissionResponse, summary="Submit Form Response")
+@router.post("/{form_id}/submit", response_model=FormSubmissionResponse, summary="Submit Form Response", dependencies=[Depends(rate_limit_general)])
 async def submit_public_form(
     form_id: str,
     submission: FormSubmissionCreate,
     background_tasks: BackgroundTasks,
 ):
     """Legacy: Accept a form submission from an end-user."""
+    if getattr(submission, "honeypot", None):
+        return FormSubmissionResponse(
+            id="ok", form_id=form_id, company_id="ok", data=submission.data,
+            submitted_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+        )
+
     form = await _get_published_form(form_id)
     result = await form_service.submit_form(form_id, form.company_id, submission)
 

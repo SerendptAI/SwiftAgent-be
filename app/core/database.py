@@ -121,7 +121,9 @@ async def create_indexes():
         await db.form_keys.drop_index("form_id_1")
     except Exception:
         pass
-    await db.form_keys.create_index("form_id")
+    await db.form_keys.create_index(
+        "form_id", unique=True, partialFilterExpression={"active": True}
+    )
     await db.form_keys.create_index("public_key_hash")
     await db.form_keys.create_index("api_key_hash")
 

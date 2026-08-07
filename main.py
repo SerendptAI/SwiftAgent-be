@@ -8,7 +8,8 @@ from app.core.logging_setup import install_default_log_record_fields
 install_default_log_record_fields()
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -175,7 +176,6 @@ class WidgetCorsBypassMiddleware:
         "/api/v1/chat",
         "/api/v1/public/stroll",
         "/api/v1/public/forms",
-        "/api/v1/forms",
         # NOTE: /api/v1/stroll is intentionally excluded — all routes are JWT-protected
         # admin endpoints. Widget origins should not receive CORS access to them.
         "/api/v1/email/inbound",
@@ -323,7 +323,19 @@ app.include_router(
 )
 app.include_router(notifications.router, prefix="/api/v1/notifications")
 
-# global exception handler
+# global exception handlers
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    # Mask noisy locs
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": "Validation error",
+            "errors": [{"loc": e["loc"], "msg": e["msg"], "type": e["type"]} for e in errors]
+        },
+    )
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger = logging.getLogger("app.errors")

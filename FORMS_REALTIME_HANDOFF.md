@@ -27,10 +27,12 @@ If the token is missing, expired, or the user is not authorized for the requeste
       {
         "id": "64bc...a1b2",
         "company_id": "com_123",
-        "website": "example.com",
-        "form_type": "website",
-        "name": "Contact Us Form",
-        ...
+        "type": "website",
+        "tags": [],
+        "is_active": true,
+        "website_link": "https://example.com",
+        "created_at": "2026-07-26T14:10:00Z",
+        "updated_at": "2026-07-26T14:10:00Z"
       }
     ],
     "total": 1
@@ -95,19 +97,21 @@ If the token is missing, expired, or the user is not authorized for the requeste
 * **Payload format:**
   ```json
   {
-    "website": "example.com",
-    "total_pages": 3,
-    "total_forms": 5,
-    "total_submissions": 45,
-    "unread_submissions": 2,
+    "form_id": "64bc...a1b2",
+    "website_link": "https://example.com",
+    "total_entries": 45,
     "pages": [
       {
         "page_path": "/contact",
-        "page_url": "https://example.com/contact",
-        "forms_count": 1,
-        "total_submissions": 45,
-        "unread_submissions": 2,
-        ...
+        "total_entries": 45,
+        "forms": [
+          {
+            "form_identifier": "id:contact-form",
+            "form_name": "Contact Form",
+            "entries_count": 45,
+            "last_submission": "2026-07-26T14:10:00Z"
+          }
+        ]
       }
     ]
   }

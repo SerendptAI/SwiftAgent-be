@@ -118,12 +118,20 @@ class FormService:
 
     async def create_website_form(self, company_id: str, form_data: WebsiteFormCreate) -> WebsiteFormCreateResponse:
         now = datetime.now(timezone.utc)
+        try:
+            parsed = urlparse(str(form_data.website_link))
+            domain = f"{parsed.scheme}://{parsed.netloc}"
+        except Exception:
+            domain = ""
+
         form_doc = {
             "company_id": company_id,
             "type": FormType.WEBSITE,
-            "website_link": form_data.website_link,
-            "alert_email": form_data.alert_email,
+            "website_link": str(form_data.website_link),
+            "website_domain": domain,
+            "alert_email": str(form_data.alert_email),
             "tags": form_data.tags or [],
+            "is_active": True,
             "created_at": now,
             "updated_at": now,
         }
@@ -138,8 +146,8 @@ class FormService:
             id=form_id,
             company_id=company_id,
             type=FormType.WEBSITE,
-            website_link=form_data.website_link,
-            alert_email=form_data.alert_email,
+            website_link=str(form_data.website_link),
+            alert_email=str(form_data.alert_email),
             tags=form_data.tags or [],
             created_at=now,
             updated_at=now,
@@ -155,7 +163,9 @@ class FormService:
             "type": FormType.ONLINE,
             "form_image": form_data.form_image,
             "form_title": form_data.form_title,
+            "alert_email": str(form_data.alert_email) if getattr(form_data, "alert_email", None) else None,
             "tags": form_data.tags or [],
+            "is_active": True,
             "created_at": now,
             "updated_at": now,
         }
@@ -171,6 +181,7 @@ class FormService:
             type=FormType.ONLINE,
             form_image=form_data.form_image,
             form_title=form_data.form_title,
+            alert_email=str(form_data.alert_email) if getattr(form_data, "alert_email", None) else None,
             tags=form_data.tags or [],
             created_at=now,
             updated_at=now,
@@ -223,9 +234,33 @@ class FormService:
             # Cascade: delete submissions, keys, and group names
             await db.form_submissions.delete_many({"form_id": form_id, "company_id": company_id})
             await form_key_service.revoke_keys(form_id)
-            await db.form_group_names.delete_many({"form_id": form_id})
+            await db.form_group_names.delete_many({"form_id": form_id, "company_id": company_id})
             return True
         return False
+
+    async def pause_form(self, form_id: str, company_id: str) -> Optional[FormResponse]:
+        if not ObjectId.is_valid(form_id):
+            return None
+        result = await db.forms.find_one_and_update(
+            {"_id": ObjectId(form_id), "company_id": company_id},
+            {"$set": {"is_active": False, "updated_at": datetime.now(timezone.utc)}},
+            return_document=True
+        )
+        if result:
+            return self._map_form(result)
+        return None
+
+    async def resume_form(self, form_id: str, company_id: str) -> Optional[FormResponse]:
+        if not ObjectId.is_valid(form_id):
+            return None
+        result = await db.forms.find_one_and_update(
+            {"_id": ObjectId(form_id), "company_id": company_id},
+            {"$set": {"is_active": True, "updated_at": datetime.now(timezone.utc)}},
+            return_document=True
+        )
+        if result:
+            return self._map_form(result)
+        return None
 
     # ── Widget Submission ──
 
@@ -616,6 +651,7 @@ class FormService:
         # Also remove custom name if it exists
         await db.form_group_names.delete_one({
             "form_id": form_id,
+            "company_id": company_id,
             "page_path": page_path,
             "form_identifier": form_identifier,
         })
@@ -735,15 +771,17 @@ class FormService:
 
         website_counts: dict[str, int] = {}
         for doc in docs:
-            link = doc.get("website_link")
-            if not link:
-                continue
-            try:
-                parsed = urlparse(link)
-                website = f"{parsed.scheme}://{parsed.netloc}"
-                website_counts[website] = website_counts.get(website, 0) + 1
-            except:
-                continue
+            website = doc.get("website_domain")
+            if not website:
+                link = doc.get("website_link")
+                if not link:
+                    continue
+                try:
+                    parsed = urlparse(link)
+                    website = f"{parsed.scheme}://{parsed.netloc}"
+                except:
+                    continue
+            website_counts[website] = website_counts.get(website, 0) + 1
 
         return [
             WebsiteDeleteInfo(website=w, form_count=c)
