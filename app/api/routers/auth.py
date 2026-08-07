@@ -188,6 +188,8 @@ async def get_registration_details(
         "company_name": reg.get("company_name", ""),
         "company_description": reg.get("company_description", ""),
         "customer_size": reg.get("customer_size", ""),
+        "company_website": reg.get("company_website", ""),
+        "scraped_data": reg.get("scraped_data", None),
     }
 
 

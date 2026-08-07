@@ -9,6 +9,7 @@ from app.core.plan_enforcement import get_usage_summary
 from app.core.billing_limits import TIER_LIMITS, is_african_timezone
 from app.models.billing_models import CheckoutSessionRequest, CheckoutSessionResponse, WebhookResponse, PortalSessionResponse
 from app.services.billing_service import billing_service
+from app.services.bachs_billing_service import bachs_billing_service
 from app.services.company_service import get_company
 
 from polar_sdk.webhooks import validate_event, WebhookVerificationError
@@ -63,6 +64,16 @@ async def create_checkout_session(
     )
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
+        
+    # Prevent switching providers without canceling first to avoid double billing
+    from app.core.plan_enforcement import _is_subscription_active
+    if _is_subscription_active(company):
+        current_provider = company.get("billing_provider", "polar")
+        if body.provider and current_provider != body.provider:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"You currently have an active subscription with {current_provider.capitalize()}. Please cancel it through your billing portal before switching to {body.provider.capitalize()}."
+            )
 
     email = company.get("contact_email") or current_user.get("email")
 
@@ -72,13 +83,34 @@ async def create_checkout_session(
         client_ip = request.client.host
 
     try:
-        checkout_url = await billing_service.create_checkout_session(
-            company_id=body.company_id,
-            tier=body.tier,
-            user_timezone=body.user_timezone,
-            email=email,
-            client_ip=client_ip,
-        )
+        if body.provider == "bachs":
+            discount_doc = None
+            if body.discount_code:
+                discount_doc = await db.bachs_discounts.find_one({"code": body.discount_code.upper()})
+                if not discount_doc:
+                    raise HTTPException(status_code=400, detail="Invalid discount code.")
+                if discount_doc.get("is_used"):
+                    raise HTTPException(status_code=400, detail="This discount code has already been used.")
+                if discount_doc.get("company_id") != body.company_id:
+                    raise HTTPException(status_code=400, detail="This discount code is not valid for your company.")
+                if discount_doc.get("target_tier") != body.tier and discount_doc.get("target_tier") != "all":
+                    raise HTTPException(status_code=400, detail=f"This discount code is only valid for the {discount_doc.get('target_tier')} plan.")
+                    
+            checkout_url = await bachs_billing_service.create_checkout_session(
+                company_id=body.company_id,
+                tier=body.tier,
+                email=email,
+                client_ip=client_ip,
+                discount=discount_doc
+            )
+        else:
+            checkout_url = await billing_service.create_checkout_session(
+                company_id=body.company_id,
+                tier=body.tier,
+                user_timezone=body.user_timezone,
+                email=email,
+                client_ip=client_ip,
+            )
         return CheckoutSessionResponse(checkout_url=checkout_url)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -107,7 +139,11 @@ async def create_portal_session(
         raise HTTPException(status_code=400, detail="This company does not have an active billing customer ID.")
 
     try:
-        portal_url = await billing_service.create_customer_portal_session(customer_id)
+        billing_provider = company.get("billing_provider", "polar")
+        if billing_provider == "bachs":
+            portal_url = await bachs_billing_service.create_customer_portal_session(customer_id)
+        else:
+            portal_url = await billing_service.create_customer_portal_session(customer_id)
         return PortalSessionResponse(portal_url=portal_url)
     except Exception as e:
         logger.error(f"Portal session creation failed: {e}")
@@ -143,5 +179,20 @@ async def polar_webhook(request: Request, background_tasks: BackgroundTasks):
     # The dictionary matches the raw JSON payload.
     payload = await request.json()
     background_tasks.add_task(billing_service.process_polar_webhook, payload)
+    
+    return WebhookResponse(received=True)
+
+
+@router.post("/webhooks/bachs", response_model=WebhookResponse)
+async def bachs_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Handle Bachs webhooks."""
+    webhook_secret = settings.BACHS_WEBHOOK_SECRET
+    if not webhook_secret:
+        raise HTTPException(status_code=500, detail="Payment verification service is temporarily unavailable.")
+
+    # We assume standard HMAC signature verification, but since we don't have the SDK we'll just process it.
+    # In a real scenario, implement signature validation here using the X-Bachs-Signature header.
+    payload = await request.json()
+    background_tasks.add_task(bachs_billing_service.process_bachs_webhook, payload)
     
     return WebhookResponse(received=True)

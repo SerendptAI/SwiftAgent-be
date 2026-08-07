@@ -14,6 +14,7 @@ from app.core.database import get_database
 from app.models.auth_models import RegistrationInterestRequest
 from app.services.email_utils import add_html_with_inline_images
 from app.services.welcome_email_service import send_welcome_email
+from app.services import page_reader_service, website_scraper_service
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ async def submit_registration(data: RegistrationInterestRequest) -> dict:
         "company_email": email,
         "company_description": data.company_description,
         "customer_size": data.customer_size,
+        "company_website": data.company_website,
         "status": "pending",
         "token": token,
         "created_at": now,
@@ -156,6 +158,23 @@ async def render_approval_confirmation(token: str) -> HTMLResponse:
     return HTMLResponse(content=html, status_code=200)
 
 
+async def _scrape_and_save_registration(token: str, url: str):
+    """Background task to scrape company website and save details to the registration doc."""
+    try:
+        page_data = await page_reader_service.read_website_page(url)
+        if "error" not in page_data:
+            content = page_data.get("content", "")
+            extracted_data = await website_scraper_service.extract_company_info(content)
+            
+            db = await get_database()
+            await db.pending_registrations.update_one(
+                {"token": token},
+                {"$set": {"scraped_data": extracted_data}}
+            )
+    except Exception as e:
+        logger.error(f"Failed to background scrape {url} for registration {token}: {e}")
+
+
 async def execute_approval(token: str) -> HTMLResponse:
     """Executes the approval and triggers welcome email."""
     db = await get_database()
@@ -178,6 +197,11 @@ async def execute_approval(token: str) -> HTMLResponse:
         asyncio.create_task(send_welcome_email(reg["company_email"], reg["company_name"]))
     except Exception as e:
         logger.error(f"Failed to queue welcome email for {reg['company_email']}: {e}")
+
+    # Trigger background scrape if website is provided
+    company_website = reg.get("company_website")
+    if company_website:
+        asyncio.create_task(_scrape_and_save_registration(token, company_website))
 
     html = _load_template(APPROVED_TEMPLATE)
     html = html.replace("{{company_email}}", reg.get('company_email', ''))
