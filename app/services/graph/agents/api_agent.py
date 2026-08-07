@@ -16,7 +16,7 @@ CRITICAL RULE: When you need to call a tool (including handoff/transfer tools), 
 
 @observe(name="api_agent_node")
 async def api_agent_node(state: AgentState, config):
-    llm = get_llm(state["agent_provider"], streaming=False)
+    llm = get_llm(state["agent_provider"], streaming=True, force_anthropic_native=True)
     llm_with_tools = llm.bind_tools([get_api_documentation, query_company_api] + API_HANDOFF_TOOLS)
     
     persona = build_company_persona_prompt(state.get("company_data", {}))

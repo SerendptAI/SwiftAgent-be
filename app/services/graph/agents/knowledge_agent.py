@@ -17,7 +17,7 @@ CRITICAL RULE: When you need to call a tool (including handoff/transfer tools), 
 
 @observe(name="knowledge_agent_node")
 async def knowledge_agent_node(state: AgentState, config):
-    llm = get_llm(state["agent_provider"], streaming=False)
+    llm = get_llm(state["agent_provider"], streaming=True, force_anthropic_native=True)
     llm_with_tools = llm.bind_tools([search_knowledge_base, scrape_documentation_link] + KNOWLEDGE_HANDOFF_TOOLS)
     
     persona = build_company_persona_prompt(state.get("company_data", {}))
