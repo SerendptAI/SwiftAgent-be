@@ -22,7 +22,7 @@ CRITICAL RULE: When you need to call a tool (including handoff/transfer tools), 
 
 @observe(name="navigation_agent_node")
 async def navigation_agent_node(state: AgentState, config):
-    llm = get_llm(state["agent_provider"])
+    llm = get_llm(state["agent_provider"], streaming=False)
     llm_with_tools = llm.bind_tools([get_dashboard_navigation, get_full_dashboard_documentation, render_navigation_guide] + NAVIGATION_HANDOFF_TOOLS)
     
     persona = build_company_persona_prompt(state.get("company_data", {}))

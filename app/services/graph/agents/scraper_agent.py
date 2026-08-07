@@ -25,7 +25,7 @@ CRITICAL RULE: When you need to call a tool (including handoff/transfer tools), 
 
 @observe(name="scraper_agent_node")
 async def scraper_agent_node(state: AgentState, config):
-    llm = get_llm(state["agent_provider"])
+    llm = get_llm(state["agent_provider"], streaming=False)
     llm_with_tools = llm.bind_tools([read_website_page] + SCRAPER_HANDOFF_TOOLS)
     
     persona = build_company_persona_prompt(state.get("company_data", {}))
