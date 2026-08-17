@@ -35,6 +35,7 @@ async def create_indexes():
     await db.widget_conversations.create_index("session_id")
     await db.widget_conversations.create_index([("company_id", 1), ("session_id", 1)], unique=True)
     await db.widget_conversations.create_index([("company_id", 1), ("created_at", -1)])
+    await db.widget_conversations.create_index([("created_at", -1)])
 
     await db.visitors.create_index("company_id")
     await db.visitors.create_index([("company_id", 1), ("visitor_id", 1), ("timestamp", 1)])
@@ -76,6 +77,9 @@ async def create_indexes():
     # email tickets
     await db.email_tickets.create_index("company_id")
     await db.email_tickets.create_index([("company_id", 1), ("status", 1), ("updated_at", -1)])
+    await db.email_tickets.create_index([("company_id", 1), ("updated_at", -1)])
+    await db.email_tickets.create_index([("status", 1), ("updated_at", -1)])
+    await db.email_tickets.create_index([("updated_at", -1)])
     await db.email_tickets.create_index("customer_email")
     await db.email_tickets.create_index("resolve_token", unique=True)
 
@@ -114,7 +118,9 @@ async def create_indexes():
     await db.form_submissions.create_index("form_id")
     await db.form_submissions.create_index("company_id")
     await db.form_submissions.create_index([("company_id", 1), ("is_read", 1)])
+    await db.form_submissions.create_index([("company_id", 1), ("submitted_at", -1)])
     await db.form_submissions.create_index([("form_id", 1), ("submitted_at", -1)])
+    await db.form_submissions.create_index([("submitted_at", -1)])
 
     # Form keys (SDPK key pairs for widget auth)
     try:
