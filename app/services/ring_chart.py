@@ -5,7 +5,8 @@ engine supports neither CSS gradients nor border-radius. The ring therefore
 ships as an image, and because it bakes its own value into the artwork it has
 to be rendered per value rather than served as one static asset.
 
-Geometry, colours and type match the Figma frame (210px, rendered at 2x).
+Geometry and colours match the Figma frame (210px, rendered at 2x); the type is
+Roboto, so the baked-in value matches the rest of the email templates.
 """
 import logging
 from pathlib import Path
@@ -28,8 +29,16 @@ _TRACK_COLOR = (117, 117, 117, 38)  # #757575 at 14.9%, per the Figma vector
 _ARC_COLOR = (242, 176, 53)         # #f2b035
 _VALUE_COLOR = (255, 255, 255)
 _LABEL = "RESOLVED"
-_LABEL_TRACKING = 2         # px at 2x, matching the design's mono letter-spacing
+_LABEL_TRACKING = 2         # px at 2x, matching the template's uppercase letter-spacing
 _LABEL_GAP = 10             # px at 2x, between the value and the label
+
+_VALUE_SIZE = 64            # px at 1x, the design size
+_VALUE_FONT = "Roboto-Bold.ttf"
+_LABEL_FONT = "Roboto-Medium.ttf"
+# Roboto is proportional rather than condensed, so a 4-character value ("100%")
+# overruns the ring at the design size. Cap the drawn width to keep it clear of
+# the stroke; the inner circle is 168px across at 1x.
+_VALUE_MAX_WIDTH = 130      # px at 1x
 
 DEFAULT_PERCENT = 67
 FALLBACK_FILENAME = "swift-wrap-ring-67.png"
@@ -59,10 +68,24 @@ def _draw_ring(percent: int) -> Image.Image:
     return ring
 
 
+def _fit_value_font(draw: ImageDraw.ImageDraw, value: str) -> ImageFont.FreeTypeFont:
+    """The design-size value font, scaled down if `value` would overrun the ring."""
+    path = str(FONTS_DIR / _VALUE_FONT)
+    size = _VALUE_SIZE * SCALE
+    font = ImageFont.truetype(path, size)
+
+    limit = _VALUE_MAX_WIDTH * SCALE
+    width = draw.textlength(value, font=font)
+    if width <= limit:
+        return font
+    # Glyph advance scales linearly with size, so one proportional step suffices.
+    return ImageFont.truetype(path, max(1, int(size * limit / width)))
+
+
 def _draw_centered_text(ring: Image.Image, value: str) -> None:
     draw = ImageDraw.Draw(ring)
-    value_font = ImageFont.truetype(str(FONTS_DIR / "GreedNarrow-SemiBold.otf"), 64 * SCALE)
-    label_font = ImageFont.truetype(str(FONTS_DIR / "DMMono-Medium.ttf"), 16 * SCALE)
+    value_font = _fit_value_font(draw, value)
+    label_font = ImageFont.truetype(str(FONTS_DIR / _LABEL_FONT), 16 * SCALE)
 
     cx = ring.width / 2
     cy = ring.height / 2 - 1

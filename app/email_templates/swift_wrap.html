@@ -20,15 +20,7 @@
       </noscript>
     <![endif]-->
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@500&family=Roboto:wght@400;500;700&display=swap');
-
-      @font-face {
-        font-family: 'Greed Narrow';
-        src: url('{{base_url}}/email-fonts/GreedNarrow-SemiBold.otf') format('opentype');
-        font-weight: 600;
-        font-style: normal;
-        font-display: swap;
-      }
+      @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
       :root {
         color-scheme: only light;
@@ -57,17 +49,21 @@
       }
       @media only screen and (max-width: 620px) {
         .card-pad { padding: 28px 20px !important; }
-        .hero-title { font-size: 46px !important; letter-spacing: -2px !important; }
+        .hero-title { font-size: 46px !important; letter-spacing: -1px !important; }
         .stat-xl { font-size: 84px !important; letter-spacing: -2px !important; }
         .stat-lg { font-size: 48px !important; }
         .hero-img { width: 220px !important; height: 282px !important; }
         .aside-img { display: none !important; }
         .stat-cell { display: block !important; width: 100% !important; padding: 0 0 12px !important; }
         .ring-cell, .ring-copy { display: block !important; width: 100% !important; padding: 0 0 20px !important; text-align: center !important; }
+        /* Eight nowrap labels share one row, so the axis sets the card's minimum
+           width. Step it down as the card narrows to keep the row from pushing
+           the email wider than the viewport. */
+        .peak-label { font-size: 13px !important; }
       }
       @media only screen and (max-width: 400px) {
         .card-pad { padding: 24px 14px !important; }
-        .peak-label { font-size: 13px !important; }
+        .peak-label { font-size: 11px !important; }
       }
     </style>
   </head>
@@ -88,7 +84,7 @@
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                         <tr>
                           <td valign="middle" style="padding: 0 12px 0 0;"><img src="{{base_url}}/images/logo_compliant.png" width="41" height="40" alt="Swift Agents" style="display: block; width: 41px; height: 40px;" /></td>
-                          <td valign="middle" style="font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #ffffff; text-transform: uppercase;">Swift Agents</td>
+                          <td valign="middle" style="font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #ffffff; text-transform: uppercase;">Swift Agents</td>
                         </tr>
                       </table>
                     </td>
@@ -98,12 +94,12 @@
                   </tr>
                   <tr>
                     <td align="center" style="padding: 0 0 16px; text-align: center;">
-                      <p class="hero-title" style="margin: 0; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 64px; font-weight: 600; line-height: 0.9; letter-spacing: -3px; color: #ffffff; text-transform: uppercase;">Your Swift<br />Wrap</p>
+                      <p class="hero-title" style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 64px; font-weight: 700; line-height: 0.9; letter-spacing: -1.5px; color: #ffffff; text-transform: uppercase;">Your Swift<br />Wrap</p>
                     </td>
                   </tr>
                   <tr>
                     <td align="center" style="padding: 0 0 10px; text-align: center;">
-                      <p style="margin: 0; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 18px; font-weight: 500; letter-spacing: 1px; color: #ffffff; text-transform: uppercase;">Weekly Report &bull; {{report_period}}</p>
+                      <p style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 500; letter-spacing: 1px; color: #ffffff; text-transform: uppercase;">Weekly Report &bull; {{report_period}}</p>
                     </td>
                   </tr>
                   <tr>
@@ -120,18 +116,18 @@
               <td class="card-pad" style="padding: 40px; background-color: #f25430; border-top: 1px solid #f36545; border-bottom: 1px solid #f36545;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                   <tr>
-                    <td style="padding: 0 0 8px; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #ffffff; text-transform: uppercase;">Volume check</td>
+                    <td style="padding: 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #ffffff; text-transform: uppercase;">Volume check</td>
                   </tr>
                   <tr>
-                    <td style="padding: 0 0 40px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -1px; color: #ffffff; text-transform: uppercase;">Conversations Handled</td>
+                    <td style="padding: 0 0 40px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -0.5px; color: #ffffff; text-transform: uppercase;">Conversations Handled</td>
                   </tr>
                   <tr>
                     <td align="center" style="padding: 0 0 20px; text-align: center;">
-                      <p class="stat-xl" style="margin: 0; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 128px; font-weight: 600; line-height: 0.9; letter-spacing: -4px; color: #ffffff;">{{total_conversations}}</p>
+                      <p class="stat-xl" style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 128px; font-weight: 700; line-height: 0.9; letter-spacing: -3px; color: #ffffff;">{{total_conversations}}</p>
                     </td>
                   </tr>
                   <tr>
-                    <td align="center" style="padding: 0 0 20px; text-align: center; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 18px; font-weight: 500; letter-spacing: 1px; color: #ffffff; text-transform: uppercase;">Total incoming queries</td>
+                    <td align="center" style="padding: 0 0 20px; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 500; letter-spacing: 1px; color: #ffffff; text-transform: uppercase;">Total incoming queries</td>
                   </tr>
                   <tr>
                     <td align="center" style="padding: 0 0 40px; text-align: center;">
@@ -155,10 +151,10 @@
               <td class="card-pad" style="padding: 40px; background-color: #1f1f1f;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                   <tr>
-                    <td style="padding: 0 0 8px; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #f2b035; text-transform: uppercase;">Automation score</td>
+                    <td style="padding: 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #f2b035; text-transform: uppercase;">Automation score</td>
                   </tr>
                   <tr>
-                    <td style="padding: 0 0 40px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -1px; color: #ffffff; text-transform: uppercase;">Solved Automatically</td>
+                    <td style="padding: 0 0 40px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -0.5px; color: #ffffff; text-transform: uppercase;">Solved Automatically</td>
                   </tr>
                   <tr>
                     <td style="padding: 0 0 40px;">
@@ -166,7 +162,7 @@
                         <tr>
                           <td class="ring-cell" valign="middle" width="210" style="width: 210px; padding: 0 40px 0 0;"><img src="{{base_url}}/images/{{resolved_ring}}" width="210" height="210" alt="{{resolved_percent}} resolved" style="display: block; width: 210px; height: 210px;" /></td>
                           <td class="ring-copy" valign="middle">
-                            <p class="stat-lg" style="margin: 0 0 12px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 44px; font-weight: 600; color: #f2b035;">{{resolved_count}}</p>
+                            <p class="stat-lg" style="margin: 0 0 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 44px; font-weight: 700; color: #f2b035;">{{resolved_count}}</p>
                             <p style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #ffffff;">conversations handled instantly by Swift Agents without human intervention.</p>
                           </td>
                         </tr>
@@ -189,9 +185,9 @@
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                         <tr>
                           <td valign="top">
-                            <p style="margin: 0 0 8px; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #1f1f1f; text-transform: uppercase;">Escalation breakdown</p>
-                            <p style="margin: 0 0 40px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -1px; color: #1f1f1f; text-transform: uppercase;">Needed Human Help</p>
-                            <p style="margin: 0; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; color: #1f1f1f;"><span class="stat-lg" style="font-size: 68px;">{{escalations_total}}</span>&nbsp;<span style="font-size: 16px;">ESCALATIONS</span></p>
+                            <p style="margin: 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #1f1f1f; text-transform: uppercase;">Escalation breakdown</p>
+                            <p style="margin: 0 0 40px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -0.5px; color: #1f1f1f; text-transform: uppercase;">Needed Human Help</p>
+                            <p style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-weight: 700; color: #1f1f1f;"><span class="stat-lg" style="font-size: 68px;">{{escalations_total}}</span>&nbsp;<span style="font-size: 16px;">ESCALATIONS</span></p>
                           </td>
                           <td class="aside-img" valign="top" width="94" style="width: 94px; padding: 0 0 0 30px;"><img src="{{base_url}}/images/swift-wrap-escalations.png" width="94" height="160" alt="" style="display: block; width: 94px; height: 160px;" /></td>
                         </tr>
@@ -203,7 +199,7 @@
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                         <tr>
                           <td style="padding: 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #1f1f1f;">{{escalation_1_label}}</td>
-                          <td align="right" style="padding: 0 0 8px; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #1f1f1f;">{{escalation_1_count}}</td>
+                          <td align="right" style="padding: 0 0 8px; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #1f1f1f;">{{escalation_1_count}}</td>
                         </tr>
                       </table>
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #dda233; border-radius: 4px;">
@@ -219,7 +215,7 @@
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                         <tr>
                           <td style="padding: 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #1f1f1f;">{{escalation_2_label}}</td>
-                          <td align="right" style="padding: 0 0 8px; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #1f1f1f;">{{escalation_2_count}}</td>
+                          <td align="right" style="padding: 0 0 8px; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #1f1f1f;">{{escalation_2_count}}</td>
                         </tr>
                       </table>
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #dda233; border-radius: 4px;">
@@ -235,7 +231,7 @@
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                         <tr>
                           <td style="padding: 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #1f1f1f;">{{escalation_3_label}}</td>
-                          <td align="right" style="padding: 0 0 8px; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #1f1f1f;">{{escalation_3_count}}</td>
+                          <td align="right" style="padding: 0 0 8px; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #1f1f1f;">{{escalation_3_count}}</td>
                         </tr>
                       </table>
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #dda233; border-radius: 4px;">
@@ -258,18 +254,18 @@
               <td class="card-pad" style="padding: 40px; background-color: #f6f4ef;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                   <tr>
-                    <td style="padding: 0 0 8px; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #1f1f1f; text-transform: uppercase;">Trending topics</td>
+                    <td style="padding: 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #1f1f1f; text-transform: uppercase;">Trending topics</td>
                   </tr>
                   <tr>
-                    <td style="padding: 0 0 40px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -1px; color: #1f1f1f; text-transform: uppercase;">Most Asked Questions</td>
+                    <td style="padding: 0 0 40px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -0.5px; color: #1f1f1f; text-transform: uppercase;">Most Asked Questions</td>
                   </tr>
                   <tr>
                     <td style="padding: 0 0 16px;">
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #ffffff; border-radius: 8px;">
                         <tr>
-                          <td valign="middle" width="28" style="width: 28px; padding: 12px 0 12px 12px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; color: #1f1f1f;">01</td>
+                          <td valign="middle" width="28" style="width: 28px; padding: 12px 0 12px 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 700; color: #1f1f1f;">01</td>
                           <td valign="middle" style="padding: 12px 16px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #1f1f1f;">{{question_1}}</td>
-                          <td valign="middle" align="right" style="padding: 12px 12px 12px 0; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #f25430; white-space: nowrap;">{{question_1_count}}</td>
+                          <td valign="middle" align="right" style="padding: 12px 12px 12px 0; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #f25430; white-space: nowrap;">{{question_1_count}}</td>
                         </tr>
                       </table>
                     </td>
@@ -278,9 +274,9 @@
                     <td style="padding: 0 0 16px;">
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #ffffff; border-radius: 8px;">
                         <tr>
-                          <td valign="middle" width="28" style="width: 28px; padding: 12px 0 12px 12px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; color: #1f1f1f;">02</td>
+                          <td valign="middle" width="28" style="width: 28px; padding: 12px 0 12px 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 700; color: #1f1f1f;">02</td>
                           <td valign="middle" style="padding: 12px 16px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #1f1f1f;">{{question_2}}</td>
-                          <td valign="middle" align="right" style="padding: 12px 12px 12px 0; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #f25430; white-space: nowrap;">{{question_2_count}}</td>
+                          <td valign="middle" align="right" style="padding: 12px 12px 12px 0; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #f25430; white-space: nowrap;">{{question_2_count}}</td>
                         </tr>
                       </table>
                     </td>
@@ -289,9 +285,9 @@
                     <td style="padding: 0 0 16px;">
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #ffffff; border-radius: 8px;">
                         <tr>
-                          <td valign="middle" width="28" style="width: 28px; padding: 12px 0 12px 12px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; color: #1f1f1f;">03</td>
+                          <td valign="middle" width="28" style="width: 28px; padding: 12px 0 12px 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 700; color: #1f1f1f;">03</td>
                           <td valign="middle" style="padding: 12px 16px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #1f1f1f;">{{question_3}}</td>
-                          <td valign="middle" align="right" style="padding: 12px 12px 12px 0; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #f25430; white-space: nowrap;">{{question_3_count}}</td>
+                          <td valign="middle" align="right" style="padding: 12px 12px 12px 0; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #f25430; white-space: nowrap;">{{question_3_count}}</td>
                         </tr>
                       </table>
                     </td>
@@ -300,9 +296,9 @@
                     <td style="padding: 0 0 16px;">
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #ffffff; border-radius: 8px;">
                         <tr>
-                          <td valign="middle" width="28" style="width: 28px; padding: 12px 0 12px 12px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; color: #1f1f1f;">04</td>
+                          <td valign="middle" width="28" style="width: 28px; padding: 12px 0 12px 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 700; color: #1f1f1f;">04</td>
                           <td valign="middle" style="padding: 12px 16px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #1f1f1f;">{{question_4}}</td>
-                          <td valign="middle" align="right" style="padding: 12px 12px 12px 0; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #f25430; white-space: nowrap;">{{question_4_count}}</td>
+                          <td valign="middle" align="right" style="padding: 12px 12px 12px 0; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #f25430; white-space: nowrap;">{{question_4_count}}</td>
                         </tr>
                       </table>
                     </td>
@@ -311,9 +307,9 @@
                     <td style="padding: 0 0 40px;">
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #ffffff; border-radius: 8px;">
                         <tr>
-                          <td valign="middle" width="28" style="width: 28px; padding: 12px 0 12px 12px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; color: #1f1f1f;">05</td>
+                          <td valign="middle" width="28" style="width: 28px; padding: 12px 0 12px 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 700; color: #1f1f1f;">05</td>
                           <td valign="middle" style="padding: 12px 16px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #1f1f1f;">{{question_5}}</td>
-                          <td valign="middle" align="right" style="padding: 12px 12px 12px 0; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #f25430; white-space: nowrap;">{{question_5_count}}</td>
+                          <td valign="middle" align="right" style="padding: 12px 12px 12px 0; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #f25430; white-space: nowrap;">{{question_5_count}}</td>
                         </tr>
                       </table>
                     </td>
@@ -334,9 +330,9 @@
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                         <tr>
                           <td valign="top">
-                            <p style="margin: 0 0 8px; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #ffffff; text-transform: uppercase;">Structured capture</p>
-                            <p style="margin: 0 0 40px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -1px; color: #ffffff; text-transform: uppercase;">Completed Forms</p>
-                            <p style="margin: 0; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600;"><span class="stat-lg" style="font-size: 64px; color: #f2b035;">{{forms_total}}</span>&nbsp;<span style="font-size: 16px; color: #f6f4ef;">FORMS FILLED THIS WEEK</span></p>
+                            <p style="margin: 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #ffffff; text-transform: uppercase;">Structured capture</p>
+                            <p style="margin: 0 0 40px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -0.5px; color: #ffffff; text-transform: uppercase;">Completed Forms</p>
+                            <p style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-weight: 700;"><span class="stat-lg" style="font-size: 64px; color: #f2b035;">{{forms_total}}</span>&nbsp;<span style="font-size: 16px; color: #f6f4ef;">FORMS FILLED THIS WEEK</span></p>
                           </td>
                           <td class="aside-img" valign="top" width="79" style="width: 79px; padding: 0 0 0 30px;"><img src="{{base_url}}/images/swift-wrap-forms.png" width="79" height="150" alt="" style="display: block; width: 79px; height: 150px;" /></td>
                         </tr>
@@ -353,7 +349,7 @@
                               <tr><td style="height: 35px; line-height: 35px; font-size: 0; background-color: #f25430; border-radius: 4px;">&nbsp;</td></tr>
                             </table>
                           </td>
-                          <td valign="middle" width="44" style="width: 44px; padding: 0 0 0 8px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #ffffff;">{{form_1_count}}</td>
+                          <td valign="middle" width="44" style="width: 44px; padding: 0 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #ffffff;">{{form_1_count}}</td>
                         </tr>
                       </table>
                     </td>
@@ -368,7 +364,7 @@
                               <tr><td style="height: 35px; line-height: 35px; font-size: 0; background-color: #f2b035; border-radius: 4px;">&nbsp;</td></tr>
                             </table>
                           </td>
-                          <td valign="middle" width="44" style="width: 44px; padding: 0 0 0 8px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #ffffff;">{{form_2_count}}</td>
+                          <td valign="middle" width="44" style="width: 44px; padding: 0 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #ffffff;">{{form_2_count}}</td>
                         </tr>
                       </table>
                     </td>
@@ -383,7 +379,7 @@
                               <tr><td style="height: 35px; line-height: 35px; font-size: 0; background-color: #7f9fff; border-radius: 4px;">&nbsp;</td></tr>
                             </table>
                           </td>
-                          <td valign="middle" width="44" style="width: 44px; padding: 0 0 0 8px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #ffffff;">{{form_3_count}}</td>
+                          <td valign="middle" width="44" style="width: 44px; padding: 0 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #ffffff;">{{form_3_count}}</td>
                         </tr>
                       </table>
                     </td>
@@ -398,7 +394,7 @@
                               <tr><td style="height: 35px; line-height: 35px; font-size: 0; background-color: #945038; border-radius: 4px;">&nbsp;</td></tr>
                             </table>
                           </td>
-                          <td valign="middle" width="44" style="width: 44px; padding: 0 0 0 8px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #ffffff;">{{form_4_count}}</td>
+                          <td valign="middle" width="44" style="width: 44px; padding: 0 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #ffffff;">{{form_4_count}}</td>
                         </tr>
                       </table>
                     </td>
@@ -415,13 +411,13 @@
               <td class="card-pad" style="padding: 40px; background-color: #f25430;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                   <tr>
-                    <td style="padding: 0 0 8px; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #ffffff; text-transform: uppercase;">Geographic spread</td>
+                    <td style="padding: 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #ffffff; text-transform: uppercase;">Geographic spread</td>
                   </tr>
                   <tr>
-                    <td style="padding: 0 0 40px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -1px; color: #ffffff; text-transform: uppercase;">Global Visitors</td>
+                    <td style="padding: 0 0 40px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -0.5px; color: #ffffff; text-transform: uppercase;">Global Visitors</td>
                   </tr>
                   <tr>
-                    <td style="padding: 0 0 16px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600;"><span class="stat-lg" style="font-size: 64px; color: #ffffff;">{{countries_total}}</span>&nbsp;<span style="font-size: 16px; color: #f6f4ef;">COUNTRIES</span></td>
+                    <td style="padding: 0 0 16px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-weight: 700;"><span class="stat-lg" style="font-size: 64px; color: #ffffff;">{{countries_total}}</span>&nbsp;<span style="font-size: 16px; color: #f6f4ef;">COUNTRIES</span></td>
                   </tr>
                   <tr>
                     <td style="padding: 0 0 16px;">
@@ -429,7 +425,7 @@
                         <tr>
                           <td valign="middle" width="36" style="width: 36px; padding: 10px 0 10px 16px; font-size: 20px; line-height: 1;">{{country_1_flag}}</td>
                           <td valign="middle" style="padding: 10px 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #ffffff;">{{country_1_name}}</td>
-                          <td valign="middle" align="right" style="padding: 10px 16px 10px 0; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #ffffff; white-space: nowrap;">{{country_1_percent}}</td>
+                          <td valign="middle" align="right" style="padding: 10px 16px 10px 0; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #ffffff; white-space: nowrap;">{{country_1_percent}}</td>
                         </tr>
                       </table>
                     </td>
@@ -440,7 +436,7 @@
                         <tr>
                           <td valign="middle" width="36" style="width: 36px; padding: 10px 0 10px 16px; font-size: 20px; line-height: 1;">{{country_2_flag}}</td>
                           <td valign="middle" style="padding: 10px 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #ffffff;">{{country_2_name}}</td>
-                          <td valign="middle" align="right" style="padding: 10px 16px 10px 0; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #ffffff; white-space: nowrap;">{{country_2_percent}}</td>
+                          <td valign="middle" align="right" style="padding: 10px 16px 10px 0; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #ffffff; white-space: nowrap;">{{country_2_percent}}</td>
                         </tr>
                       </table>
                     </td>
@@ -451,7 +447,7 @@
                         <tr>
                           <td valign="middle" width="36" style="width: 36px; padding: 10px 0 10px 16px; font-size: 20px; line-height: 1;">{{country_3_flag}}</td>
                           <td valign="middle" style="padding: 10px 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #ffffff;">{{country_3_name}}</td>
-                          <td valign="middle" align="right" style="padding: 10px 16px 10px 0; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #ffffff; white-space: nowrap;">{{country_3_percent}}</td>
+                          <td valign="middle" align="right" style="padding: 10px 16px 10px 0; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #ffffff; white-space: nowrap;">{{country_3_percent}}</td>
                         </tr>
                       </table>
                     </td>
@@ -462,7 +458,7 @@
                         <tr>
                           <td valign="middle" width="36" style="width: 36px; padding: 10px 0 10px 16px; font-size: 20px; line-height: 1;">{{country_4_flag}}</td>
                           <td valign="middle" style="padding: 10px 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #ffffff;">{{country_4_name}}</td>
-                          <td valign="middle" align="right" style="padding: 10px 16px 10px 0; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #ffffff; white-space: nowrap;">{{country_4_percent}}</td>
+                          <td valign="middle" align="right" style="padding: 10px 16px 10px 0; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #ffffff; white-space: nowrap;">{{country_4_percent}}</td>
                         </tr>
                       </table>
                     </td>
@@ -473,7 +469,7 @@
                         <tr>
                           <td valign="middle" width="36" style="width: 36px; padding: 10px 0 10px 16px; font-size: 20px; line-height: 1;">{{country_5_flag}}</td>
                           <td valign="middle" style="padding: 10px 12px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.4; color: #ffffff;">{{country_5_name}}</td>
-                          <td valign="middle" align="right" style="padding: 10px 16px 10px 0; text-align: right; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: #ffffff; white-space: nowrap;">{{country_5_percent}}</td>
+                          <td valign="middle" align="right" style="padding: 10px 16px 10px 0; text-align: right; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #ffffff; white-space: nowrap;">{{country_5_percent}}</td>
                         </tr>
                       </table>
                     </td>
@@ -494,8 +490,8 @@
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                         <tr>
                           <td valign="top">
-                            <p style="margin: 0 0 8px; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #1f1f1f; text-transform: uppercase;">Traffic peak</p>
-                            <p style="margin: 0; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -1px; color: #1f1f1f; text-transform: uppercase;">Busiest Hour: {{peak_hour}}</p>
+                            <p style="margin: 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #1f1f1f; text-transform: uppercase;">Traffic peak</p>
+                            <p style="margin: 0; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -0.5px; color: #1f1f1f; text-transform: uppercase;">Busiest Hour: {{peak_hour}}</p>
                           </td>
                           <td class="aside-img" valign="top" width="102" style="width: 102px; padding: 0 0 0 30px;"><img src="{{base_url}}/images/swift-wrap-peak.png" width="102" height="70" alt="" style="display: block; width: 102px; height: 70px;" /></td>
                         </tr>
@@ -510,56 +506,56 @@
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                               <tr><td height="{{peak_gap_1}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0;">&nbsp;</td></tr>
                               <tr><td height="{{peak_bar_1}}" bgcolor="{{peak_color_1}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0; border-radius: 4px 4px 0 0;">&nbsp;</td></tr>
-                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: {{peak_color_1}}; white-space: nowrap;">{{peak_label_1}}</td></tr>
+                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: {{peak_color_1}}; white-space: nowrap;">{{peak_label_1}}</td></tr>
                             </table>
                           </td>
                           <td valign="bottom" style="padding: 0 2px;">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                               <tr><td height="{{peak_gap_2}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0;">&nbsp;</td></tr>
                               <tr><td height="{{peak_bar_2}}" bgcolor="{{peak_color_2}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0; border-radius: 4px 4px 0 0;">&nbsp;</td></tr>
-                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: {{peak_color_2}}; white-space: nowrap;">{{peak_label_2}}</td></tr>
+                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: {{peak_color_2}}; white-space: nowrap;">{{peak_label_2}}</td></tr>
                             </table>
                           </td>
                           <td valign="bottom" style="padding: 0 2px;">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                               <tr><td height="{{peak_gap_3}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0;">&nbsp;</td></tr>
                               <tr><td height="{{peak_bar_3}}" bgcolor="{{peak_color_3}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0; border-radius: 4px 4px 0 0;">&nbsp;</td></tr>
-                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: {{peak_color_3}}; white-space: nowrap;">{{peak_label_3}}</td></tr>
+                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: {{peak_color_3}}; white-space: nowrap;">{{peak_label_3}}</td></tr>
                             </table>
                           </td>
                           <td valign="bottom" style="padding: 0 2px;">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                               <tr><td height="{{peak_gap_4}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0;">&nbsp;</td></tr>
                               <tr><td height="{{peak_bar_4}}" bgcolor="{{peak_color_4}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0; border-radius: 4px 4px 0 0;">&nbsp;</td></tr>
-                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: {{peak_color_4}}; white-space: nowrap;">{{peak_label_4}}</td></tr>
+                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: {{peak_color_4}}; white-space: nowrap;">{{peak_label_4}}</td></tr>
                             </table>
                           </td>
                           <td valign="bottom" style="padding: 0 2px;">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                               <tr><td height="{{peak_gap_5}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0;">&nbsp;</td></tr>
                               <tr><td height="{{peak_bar_5}}" bgcolor="{{peak_color_5}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0; border-radius: 4px 4px 0 0;">&nbsp;</td></tr>
-                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: {{peak_color_5}}; white-space: nowrap;">{{peak_label_5}}</td></tr>
+                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: {{peak_color_5}}; white-space: nowrap;">{{peak_label_5}}</td></tr>
                             </table>
                           </td>
                           <td valign="bottom" style="padding: 0 2px;">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                               <tr><td height="{{peak_gap_6}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0;">&nbsp;</td></tr>
                               <tr><td height="{{peak_bar_6}}" bgcolor="{{peak_color_6}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0; border-radius: 4px 4px 0 0;">&nbsp;</td></tr>
-                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: {{peak_color_6}}; white-space: nowrap;">{{peak_label_6}}</td></tr>
+                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: {{peak_color_6}}; white-space: nowrap;">{{peak_label_6}}</td></tr>
                             </table>
                           </td>
                           <td valign="bottom" style="padding: 0 2px;">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                               <tr><td height="{{peak_gap_7}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0;">&nbsp;</td></tr>
                               <tr><td height="{{peak_bar_7}}" bgcolor="{{peak_color_7}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0; border-radius: 4px 4px 0 0;">&nbsp;</td></tr>
-                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: {{peak_color_7}}; white-space: nowrap;">{{peak_label_7}}</td></tr>
+                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: {{peak_color_7}}; white-space: nowrap;">{{peak_label_7}}</td></tr>
                             </table>
                           </td>
                           <td valign="bottom" style="padding: 0 2px;">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                               <tr><td height="{{peak_gap_8}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0;">&nbsp;</td></tr>
                               <tr><td height="{{peak_bar_8}}" bgcolor="{{peak_color_8}}" style="mso-line-height-rule: exactly; line-height: 0; font-size: 0; border-radius: 4px 4px 0 0;">&nbsp;</td></tr>
-                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: {{peak_color_8}}; white-space: nowrap;">{{peak_label_8}}</td></tr>
+                              <tr><td class="peak-label" align="center" style="padding: 8px 0 0; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; color: {{peak_color_8}}; white-space: nowrap;">{{peak_label_8}}</td></tr>
                             </table>
                           </td>
                         </tr>
@@ -581,13 +577,13 @@
               <td class="card-pad" style="padding: 40px; background-color: #6433cc;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                   <tr>
-                    <td style="padding: 0 0 8px; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #ffffff; text-transform: uppercase;">Sentiment score</td>
+                    <td style="padding: 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #ffffff; text-transform: uppercase;">Sentiment score</td>
                   </tr>
                   <tr>
-                    <td style="padding: 0 0 40px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -1px; color: #ffffff; text-transform: uppercase;">Customer Happiness</td>
+                    <td style="padding: 0 0 40px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -0.5px; color: #ffffff; text-transform: uppercase;">Customer Happiness</td>
                   </tr>
                   <tr>
-                    <td align="center" style="padding: 0 0 20px; text-align: center; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 600; color: #ffffff; letter-spacing: -4px;"><span class="stat-lg" style="font-size: 64px;">{{satisfaction_score}}</span><span style="font-size: 40px;">/</span><span style="font-size: 24px; letter-spacing: -2px;">{{satisfaction_scale}}</span></td>
+                    <td align="center" style="padding: 0 0 20px; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-weight: 700; color: #ffffff; letter-spacing: -1.5px;"><span class="stat-lg" style="font-size: 64px;">{{satisfaction_score}}</span><span style="font-size: 40px;">/</span><span style="font-size: 24px; letter-spacing: -0.5px;">{{satisfaction_scale}}</span></td>
                   </tr>
                   <tr>
                     <td align="center" style="padding: 0 0 8px; text-align: center;">
@@ -621,26 +617,26 @@
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                         <tr>
                           <td valign="top">
-                            <p style="margin: 0 0 8px; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #1f1f1f; text-transform: uppercase;">Recap</p>
-                            <p style="margin: 0 0 40px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -1px; color: #1f1f1f; text-transform: uppercase;">That&rsquo;s Your Week!</p>
+                            <p style="margin: 0 0 8px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: 2px; color: #1f1f1f; text-transform: uppercase;">Recap</p>
+                            <p style="margin: 0 0 40px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -0.5px; color: #1f1f1f; text-transform: uppercase;">That&rsquo;s Your Week!</p>
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                               <tr>
                           <td class="stat-cell" valign="top" width="33.33%" style="width: 33.33%; padding: 0 8px 0 0;">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #ffffff; border-radius: 12px;">
-                              <tr><td align="center" style="padding: 16px 12px 8px; text-align: center; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 600; color: #1f1f1f;">{{summary_conversations}}</td></tr>
-                              <tr><td align="center" style="padding: 0 12px 16px; text-align: center; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; color: #1f1f1f; text-transform: uppercase;">Conversations</td></tr>
+                              <tr><td align="center" style="padding: 16px 12px 8px; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; color: #1f1f1f;">{{summary_conversations}}</td></tr>
+                              <tr><td align="center" style="padding: 0 12px 16px; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; color: #1f1f1f; text-transform: uppercase;">Conversations</td></tr>
                             </table>
                           </td>
                           <td class="stat-cell" valign="top" width="33.33%" style="width: 33.33%; padding: 0 8px;">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #ffffff; border-radius: 12px;">
-                              <tr><td align="center" style="padding: 16px 12px 8px; text-align: center; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 600; color: #1f1f1f;">{{summary_resolved}}</td></tr>
-                              <tr><td align="center" style="padding: 0 12px 16px; text-align: center; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; color: #1f1f1f; text-transform: uppercase;">Auto-Resolved</td></tr>
+                              <tr><td align="center" style="padding: 16px 12px 8px; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; color: #1f1f1f;">{{summary_resolved}}</td></tr>
+                              <tr><td align="center" style="padding: 0 12px 16px; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; color: #1f1f1f; text-transform: uppercase;">Auto-Resolved</td></tr>
                             </table>
                           </td>
                           <td class="stat-cell" valign="top" width="33.33%" style="width: 33.33%; padding: 0 0 0 8px;">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #ffffff; border-radius: 12px;">
-                              <tr><td align="center" style="padding: 16px 12px 8px; text-align: center; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 600; color: #1f1f1f;">{{summary_satisfaction}}</td></tr>
-                              <tr><td align="center" style="padding: 0 12px 16px; text-align: center; font-family: 'DM Mono', 'Courier New', Courier, monospace; font-size: 14px; font-weight: 500; color: #1f1f1f; text-transform: uppercase;">Satisfaction</td></tr>
+                              <tr><td align="center" style="padding: 16px 12px 8px; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; color: #1f1f1f;">{{summary_satisfaction}}</td></tr>
+                              <tr><td align="center" style="padding: 0 12px 16px; text-align: center; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 500; color: #1f1f1f; text-transform: uppercase;">Satisfaction</td></tr>
                             </table>
                           </td>
                               </tr>
@@ -653,7 +649,7 @@
                   </tr>
                   <tr>
                     <td style="padding: 0 0 12px;">
-                      <a href="{{dashboard_url}}" target="_blank" style="display: block; height: 49px; line-height: 49px; background-color: #1f1f1f; color: #ffffff; border-radius: 100px; font-family: 'Greed Narrow', 'Arial Narrow', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; letter-spacing: 1px; text-align: center; text-decoration: none; text-transform: uppercase;">View Full Dashboard</a>
+                      <a href="{{dashboard_url}}" target="_blank" style="display: block; height: 49px; line-height: 49px; background-color: #1f1f1f; color: #ffffff; border-radius: 100px; font-family: 'Roboto', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; letter-spacing: 1px; text-align: center; text-decoration: none; text-transform: uppercase;">View Full Dashboard</a>
                     </td>
                   </tr>
                   <tr>
