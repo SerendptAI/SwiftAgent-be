@@ -17,6 +17,7 @@ from app.core.utils import get_random_avatar
 from app.services import company_service
 from app.services.email_utils import get_image_data, process_html_for_inline_images, add_html_with_inline_images
 from app.services import notification_service
+from app.services import ring_chart
 
 logger = logging.getLogger(__name__)
 
@@ -1105,7 +1106,21 @@ async def dispatch_all_test_templates(company_id: str, recipients: list[str], au
     agent_avatar = auth_user.get("picture") or f"{settings.API_BASE_URL}/images/logo_compliant.png"
     
     from_email = f"{email_slug}@{settings.EMAIL_DOMAIN}"
-    
+
+    # Swift Wrap donut: the ring bakes its own value in, so it is rendered per percentage.
+    resolved_percent = 67
+    resolved_ring = ring_chart.render_ring(resolved_percent)
+
+    # Swift Wrap hourly chart: bars sit in a 135px column, the busiest hour is highlighted.
+    peak_hours = [("8 AM", 36), ("10 AM", 66), ("12 PM", 96), ("2 PM", 120), ("4 PM", 90), ("6 PM", 72), ("8 PM", 48), ("10 PM", 24)]
+    busiest = max(height for _, height in peak_hours)
+    peak_replacements = {}
+    for i, (label, height) in enumerate(peak_hours, start=1):
+        peak_replacements[f"{{{{peak_label_{i}}}}}"] = label
+        peak_replacements[f"{{{{peak_bar_{i}}}}}"] = str(height)
+        peak_replacements[f"{{{{peak_gap_{i}}}}}"] = str(135 - height)
+        peak_replacements[f"{{{{peak_color_{i}}}}}"] = "#f25430" if height == busiest else "#1f1f1f"
+
     template_tasks = [
         {
             "file": "welcome.html",
@@ -1210,6 +1225,95 @@ async def dispatch_all_test_templates(company_id: str, recipients: list[str], au
                 "{{company_name}}": company_name,
                 "{{ticket_number}}": "TEST1234"
             }
+        },
+        {
+            "file": "swift_wrap.html",
+            "subject": "Your Swift Wrap - JUL 14-20, 2025",
+            "replacements": {
+                "{{report_period}}": "JUL 14-20, 2025",
+                "{{total_conversations}}": "2,847",
+                "{{conversations_trend}}": "+12% increase vs last week",
+                "{{conversations_note}}": "Traffic peaked primarily around mid-week processing windows.",
+                "{{resolved_ring}}": resolved_ring,
+                "{{resolved_percent}}": f"{resolved_percent}%",
+                "{{resolved_count}}": "1,923",
+                "{{resolved_note}}": "Your agents saved roughly 64 hours of manual support time.",
+                "{{escalations_total}}": "924",
+                "{{escalation_1_label}}": "Too complex for AI model",
+                "{{escalation_1_count}}": "412",
+                "{{escalation_1_width}}": "44%",
+                "{{escalation_2_label}}": "Out of platform scope",
+                "{{escalation_2_count}}": "298",
+                "{{escalation_2_width}}": "32%",
+                "{{escalation_3_label}}": "Explicitly escalated by user",
+                "{{escalation_3_count}}": "214",
+                "{{escalation_3_width}}": "24%",
+                "{{escalations_note}}": "Pro-tip: Adding pricing API integration would resolve 50% of out-of-scope issues!",
+                "{{question_1}}": "How do I reset my password?",
+                "{{question_1_count}}": "342x",
+                "{{question_2}}": "What are your pricing plans?",
+                "{{question_2_count}}": "287x",
+                "{{question_3}}": "Where is my order?",
+                "{{question_3_count}}": "256x",
+                "{{question_4}}": "How to cancel subscription?",
+                "{{question_4_count}}": "198x",
+                "{{question_5}}": "Integration setup help",
+                "{{question_5_count}}": "167x",
+                "{{questions_note}}": "Password resets remain the top driver of automated support.",
+                "{{forms_total}}": "486",
+                "{{form_1_label}}": "Support tickets",
+                "{{form_1_count}}": "203",
+                "{{form_1_width}}": "100%",
+                "{{form_2_label}}": "Feedback forms",
+                "{{form_2_count}}": "156",
+                "{{form_2_width}}": "77%",
+                "{{form_3_label}}": "Contact requests",
+                "{{form_3_count}}": "89",
+                "{{form_3_width}}": "44%",
+                "{{form_4_label}}": "Bug reports",
+                "{{form_4_count}}": "38",
+                "{{form_4_width}}": "19%",
+                "{{forms_note}}": "Structured data capture cuts human follow-up times in half.",
+                "{{countries_total}}": "23",
+                "{{country_1_flag}}": "\U0001F1F3\U0001F1EC",
+                "{{country_1_name}}": "Nigeria",
+                "{{country_1_percent}}": "34%",
+                "{{country_2_flag}}": "\U0001F1FA\U0001F1F8",
+                "{{country_2_name}}": "United States",
+                "{{country_2_percent}}": "22%",
+                "{{country_3_flag}}": "\U0001F1EC\U0001F1E7",
+                "{{country_3_name}}": "United Kingdom",
+                "{{country_3_percent}}": "15%",
+                "{{country_4_flag}}": "\U0001F1EC\U0001F1ED",
+                "{{country_4_name}}": "Ghana",
+                "{{country_4_percent}}": "8%",
+                "{{country_5_flag}}": "\U0001F1E8\U0001F1E6",
+                "{{country_5_name}}": "Canada",
+                "{{country_5_percent}}": "6%",
+                "{{geography_note}}": "West African timezone (WAT) continues to be your highest volume region.",
+                "{{peak_hour}}": "2PM WAT",
+                "{{peak_messages}}": "420 messages",
+                "{{peak_block}}": "2:00 PM",
+                "{{peak_note}}": "No delays were reported during peak surge windows.",
+                **peak_replacements,
+                "{{satisfaction_score}}": "4.6",
+                "{{satisfaction_scale}}": "5.0",
+                "{{satisfaction_percent}}": "92%",
+                "{{star_1}}": "swift-wrap-star-full.png",
+                "{{star_2}}": "swift-wrap-star-full.png",
+                "{{star_3}}": "swift-wrap-star-full.png",
+                "{{star_4}}": "swift-wrap-star-full.png",
+                "{{star_5}}": "swift-wrap-star-empty.png",
+                "{{satisfaction_note}}": 'Customers frequently mentioned "speed" and "clarity" in their feedback.',
+                "{{summary_conversations}}": "2.8k+",
+                "{{summary_resolved}}": "67%",
+                "{{summary_satisfaction}}": "4.6★",
+                "{{year}}": "2025",
+                "{{dashboard_url}}": f"{settings.FRONTEND_URL}/dashboard",
+                "{{preferences_url}}": f"{settings.FRONTEND_URL}/settings/notifications",
+            },
+            "from_email": "noreply@swiftagents.org",
+            "from_name": "SwiftAgent"
         }
     ]
     
