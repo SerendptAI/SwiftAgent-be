@@ -151,7 +151,7 @@ async def read_website_page(url: str, force_refresh: bool = False, config: Runna
     """
     Loads a URL, extracts visible text, and grabs available links.
     Optimized for speed (quick lookup) to provide agent context.
-    The result is cached for 7 days. If you believe the data is stale or the user mentions recent changes, set force_refresh=True.
+    The result is cached for 1 hour. If you believe the data is stale or the user mentions recent changes, set force_refresh=True.
     """
     from app.services.page_reader_service import read_website_page as scrape_page
     return await scrape_page(url, force_refresh=force_refresh)

@@ -85,7 +85,7 @@ async def read_website_page(url: str, force_refresh: bool = False) -> dict:
     """
     Loads a URL, extracts visible text, and grabs available links.
     Optimized for speed (quick lookup) to provide agent context.
-    Caches the result in the database for 7 days unless force_refresh is True.
+    Caches the result in the database for 1 hour unless force_refresh is True.
     """
     try:
         if not url.startswith(("http://", "https://")):
@@ -103,14 +103,14 @@ async def read_website_page(url: str, force_refresh: bool = False) -> dict:
         if not force_refresh:
             cached = await db.scraped_pages_cache.find_one({"url": final_url})
             if cached:
-                # Check if it's less than 7 days old
+                # Check if it's less than 1 hour old
                 cache_time = cached.get("timestamp")
                 if cache_time:
                     # If naive, make it aware (MongoDB drivers usually return aware UTC datetime if configured, but let's be safe)
                     if cache_time.tzinfo is None:
                         cache_time = cache_time.replace(tzinfo=timezone.utc)
                         
-                    if now - cache_time < timedelta(days=7):
+                    if now - cache_time < timedelta(hours=1):
                         logger.info(f"Returning cached website page for: {final_url}")
                         return {
                             "url": cached["url"],
