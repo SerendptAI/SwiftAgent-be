@@ -47,6 +47,7 @@ dependencies = [
     "tiktoken>=0.8.0,<1.0.0",
     "nest-asyncio>=1.6.0,<2.0.0",
     "cencori>=0.1.0",
+    "pycountry>=26.2.16",
 ]
 
 [project.optional-dependencies]
