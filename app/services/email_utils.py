@@ -47,14 +47,34 @@ def process_html_for_inline_images(html: str) -> tuple[str, dict[str, str]]:
     return new_html, attachments
 
 
+import re
+from pathlib import Path
+from email.mime.image import MIMEImage
+
 def add_html_with_inline_images(msg: EmailMessage, html: str) -> dict[str, str]:
     """
-    Add an HTML alternative.
-    We no longer embed template images as inline attachments (CIDs)
-    because email clients (like Gmail) still render them as attachment pills
-    at the bottom of the email, cluttering the UI.
-    The templates already use absolute URLs (e.g. {{base_url}}/images/...)
-    so remote HTTP loading will work perfectly.
+    Parse HTML for image tags, attach them as inline CIDs, and replace the src.
     """
+    images_dir = Path(__file__).parent.parent / "email_templates" / "images"
+    
+    # Find all image sources that look like they belong to our templates
+    pattern = re.compile(r'src="[^"]*/images/([^"]+\.png)"')
+    found_images = set(pattern.findall(html))
+    
+    # First we modify HTML
+    for img_name in found_images:
+        html = re.sub(rf'src="[^"]*/images/{img_name}"', f'src="cid:{img_name}"', html)
+
     msg.add_alternative(html, subtype="html")
+    
+    # The HTML part is the last payload after add_alternative
+    html_part = msg.get_payload()[-1]
+    
+    for img_name in found_images:
+        img_path = images_dir / img_name
+        if img_path.exists():
+            with open(img_path, "rb") as f:
+                img_data = f.read()
+            html_part.add_related(img_data, 'image', 'png', cid=f"<{img_name}>")
+
     return {}
