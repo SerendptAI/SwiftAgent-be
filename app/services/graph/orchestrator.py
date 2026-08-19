@@ -23,7 +23,7 @@ def transfer_to_api():
 
 @tool
 def transfer_to_scraper():
-    """Transfer to the website scraper agent to check the company's official website or public URLs. MUST use this whenever information (such as use cases, features, pricing, plans, eligibility, or general company offerings) is NOT found in the knowledge base, or when the user asks about pricing, plans, or website content."""
+    """Transfer to the website scraper agent to check the company's official website or public URLs. MUST use this whenever information (such as use cases, features, pricing, plans, eligibility, about us, or general company offerings) is NOT found in the knowledge base, or when the user asks about pricing, plans, about us, or direct questions about the company."""
     pass
 
 @tool
@@ -74,7 +74,7 @@ ROUTING RULES:
 - Read the user's request carefully.
 - If it requires a specific expert, call the corresponding transfer tool IMMEDIATELY.
 - DO NOT answer the question yourself if an expert is needed.
-- CRITICAL: For questions about pricing or plans, default to routing to the scraper agent FIRST to check the website, since plans are updated frequently there.
+- CRITICAL: For questions about information that can change (like pricing, plans, "about us", or direct questions about the company), default to routing to the scraper agent FIRST to check the website, since this information is updated frequently there.
 - CRITICAL: If the user explicitly asks to speak to a human, create a ticket, or contact support, you MUST call the `escalate_to_human` tool IMMEDIATELY. Do NOT pretend to be a human, do NOT ask for their email address, and do NOT try to handle the ticket creation yourself.
 - CRITICAL: If the user provides an email address (e.g. name@example.com), and the previous message asked them for their email to create a ticket, you MUST call the `escalate_to_human` tool IMMEDIATELY to complete the escalation.
 - If the user says a simple greeting (e.g. "hi", "hello") or something that requires no tools, respond directly and conversationally.
