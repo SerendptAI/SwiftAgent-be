@@ -94,6 +94,8 @@ async def list_documents(
         .limit(limit)
     )
     documents = await cursor.to_list(length=limit)
+    for doc in documents:
+        doc.pop("_id", None)
 
     total = await db.documents.count_documents({"user_id": user_id})
     return {
