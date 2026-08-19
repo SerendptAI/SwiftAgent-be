@@ -460,6 +460,19 @@ async def log_visitor(company_id: str, ip_address: str) -> dict:
     if existing_visitor:
         return {"status": "already_logged", "id": existing_visitor["id"]}
 
+    country = None
+    if ip_address and ip_address not in ("127.0.0.1", "localhost", "unknown"):
+        try:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                res = await client.get(f"http://ip-api.com/json/{ip_address}", timeout=3.0)
+                if res.status_code == 200:
+                    data = res.json()
+                    if data.get("status") == "success":
+                        country = data.get("country")
+        except Exception:
+            pass
+
     new_id = str(uuid4())
     doc = {
         "id": new_id,
@@ -468,5 +481,9 @@ async def log_visitor(company_id: str, ip_address: str) -> dict:
         "timestamp": now,
         "duration_seconds": 0,
     }
+    
+    if country:
+        doc["country"] = country
+
     await db.visitors.insert_one(doc)
     return {"status": "logged", "id": new_id}
