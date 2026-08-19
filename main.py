@@ -40,6 +40,7 @@ from app.core.config import settings
 from app.core.database import create_indexes
 from app.services.stroll_service import init_browser, close_browser
 from app.services.stroll_scheduler import init_scheduler, close_scheduler
+from app.services import wrap_scheduler
 from app.core.langfuse import init_langfuse, shutdown_langfuse
 
 # structured logging setup
@@ -69,6 +70,7 @@ async def lifespan(app: FastAPI):
     # Start stroll schedules
     try:
         await init_scheduler()
+        wrap_scheduler.init_scheduler()
     except Exception as e:
         logging.getLogger(__name__).error(f"Scheduler init failed: {e}")
 
@@ -76,6 +78,7 @@ async def lifespan(app: FastAPI):
     # shutdown: close Playwright browser and scheduler
     try:
         await close_scheduler()
+        wrap_scheduler.close_scheduler()
     except Exception:
         pass
 
