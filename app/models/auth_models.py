@@ -12,6 +12,7 @@ class UserProfileUpdate(BaseModel):
     picture: Optional[str] = None
     personal_email: Optional[EmailStr] = None
     personal_phone: Optional[str] = None
+    unsubscribed_from_wrap: Optional[bool] = None
 
 class UserNameUpdate(BaseModel):
     name: str
