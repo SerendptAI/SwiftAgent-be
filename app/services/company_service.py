@@ -22,6 +22,33 @@ def _sanitize_slug(name: str) -> str:
     return slug
 
 
+# Default per-priority SLA policy. Companies may override this (partially or
+# fully) via the optional ``sla_policy`` field on the company document.
+DEFAULT_SLA_POLICY: dict = {
+    "low": {"first_response_h": 8, "resolution_h": 48},
+    "medium": {"first_response_h": 4, "resolution_h": 24},
+    "high": {"first_response_h": 2, "resolution_h": 8},
+    "urgent": {"first_response_h": 1, "resolution_h": 4},
+}
+
+
+def resolve_sla_policy(company: Optional[dict]) -> dict:
+    """Merge the company's SLA policy over the platform defaults.
+
+    Returns the full effective policy for all four priorities, e.g.
+    ``{"low": {"first_response_h": 8, "resolution_h": 48}, ...}``.
+    """
+    policy = {p: dict(cfg) for p, cfg in DEFAULT_SLA_POLICY.items()}
+    company_policy = (company or {}).get("sla_policy") or {}
+    if isinstance(company_policy, dict):
+        for priority, cfg in company_policy.items():
+            if priority in policy and isinstance(cfg, dict):
+                policy[priority].update(
+                    {k: v for k, v in cfg.items() if isinstance(v, (int, float))}
+                )
+    return policy
+
+
 async def check_slug_availability(slug: str) -> bool:
     """Check if an email slug is available."""
     existing = await db.companies.find_one({"email_slug": slug})

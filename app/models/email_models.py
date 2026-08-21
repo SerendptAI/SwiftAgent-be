@@ -28,7 +28,9 @@ class EmailTicket(BaseModel):
     customer_email: str
     customer_name: Optional[str] = None
     subject: str
-    status: str = "pending"  # pending | awaiting_customer | follow_up | resolved
+    # pending | in_progress | awaiting_customer | follow_up | open | resolved
+    status: str = "pending"
+    priority: str = "medium"  # low | medium | high | urgent
     resolve_token: str
     messages: List[TicketMessage] = []
     unseen_count: int = 0
@@ -39,6 +41,22 @@ class EmailTicket(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
+    # assignment / ownership
+    assigned_to: Optional[str] = None
+    assigned_by: Optional[str] = None
+    assigned_at: Optional[datetime] = None
+    # response + SLA tracking
+    first_response_at: Optional[datetime] = None
+    sla_policy: Optional[dict] = None
+    sla_first_response_deadline: Optional[datetime] = None
+    sla_resolution_deadline: Optional[datetime] = None
+    sla_breached: bool = False
+    sla_breach_reason: Optional[str] = None
+    # escalation (auto-escalated chats)
+    escalation_reason: Optional[str] = None
+    escalated_at: Optional[datetime] = None
+    # audit trail
+    activity_log: List[dict] = []
 
 
 class EmailReplyRequest(BaseModel):
@@ -55,14 +73,42 @@ class EmailReplyRequest(BaseModel):
 
 class TicketStatusUpdate(BaseModel):
     status: str
+    priority: Optional[str] = None
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
-        allowed = {"pending", "awaiting_customer", "follow_up", "resolved"}
+        allowed = {"pending", "in_progress", "awaiting_customer", "follow_up", "open", "resolved"}
         if v not in allowed:
             raise ValueError(f"Status must be one of {allowed}")
         return v
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        allowed = {"low", "medium", "high", "urgent"}
+        if v not in allowed:
+            raise ValueError(f"Priority must be one of {allowed}")
+        return v
+
+
+class TicketPriorityUpdate(BaseModel):
+    priority: str = "medium"
+
+    @field_validator("priority")
+    @classmethod
+    def validate_priority(cls, v: str) -> str:
+        allowed = {"low", "medium", "high", "urgent"}
+        if v not in allowed:
+            raise ValueError(f"Priority must be one of {allowed}")
+        return v
+
+
+class TicketAssignRequest(BaseModel):
+    # None / null unassigns the ticket
+    assignee_user_id: Optional[str] = None
 
 
 class EmailSlugCheck(BaseModel):
@@ -111,6 +157,7 @@ class EmailTicketResponse(BaseModel):
     customer_name: Optional[str] = None
     subject: str
     status: str
+    priority: str = "medium"
     messages: List[TicketMessage] = []
     unseen_count: int = 0
     avatar: Optional[str] = None
@@ -120,6 +167,18 @@ class EmailTicketResponse(BaseModel):
     updated_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
     attributed_chat: Optional[dict] = None
+    assigned_to: Optional[str] = None
+    assigned_by: Optional[str] = None
+    assigned_at: Optional[datetime] = None
+    first_response_at: Optional[datetime] = None
+    sla_policy: Optional[dict] = None
+    sla_first_response_deadline: Optional[datetime] = None
+    sla_resolution_deadline: Optional[datetime] = None
+    sla_breached: bool = False
+    sla_breach_reason: Optional[str] = None
+    escalation_reason: Optional[str] = None
+    escalated_at: Optional[datetime] = None
+    activity_log: List[dict] = []
 
 
 class EmailTicketSummary(BaseModel):
@@ -129,6 +188,7 @@ class EmailTicketSummary(BaseModel):
     customer_name: Optional[str] = None
     subject: str
     status: str
+    priority: str = "medium"
     message_count: int = 0
     unseen_count: int = 0
     avatar: Optional[str] = None
@@ -136,6 +196,8 @@ class EmailTicketSummary(BaseModel):
     updated_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
     preview_message: Optional[str] = None
+    assigned_to: Optional[str] = None
+    sla_breached: bool = False
 
 class TestDispatchRequest(BaseModel):
     company_id: str
