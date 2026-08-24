@@ -390,11 +390,15 @@ async def auto_escalate_chats(company_id: str) -> list[dict]:
     the originating chat as escalated), with the detected ``escalation_reason``.
     """
     now = _utcnow()
-    cursor = db.widget_conversations.find({"company_id": company_id, "escalated": {"$ne": True}})
-    conversations = await cursor.to_list(length=None)
+    cutoff = now - timedelta(hours=24)
+    cursor = db.widget_conversations.find({
+        "company_id": company_id, 
+        "escalated": {"$ne": True},
+        "updated_at": {"$gte": cutoff}
+    })
 
     created: list[dict] = []
-    for conversation in conversations:
+    async for conversation in cursor:
         should, reason = should_escalate(conversation, now)
         if not should or not reason:
             continue
@@ -466,10 +470,9 @@ async def sla_watch_loop() -> int:
         ],
     }
     cursor = db.email_tickets.find(query)
-    tickets = await cursor.to_list(length=None)
 
     flagged = 0
-    for ticket in tickets:
+    async for ticket in cursor:
         ticket_id = ticket.get("id")
         company_id = ticket.get("company_id")
         if not ticket_id or not company_id:

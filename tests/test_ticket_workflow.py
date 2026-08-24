@@ -437,8 +437,12 @@ class TestSlaWatchLoop:
             sla_resolution_deadline=NOW + timedelta(days=1),
             sla_breached=False,
         )
+        async def mock_cursor_iter(items):
+            for item in items:
+                yield item
+
         cursor = MagicMock()
-        cursor.to_list = AsyncMock(return_value=[ticket])
+        cursor.__aiter__.side_effect = lambda *args: mock_cursor_iter([ticket])
         mock_ticket_db.email_tickets.find = MagicMock(return_value=cursor)
         mock_ticket_db.email_tickets.update_one = AsyncMock()
 
@@ -462,8 +466,12 @@ class TestSlaWatchLoop:
             sla_first_response_deadline=NOW - timedelta(hours=4),
             sla_resolution_deadline=NOW - timedelta(minutes=1),
         )
+        async def mock_cursor_iter(items):
+            for item in items:
+                yield item
+
         cursor = MagicMock()
-        cursor.to_list = AsyncMock(return_value=[ticket])
+        cursor.__aiter__.side_effect = lambda *args: mock_cursor_iter([ticket])
         mock_ticket_db.email_tickets.find = MagicMock(return_value=cursor)
         mock_ticket_db.email_tickets.update_one = AsyncMock()
 
@@ -485,8 +493,12 @@ class TestSlaWatchLoop:
             sla_first_response_deadline=NOW + timedelta(hours=2),
             sla_resolution_deadline=NOW + timedelta(days=1),
         )
+        async def mock_cursor_iter(items):
+            for item in items:
+                yield item
+
         cursor = MagicMock()
-        cursor.to_list = AsyncMock(return_value=[ticket])
+        cursor.__aiter__.side_effect = lambda *args: mock_cursor_iter([ticket])
         mock_ticket_db.email_tickets.find = MagicMock(return_value=cursor)
         mock_ticket_db.email_tickets.update_one = AsyncMock()
 
@@ -606,8 +618,12 @@ class TestAutoEscalateChats:
             _msg("user", "Help me please", timestamp=NOW - timedelta(minutes=15)),
             _msg("assistant", FALLBACK, timestamp=NOW - timedelta(minutes=14)),
         )
+        async def mock_cursor_iter(items):
+            for item in items:
+                yield item
+
         cursor = MagicMock()
-        cursor.to_list = AsyncMock(return_value=[chat])
+        cursor.__aiter__.side_effect = lambda *args: mock_cursor_iter([chat])
         mock_ticket_db.widget_conversations.find = MagicMock(return_value=cursor)
 
         created_ticket = {"id": "TICKET01"}
@@ -639,8 +655,12 @@ class TestAutoEscalateChats:
             _msg("user", "Question"),
             _msg("assistant", "Solid answer"),
         )
+        async def mock_cursor_iter(items):
+            for item in items:
+                yield item
+
         cursor = MagicMock()
-        cursor.to_list = AsyncMock(return_value=[chat])
+        cursor.__aiter__.side_effect = lambda *args: mock_cursor_iter([chat])
         mock_ticket_db.widget_conversations.find = MagicMock(return_value=cursor)
 
         create_ticket_mock = AsyncMock()
@@ -661,8 +681,12 @@ class TestAutoEscalateChats:
             _msg("assistant", FALLBACK),
         )
         chat.pop("sdk_user_email")
+        async def mock_cursor_iter(items):
+            for item in items:
+                yield item
+
         cursor = MagicMock()
-        cursor.to_list = AsyncMock(return_value=[chat])
+        cursor.__aiter__.side_effect = lambda *args: mock_cursor_iter([chat])
         mock_ticket_db.widget_conversations.find = MagicMock(return_value=cursor)
 
         create_ticket_mock = AsyncMock()
