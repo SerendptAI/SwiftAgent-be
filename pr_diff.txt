@@ -1,0 +1,2260 @@
+diff --git c/app/api/routers/chat.py w/app/api/routers/chat.py
+index 65b97f5..845ede1 100644
+--- c/app/api/routers/chat.py
++++ w/app/api/routers/chat.py
+@@ -178,22 +178,11 @@ async def _chat_sse_generator(
+         push_op = {}
+ 
+         if not subject:
+-            subject = "New Chat"
++            subject = await generate_chat_title(req.message, agent_key)
++            if not subject:
++                subject = "New Chat"
+             yield _sse("subject", subject=subject)
+-            
+-            # Run title generation in background to avoid blocking the SSE stream
+-            async def generate_and_update_title():
+-                try:
+-                    new_sub = await generate_chat_title(req.message, agent_key)
+-                    if new_sub and new_sub != "New Chat":
+-                        await db.widget_conversations.update_one(
+-                            {"company_id": company_id, "session_id": req.session_id},
+-                            {"$set": {"subject": new_sub}}
+-                        )
+-                except Exception as e:
+-                    logger.error(f"Failed to generate title: {e}")
+-            
+-            asyncio.create_task(generate_and_update_title())
++            update_set["subject"] = subject
+         else:
+             yield _sse("subject", subject=subject)
+ 
+@@ -365,7 +354,6 @@ async def _chat_sse_generator(
+         actual_message_to_send = req.message
+ 
+         response_text = ""
+-        yield _sse("thinking", message="Thinking...")
+ 
+         for idx, provider_key in enumerate(agents_to_try):
+             try:
+@@ -387,9 +375,6 @@ async def _chat_sse_generator(
+                     if event_type == "tool":
+                         yield _sse("tool", name=event.get("name", ""), label=event.get("label", ""))
+ 
+-                    elif event_type == "ping":
+-                        yield ": keepalive\n\n"
+-
+                     elif event_type == "text":
+                         content = event.get("content", "")
+                         response_text += content
+diff --git c/app/api/routers/email.py w/app/api/routers/email.py
+index 2cdf1d4..8fdd95c 100644
+--- c/app/api/routers/email.py
++++ w/app/api/routers/email.py
+@@ -14,8 +14,11 @@ from app.models.email_models import (
+     EmailTicketResponse,
+     EmailTicketSummary,
+     TestDispatchRequest,
++    TicketAssignRequest,
++    TicketPriorityUpdate,
++    TicketStatusUpdate,
+ )
+-from app.services import company_service, company_email_service
++from app.services import company_service, company_email_service, ticket_service
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -122,16 +125,37 @@ async def list_tickets(
+     company_id: str,
+     limit: int = Query(default=50, ge=1, le=100),
+     skip: int = Query(default=0, ge=0),
++    status: Optional[str] = Query(default=None),
++    priority: Optional[str] = Query(default=None),
++    assigned_to: Optional[str] = Query(default=None),
++    sla_breached: Optional[bool] = Query(default=None),
+     current_user: dict = Depends(get_current_user),
+ ):
+-    """List unresolved email tickets for a company (Pending section)."""
++    """List unresolved email tickets for a company (Pending section).
++
++    Optional filters: status, priority, assigned_to, sla_breached.
++    """
+     user_id = current_user["user_id"]
+     company = await company_service.get_company(company_id, user_id)
+     if not company:
+         raise HTTPException(status_code=404, detail="Company not found")
+ 
+-    tickets = await company_email_service.list_tickets(company_id, limit, skip)
+-    total = await company_email_service.count_tickets(company_id)
++    tickets = await company_email_service.list_tickets(
++        company_id,
++        limit,
++        skip,
++        status=status,
++        priority=priority,
++        assigned_to=assigned_to,
++        sla_breached=sla_breached,
++    )
++    total = await company_email_service.count_tickets(
++        company_id,
++        status=status,
++        priority=priority,
++        assigned_to=assigned_to,
++        sla_breached=sla_breached,
++    )
+ 
+     return {
+         "items": tickets,
+@@ -142,6 +166,24 @@ async def list_tickets(
+     }
+ 
+ 
++@router.post("/{company_id}/tickets/auto-escalate")
++async def auto_escalate_endpoint(
++    company_id: str,
++    current_user: dict = Depends(get_current_user),
++):
++    """Manually trigger the auto-escalation scan for a company (admin only)."""
++    user_id = current_user["user_id"]
++    company = await company_service.get_company(company_id, user_id, admin_only=True)
++    if not company:
++        raise HTTPException(
++            status_code=403,
++            detail="Only the company owner can trigger auto-escalation",
++        )
++
++    created = await ticket_service.auto_escalate_chats(company_id)
++    return {"status": "complete", "escalated": created}
++
++
+ @router.websocket("/{company_id}/tickets/ws")
+ async def tickets_websocket(
+     websocket: WebSocket,
+@@ -473,6 +515,110 @@ async def reopen_ticket_endpoint(
+ 
+     return {"status": "reopened", "ticket_id": ticket_id}
+ 
++@router.patch("/{company_id}/tickets/{ticket_id}/priority")
++async def update_ticket_priority(
++    company_id: str,
++    ticket_id: str,
++    request: TicketPriorityUpdate,
++    current_user: dict = Depends(get_current_user),
++):
++    """Set a ticket's priority and recompute its SLA deadlines from policy."""
++    user_id = current_user["user_id"]
++    company = await company_service.get_company(company_id, user_id)
++    if not company:
++        raise HTTPException(status_code=404, detail="Company not found")
++
++    ticket = await company_email_service.get_ticket(company_id, ticket_id)
++    if not ticket:
++        raise HTTPException(status_code=404, detail="Ticket not found")
++
++    try:
++        result = await ticket_service.set_priority(
++            company_id, ticket_id, request.priority, actor=current_user["user_id"]
++        )
++    except ValueError as e:
++        raise HTTPException(status_code=400, detail=str(e))
++
++    if not result:
++        raise HTTPException(status_code=404, detail="Ticket not found")
++    return result
++
++
++@router.patch("/{company_id}/tickets/{ticket_id}/assign")
++async def assign_ticket_endpoint(
++    company_id: str,
++    ticket_id: str,
++    request: TicketAssignRequest,
++    current_user: dict = Depends(get_current_user),
++):
++    """Assign a ticket to a company member, or unassign it with a null body."""
++    user_id = current_user["user_id"]
++    company = await company_service.get_company(company_id, user_id)
++    if not company:
++        raise HTTPException(status_code=404, detail="Company not found")
++
++    ticket = await company_email_service.get_ticket(company_id, ticket_id)
++    if not ticket:
++        raise HTTPException(status_code=404, detail="Ticket not found")
++
++    try:
++        result = await ticket_service.assign_ticket(
++            company_id,
++            ticket_id,
++            request.assignee_user_id,
++            actor=current_user["user_id"],
++        )
++    except ValueError as e:
++        raise HTTPException(status_code=400, detail=str(e))
++
++    if not result:
++        raise HTTPException(status_code=404, detail="Ticket not found")
++    return result
++
++
++@router.patch("/{company_id}/tickets/{ticket_id}/status")
++async def update_ticket_status(
++    company_id: str,
++    ticket_id: str,
++    request: TicketStatusUpdate,
++    current_user: dict = Depends(get_current_user),
++):
++    """Transition a ticket through the workflow state machine.
++
++    An optional ``priority`` may be supplied to also update the ticket's
++    priority (and SLA deadlines) in the same request.
++    """
++    user_id = current_user["user_id"]
++    company = await company_service.get_company(company_id, user_id)
++    if not company:
++        raise HTTPException(status_code=404, detail="Company not found")
++
++    ticket = await company_email_service.get_ticket(company_id, ticket_id)
++    if not ticket:
++        raise HTTPException(status_code=404, detail="Ticket not found")
++
++    try:
++        result = await ticket_service.transition_ticket(
++            company_id,
++            ticket_id,
++            request.status,
++            actor=current_user["user_id"],
++        )
++        if request.priority and request.priority != ticket.get("priority"):
++            await ticket_service.set_priority(
++                company_id,
++                ticket_id,
++                request.priority,
++                actor=current_user["user_id"],
++            )
++    except ValueError as e:
++        raise HTTPException(status_code=400, detail=str(e))
++
++    if not result:
++        raise HTTPException(status_code=404, detail="Ticket not found")
++    return result
++
++
+ @router.post("/test-dispatch")
+ async def dispatch_test_suite(
+     request: TestDispatchRequest,
+diff --git c/app/api/routers/sdk.py w/app/api/routers/sdk.py
+index 2c4c2a5..b5d31a1 100644
+--- c/app/api/routers/sdk.py
++++ w/app/api/routers/sdk.py
+@@ -140,25 +140,13 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
+         push_op = {}
+ 
+         if not subject:
+-            subject = "New Chat"
++            subject = await generate_chat_title(req.message, agent_key)
++            if not subject:
++                subject = "New Chat"
+             yield _sse("subject", subject=subject)
+             update_set["sdk_user_email"] = email
+             update_set["source"] = "sdk"
+             update_set["subject"] = subject
+-
+-            # Run title generation in background to avoid blocking the SSE stream
+-            async def generate_and_update_title_sdk():
+-                try:
+-                    new_sub = await generate_chat_title(req.message, agent_key)
+-                    if new_sub and new_sub != "New Chat":
+-                        await db.widget_conversations.update_one(
+-                            {"company_id": company_id, "session_id": req.session_id},
+-                            {"$set": {"subject": new_sub}}
+-                        )
+-                except Exception as e:
+-                    logger.error(f"Failed to generate title in SDK: {e}")
+-            
+-            asyncio.create_task(generate_and_update_title_sdk())
+         else:
+             yield _sse("subject", subject=subject)
+             if not conversation or conversation.get("sdk_user_email") != email or conversation.get("source") != "sdk":
+@@ -299,8 +287,6 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
+         for idx, provider_key in enumerate(agents_to_try):
+             try:
+                 response_text = ""
+-                yield _sse("thinking", message="Thinking...")
+-                
+                 # Call chat_stream_graph with the injected message
+                 async for event in chat_stream_graph(
+                     company_id=company_id,
+@@ -318,8 +304,6 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
+ 
+                     if event_type == "tool":
+                         yield _sse("tool", name=event.get("name", ""), label=event.get("label", ""))
+-                    elif event_type == "ping":
+-                        yield ": keepalive\n\n"
+                     elif event_type == "text":
+                         content = event.get("content", "")
+                         response_text += content
+diff --git c/app/core/config.py w/app/core/config.py
+index 83bef25..7be9363 100644
+--- c/app/core/config.py
++++ w/app/core/config.py
+@@ -108,6 +108,7 @@ class Settings(BaseSettings):
+     STROLL_PAGE_TIMEOUT_MS: int = 10000
+     ENABLE_STROLL_SCHEDULER: bool = True
+     ENABLE_WRAP_SCHEDULER: bool = True
++    ENABLE_TICKET_SCHEDULER: bool = True
+     PLAYWRIGHT_WS_ENDPOINT: Optional[str] = "ws://browserless:3000"
+ 
+     # Expo Push Notifications (optional — push works without it but recommended)
+diff --git c/app/models/email_models.py w/app/models/email_models.py
+index 0a562b8..7386b42 100644
+--- c/app/models/email_models.py
++++ w/app/models/email_models.py
+@@ -28,7 +28,9 @@ class EmailTicket(BaseModel):
+     customer_email: str
+     customer_name: Optional[str] = None
+     subject: str
+-    status: str = "pending"  # pending | awaiting_customer | follow_up | resolved
++    # pending | in_progress | awaiting_customer | follow_up | open | resolved
++    status: str = "pending"
++    priority: str = "medium"  # low | medium | high | urgent
+     resolve_token: str
+     messages: List[TicketMessage] = []
+     unseen_count: int = 0
+@@ -39,6 +41,22 @@ class EmailTicket(BaseModel):
+     created_at: Optional[datetime] = None
+     updated_at: Optional[datetime] = None
+     resolved_at: Optional[datetime] = None
++    # assignment / ownership
++    assigned_to: Optional[str] = None
++    assigned_by: Optional[str] = None
++    assigned_at: Optional[datetime] = None
++    # response + SLA tracking
++    first_response_at: Optional[datetime] = None
++    sla_policy: Optional[dict] = None
++    sla_first_response_deadline: Optional[datetime] = None
++    sla_resolution_deadline: Optional[datetime] = None
++    sla_breached: bool = False
++    sla_breach_reason: Optional[str] = None
++    # escalation (auto-escalated chats)
++    escalation_reason: Optional[str] = None
++    escalated_at: Optional[datetime] = None
++    # audit trail
++    activity_log: List[dict] = []
+ 
+ 
+ class EmailReplyRequest(BaseModel):
+@@ -55,15 +73,43 @@ class EmailReplyRequest(BaseModel):
+ 
+ class TicketStatusUpdate(BaseModel):
+     status: str
++    priority: Optional[str] = None
+ 
+     @field_validator("status")
+     @classmethod
+     def validate_status(cls, v: str) -> str:
+-        allowed = {"pending", "awaiting_customer", "follow_up", "resolved"}
++        allowed = {"pending", "in_progress", "awaiting_customer", "follow_up", "open", "resolved"}
+         if v not in allowed:
+             raise ValueError(f"Status must be one of {allowed}")
+         return v
+ 
++    @field_validator("priority")
++    @classmethod
++    def validate_priority(cls, v: Optional[str]) -> Optional[str]:
++        if v is None:
++            return None
++        allowed = {"low", "medium", "high", "urgent"}
++        if v not in allowed:
++            raise ValueError(f"Priority must be one of {allowed}")
++        return v
++
++
++class TicketPriorityUpdate(BaseModel):
++    priority: str = "medium"
++
++    @field_validator("priority")
++    @classmethod
++    def validate_priority(cls, v: str) -> str:
++        allowed = {"low", "medium", "high", "urgent"}
++        if v not in allowed:
++            raise ValueError(f"Priority must be one of {allowed}")
++        return v
++
++
++class TicketAssignRequest(BaseModel):
++    # None / null unassigns the ticket
++    assignee_user_id: Optional[str] = None
++
+ 
+ class EmailSlugCheck(BaseModel):
+     slug: str
+@@ -111,6 +157,7 @@ class EmailTicketResponse(BaseModel):
+     customer_name: Optional[str] = None
+     subject: str
+     status: str
++    priority: str = "medium"
+     messages: List[TicketMessage] = []
+     unseen_count: int = 0
+     avatar: Optional[str] = None
+@@ -120,6 +167,18 @@ class EmailTicketResponse(BaseModel):
+     updated_at: Optional[datetime] = None
+     resolved_at: Optional[datetime] = None
+     attributed_chat: Optional[dict] = None
++    assigned_to: Optional[str] = None
++    assigned_by: Optional[str] = None
++    assigned_at: Optional[datetime] = None
++    first_response_at: Optional[datetime] = None
++    sla_policy: Optional[dict] = None
++    sla_first_response_deadline: Optional[datetime] = None
++    sla_resolution_deadline: Optional[datetime] = None
++    sla_breached: bool = False
++    sla_breach_reason: Optional[str] = None
++    escalation_reason: Optional[str] = None
++    escalated_at: Optional[datetime] = None
++    activity_log: List[dict] = []
+ 
+ 
+ class EmailTicketSummary(BaseModel):
+@@ -129,6 +188,7 @@ class EmailTicketSummary(BaseModel):
+     customer_name: Optional[str] = None
+     subject: str
+     status: str
++    priority: str = "medium"
+     message_count: int = 0
+     unseen_count: int = 0
+     avatar: Optional[str] = None
+@@ -136,6 +196,8 @@ class EmailTicketSummary(BaseModel):
+     updated_at: Optional[datetime] = None
+     resolved_at: Optional[datetime] = None
+     preview_message: Optional[str] = None
++    assigned_to: Optional[str] = None
++    sla_breached: bool = False
+ 
+ class TestDispatchRequest(BaseModel):
+     company_id: str
+diff --git c/app/services/company_email_service.py w/app/services/company_email_service.py
+index 52d11f0..06b9214 100644
+--- c/app/services/company_email_service.py
++++ w/app/services/company_email_service.py
+@@ -54,6 +54,8 @@ async def create_ticket(
+     chat_summary: str,
+     chat_session_id: str | None = None,
+     customer_name: str | None = None,
++    priority: str = "medium",
++    escalation_reason: str | None = None,
+ ) -> dict:
+     """Create a new support ticket (called by the AI agent)."""
+     # ensure ticket id is unique (avoid rare collisions)
+@@ -63,6 +65,16 @@ async def create_ticket(
+     resolve_token = str(uuid4())
+     now = datetime.now(tz=timezone.utc)
+ 
++    if priority not in {"low", "medium", "high", "urgent"}:
++        priority = "medium"
++
++    # Compute SLA deadlines from the company's policy (defaults applied)
++    company = await company_service.get_company(company_id)
++    sla_policy = company_service.resolve_sla_policy(company)
++    priority_cfg = sla_policy.get(priority) or sla_policy["medium"]
++    sla_first_response_deadline = now + timedelta(hours=priority_cfg["first_response_h"])
++    sla_resolution_deadline = now + timedelta(hours=priority_cfg["resolution_h"])
++
+     avatar = get_random_avatar()
+     if chat_session_id:
+         chat_session = await db.widget_conversations.find_one(
+@@ -79,6 +91,7 @@ async def create_ticket(
+         "customer_name": customer_name,
+         "subject": subject,
+         "status": "pending",
++        "priority": priority,
+         "resolve_token": resolve_token,
+         "messages": [
+             {
+@@ -96,6 +109,20 @@ async def create_ticket(
+         "chat_summary": chat_summary,
+         "created_at": now,
+         "updated_at": now,
++        "sla_policy": sla_policy,
++        "sla_first_response_deadline": sla_first_response_deadline,
++        "sla_resolution_deadline": sla_resolution_deadline,
++        "sla_breached": False,
++        "escalation_reason": escalation_reason,
++        "escalated_at": now if escalation_reason else None,
++        "activity_log": [
++            {
++                "action": "created",
++                "actor": "system",
++                "note": escalation_reason,
++                "timestamp": now,
++            }
++        ],
+     }
+ 
+     await db.email_tickets.insert_one(doc)
+@@ -111,7 +138,6 @@ async def create_ticket(
+             data={"ticket_id": ticket_id}
+         )
+     )
+-    company = await company_service.get_company(company_id)
+     if company:
+         asyncio.create_task(_send_new_ticket_email(company, doc))
+         asyncio.create_task(_send_ticket_confirmation_email(company, doc))
+@@ -146,9 +172,21 @@ async def list_tickets(
+     company_id: str,
+     limit: int = 50,
+     skip: int = 0,
++    status: str | None = None,
++    priority: str | None = None,
++    assigned_to: str | None = None,
++    sla_breached: bool | None = None,
+ ) -> list:
+-    """List only unresolved tickets (pending section)."""
++    """List only unresolved tickets (pending section), optionally filtered."""
+     query: dict = {"company_id": company_id, "status": {"$ne": "resolved"}}
++    if status:
++        query["status"] = status
++    if priority:
++        query["priority"] = priority
++    if assigned_to:
++        query["assigned_to"] = assigned_to
++    if sla_breached is not None:
++        query["sla_breached"] = sla_breached
+ 
+     pipeline = [
+         {"$match": query},
+@@ -179,6 +217,9 @@ async def list_tickets(
+                 "customer_name": 1,
+                 "subject": 1,
+                 "status": 1,
++                "priority": 1,
++                "assigned_to": 1,
++                "sla_breached": 1,
+                 "unseen_count": 1,
+                 "avatar": {"$ifNull": ["$avatar", "/chat-avatars/newimg.svg"]},
+                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
+@@ -219,9 +260,23 @@ async def list_tickets(
+     return await cursor.to_list(length=limit)
+ 
+ 
+-async def count_tickets(company_id: str) -> int:
+-    """Count only unresolved tickets."""
++async def count_tickets(
++    company_id: str,
++    status: str | None = None,
++    priority: str | None = None,
++    assigned_to: str | None = None,
++    sla_breached: bool | None = None,
++) -> int:
++    """Count only unresolved tickets, optionally filtered."""
+     query: dict = {"company_id": company_id, "status": {"$ne": "resolved"}}
++    if status:
++        query["status"] = status
++    if priority:
++        query["priority"] = priority
++    if assigned_to:
++        query["assigned_to"] = assigned_to
++    if sla_breached is not None:
++        query["sla_breached"] = sla_breached
+     return await db.email_tickets.count_documents(query)
+ 
+ 
+@@ -413,10 +468,22 @@ async def send_ticket_reply(
+     await db.email_tickets.update_one(
+         {"id": ticket_id, "company_id": company_id},
+         {
+-            "$push": {"messages": outbound_msg},
++            "$push": {
++                "messages": outbound_msg,
++                "activity_log": {
++                    "action": "agent_reply",
++                    "actor": agent_display,
++                    "timestamp": now,
++                },
++            },
+             "$set": {
+                 "status": "awaiting_customer",
+                 "updated_at": now,
++                # First company response: stamp the response time and clear any
++                # pending SLA breach state.
++                "first_response_at": ticket.get("first_response_at") or now,
++                "sla_breached": False,
++                "sla_breach_reason": None,
+             },
+         },
+     )
+diff --git c/app/services/company_service.py w/app/services/company_service.py
+index 29317f9..6e4d486 100644
+--- c/app/services/company_service.py
++++ w/app/services/company_service.py
+@@ -22,6 +22,33 @@ def _sanitize_slug(name: str) -> str:
+     return slug
+ 
+ 
++# Default per-priority SLA policy. Companies may override this (partially or
++# fully) via the optional ``sla_policy`` field on the company document.
++DEFAULT_SLA_POLICY: dict = {
++    "low": {"first_response_h": 8, "resolution_h": 48},
++    "medium": {"first_response_h": 4, "resolution_h": 24},
++    "high": {"first_response_h": 2, "resolution_h": 8},
++    "urgent": {"first_response_h": 1, "resolution_h": 4},
++}
++
++
++def resolve_sla_policy(company: Optional[dict]) -> dict:
++    """Merge the company's SLA policy over the platform defaults.
++
++    Returns the full effective policy for all four priorities, e.g.
++    ``{"low": {"first_response_h": 8, "resolution_h": 48}, ...}``.
++    """
++    policy = {p: dict(cfg) for p, cfg in DEFAULT_SLA_POLICY.items()}
++    company_policy = (company or {}).get("sla_policy") or {}
++    if isinstance(company_policy, dict):
++        for priority, cfg in company_policy.items():
++            if priority in policy and isinstance(cfg, dict):
++                policy[priority].update(
++                    {k: v for k, v in cfg.items() if isinstance(v, (int, float))}
++                )
++    return policy
++
++
+ async def check_slug_availability(slug: str) -> bool:
+     """Check if an email slug is available."""
+     existing = await db.companies.find_one({"email_slug": slug})
+diff --git c/app/services/graph/executor.py w/app/services/graph/executor.py
+index 3c2770f..f7d4b6f 100644
+--- c/app/services/graph/executor.py
++++ w/app/services/graph/executor.py
+@@ -93,15 +93,7 @@ async def chat_stream_graph(
+         final_text = ""
+         has_yielded_response = False
+         
+-        import time
+-        last_ping_time = time.time()
+-        
+         async for event in compiled_graph.astream_events(state, config, version="v2"):
+-            current_time = time.time()
+-            if current_time - last_ping_time > 2.0:
+-                last_ping_time = current_time
+-                yield {"type": "ping"}
+-
+             kind = event["event"]
+             
+             if kind == "on_chat_model_stream":
+diff --git c/app/services/ticket_scheduler.py w/app/services/ticket_scheduler.py
+new file mode 100644
+index 0000000..03e6992
+--- /dev/null
++++ w/app/services/ticket_scheduler.py
+@@ -0,0 +1,97 @@
++"""
++Ticket Workflow Scheduler — background jobs for ticket operations.
++
++Jobs:
++  - Auto-escalation: hourly scan of widget conversations stuck on AI failures.
++  - SLA watch: every 5 minutes, flag tickets past their SLA deadlines.
++
++Follows the same AsyncIOScheduler pattern as wrap_scheduler/stroll_scheduler
++and is wired into the FastAPI lifespan in main.py.
++"""
++
++import logging
++
++from apscheduler.schedulers.asyncio import AsyncIOScheduler
++from apscheduler.triggers.cron import CronTrigger
++
++from app.core.config import settings
++from app.core.database import db
++from app.services import ticket_service
++
++logger = logging.getLogger(__name__)
++
++# Global scheduler instance
++_scheduler = AsyncIOScheduler()
++
++
++async def _scheduled_auto_escalate_task():
++    """Hourly: scan every company's widget chats for conversations that need a human."""
++    logger.info("Starting auto-escalation scan.")
++    try:
++        company_ids = await db.widget_conversations.distinct(
++            "company_id", {"escalated": {"$ne": True}}
++        )
++        for company_id in company_ids:
++            if not company_id:
++                continue
++            try:
++                created = await ticket_service.auto_escalate_chats(company_id)
++                if created:
++                    logger.info(
++                        "Auto-escalated %d chat(s) for company %s", len(created), company_id
++                    )
++            except Exception as e:
++                logger.exception(
++                    "Auto-escalation scan failed for company %s: %s", company_id, e
++                )
++        logger.info("Auto-escalation scan complete.")
++    except Exception as e:
++        logger.exception("Auto-escalation scan failed: %s", e)
++
++
++async def _scheduled_sla_watch_task():
++    """Every 5 minutes: flag tickets past their first-response / resolution deadlines."""
++    try:
++        flagged = await ticket_service.sla_watch_loop()
++        if flagged:
++            logger.info("SLA watch flagged %d ticket(s).", flagged)
++    except Exception as e:
++        logger.exception("SLA watch pass failed: %s", e)
++
++
++def init_scheduler():
++    """Initialize and start the ticket workflow scheduler."""
++    if not getattr(settings, "ENABLE_TICKET_SCHEDULER", True):
++        logger.info("Ticket workflow scheduler is disabled in settings.")
++        return
++
++    if _scheduler.running:
++        return
++
++    logger.info("Initializing ticket workflow scheduler...")
++
++    # Auto-escalation: every hour on the hour
++    _scheduler.add_job(
++        _scheduled_auto_escalate_task,
++        trigger=CronTrigger(minute=0),
++        id="ticket_auto_escalate_job",
++        replace_existing=True,
++    )
++
++    # SLA watch: every 5 minutes
++    _scheduler.add_job(
++        _scheduled_sla_watch_task,
++        trigger=CronTrigger(minute="*/5"),
++        id="ticket_sla_watch_job",
++        replace_existing=True,
++    )
++
++    _scheduler.start()
++    logger.info("Ticket workflow scheduler started.")
++
++
++def close_scheduler():
++    """Gracefully shutdown the scheduler."""
++    if _scheduler.running:
++        _scheduler.shutdown(wait=False)
++        logger.info("Ticket workflow scheduler shutdown complete.")
+diff --git c/app/services/ticket_service.py w/app/services/ticket_service.py
+new file mode 100644
+index 0000000..eb65540
+--- /dev/null
++++ w/app/services/ticket_service.py
+@@ -0,0 +1,533 @@
++"""
++Ticket Workflow Service — state machine, assignment, priority, SLA tracking,
++and auto-escalation for email tickets.
++
++Keeps all ticket mutations centralized so the dashboard endpoints, the
++background scheduler, and future integrations share one audited code path.
++Every mutation appends an entry to the ticket's ``activity_log`` and fires
++the appropriate company notifications.
++"""
++
++import asyncio
++import logging
++import re
++from datetime import datetime, timedelta, timezone
++
++from pymongo import ReturnDocument
++
++from app.core.database import db
++from app.services import company_email_service, company_service, notification_service
++
++logger = logging.getLogger(__name__)
++
++# Allowed ticket priorities
++PRIORITIES = ("low", "medium", "high", "urgent")
++
++# Allowed ticket statuses (superset of the legacy statuses)
++STATUSES = ("pending", "in_progress", "awaiting_customer", "follow_up", "open", "resolved")
++
++# Reopen window (matches the legacy reopen rule in company_email_service)
++REOPEN_WINDOW_HOURS = 48
++
++# Fallback text the graph executor yields when the AI produced no answer.
++# See app/services/graph/executor.py.
++FALLBACK_TEXT = "I'm sorry, I wasn't able to find that information right now."
++
++# Idle threshold for auto-escalation: last user message unanswered for >= N minutes.
++IDLE_ESCALATION_MINUTES = 10
++
++# Minimum number of user messages before the idle rule applies.
++MIN_USER_MESSAGES_FOR_IDLE = 2
++
++# A transition map from current status -> allowed target statuses.
++#
++# Matches the workflow spec:
++#   - pending <-> in_progress
++#   - pending / awaiting_customer / follow_up -> resolved
++#   - resolved -> open (within 48h, mirroring the legacy reopen rule)
++# Two pragmatic additions keep the machine complete: in_progress -> resolved
++# (agents resolve directly from work) and open -> resolved (reopened tickets
++# must be closable through the same API).
++_VALID_TRANSITIONS: dict[str, set[str]] = {
++    "pending": {"in_progress", "resolved"},
++    "in_progress": {"pending", "resolved"},
++    "awaiting_customer": {"resolved"},
++    "follow_up": {"resolved"},
++    "open": {"resolved"},
++    "resolved": {"open"},
++}
++
++_EMAIL_RE = re.compile(r"[\w\.-]+@[\w\.-]+\.\w+")
++
++
++def _utcnow() -> datetime:
++    return datetime.now(tz=timezone.utc)
++
++
++def _as_utc_datetime(value) -> datetime | None:
++    """Coerce a stored timestamp (str or datetime) into a tz-aware datetime."""
++    if isinstance(value, str):
++        try:
++            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
++        except ValueError:
++            return None
++    if isinstance(value, datetime):
++        if value.tzinfo is None:
++            value = value.replace(tzinfo=timezone.utc)
++        return value
++    return None
++
++
++def _activity_entry(action: str, actor: str, **extra) -> dict:
++    entry = {
++        "action": action,
++        "actor": actor,
++        "timestamp": _utcnow(),
++    }
++    entry.update(extra)
++    return entry
++
++
++async def _fetch_ticket(company_id: str, ticket_id: str) -> dict:
++    ticket = await db.email_tickets.find_one({"company_id": company_id, "id": ticket_id})
++    if not ticket:
++        raise ValueError(f"Ticket {ticket_id} not found")
++    return ticket
++
++
++def _fire_company_notification(
++    company_id: str,
++    title: str,
++    body: str,
++    type: str,
++    data: dict | None = None,
++):
++    asyncio.create_task(
++        notification_service.notify_company(
++            company_id=company_id,
++            title=title,
++            body=body,
++            type=type,
++            data=data,
++        )
++    )
++
++
++async def transition_ticket(
++    company_id: str,
++    ticket_id: str,
++    to_status: str,
++    actor: str,
++    note: str | None = None,
++) -> dict | None:
++    """Move a ticket through the allowed state machine, with audit + notifications."""
++    if to_status not in STATUSES:
++        raise ValueError(f"Status must be one of {STATUSES}")
++
++    ticket = await _fetch_ticket(company_id, ticket_id)
++    from_status = ticket.get("status", "pending")
++
++    allowed = _VALID_TRANSITIONS.get(from_status, set())
++    if to_status not in allowed:
++        raise ValueError(f"Cannot transition ticket from '{from_status}' to '{to_status}'")
++
++    now = _utcnow()
++
++    # Enforce the 48h reopen window (same rule as the legacy reopen endpoint).
++    if from_status == "resolved" and to_status == "open":
++        updated_at = _as_utc_datetime(ticket.get("updated_at"))
++        if updated_at and updated_at < now - timedelta(hours=REOPEN_WINDOW_HOURS):
++            raise ValueError(
++                "Cannot reopen a ticket that has been closed for more than 48 hours."
++            )
++
++    entry = _activity_entry(
++        "status_change",
++        actor,
++        from_status=from_status,
++        to_status=to_status,
++        note=note,
++    )
++
++    update: dict = {
++        "$set": {
++            "status": to_status,
++            "updated_at": now,
++        },
++        "$push": {"activity_log": entry},
++    }
++    if to_status == "resolved":
++        update["$set"]["resolved_at"] = now
++    if from_status == "resolved" and to_status == "open":
++        update["$unset"] = {"resolved_at": ""}
++
++    result = await db.email_tickets.find_one_and_update(
++        {"company_id": company_id, "id": ticket_id},
++        update,
++        return_document=ReturnDocument.AFTER,
++    )
++
++    if result:
++        if to_status == "resolved":
++            _fire_company_notification(
++                company_id,
++                title="✅ Ticket Closed",
++                body=f"Ticket #{ticket_id} was marked as resolved by {actor}.",
++                type="ticket_close",
++                data={"ticket_id": ticket_id},
++            )
++        elif to_status == "open":
++            _fire_company_notification(
++                company_id,
++                title="🔄 Ticket Reopened",
++                body=f"Ticket #{ticket_id} was reopened by {actor}.",
++                type="ticket_reopen",
++                data={"ticket_id": ticket_id},
++            )
++
++    return result
++
++
++async def assign_ticket(
++    company_id: str,
++    ticket_id: str,
++    assignee_user_id: str | None,
++    actor: str,
++) -> dict | None:
++    """Assign (or, with ``assignee_user_id=None``, unassign) a ticket.
++
++    The assignee must be the company owner or a member. The assignee is
++    notified directly via ``create_notification`` (which also fires a push
++    through ``send_generic_push``).
++    """
++    ticket = await _fetch_ticket(company_id, ticket_id)
++    now = _utcnow()
++
++    if not assignee_user_id:
++        entry = _activity_entry("unassigned", actor)
++        return await db.email_tickets.find_one_and_update(
++            {"company_id": company_id, "id": ticket_id},
++            {
++                "$unset": {"assigned_to": "", "assigned_by": "", "assigned_at": ""},
++                "$set": {"updated_at": now},
++                "$push": {"activity_log": entry},
++            },
++            return_document=ReturnDocument.AFTER,
++        )
++
++    # Validate the assignee exists and belongs to this company.
++    user = await db.users.find_one({"user_id": assignee_user_id})
++    if not user:
++        raise ValueError("Assignee user not found")
++
++    company = await company_service.get_company(company_id)
++    if not company:
++        raise ValueError(f"Company {company_id} not found")
++
++    owner_id = company.get("user_id")
++    member_ids = [m.get("user_id") for m in company.get("members", []) if m.get("user_id")]
++    if assignee_user_id != owner_id and assignee_user_id not in member_ids:
++        raise ValueError("Assignee is not a member of this company")
++
++    entry = _activity_entry("assigned", actor, assignee_user_id=assignee_user_id)
++
++    result = await db.email_tickets.find_one_and_update(
++        {"company_id": company_id, "id": ticket_id},
++        {
++            "$set": {
++                "assigned_to": assignee_user_id,
++                "assigned_by": actor,
++                "assigned_at": now,
++                "updated_at": now,
++            },
++            "$push": {"activity_log": entry},
++        },
++        return_document=ReturnDocument.AFTER,
++    )
++
++    if result:
++        asyncio.create_task(
++            notification_service.create_notification(
++                user_id=assignee_user_id,
++                title="🎫 Ticket Assigned",
++                body=(
++                    f"You have been assigned Ticket #{ticket_id}: "
++                    f"{ticket.get('subject', 'No subject')}"
++                ),
++                type="ticket_assigned",
++                data={"ticket_id": ticket_id, "company_id": company_id},
++            )
++        )
++
++    return result
++
++
++async def set_priority(
++    company_id: str,
++    ticket_id: str,
++    priority: str,
++    actor: str,
++) -> dict | None:
++    """Change a ticket's priority and recompute its SLA deadlines from policy.
++
++    If the ticket had a breach flag and the new deadlines are still in the
++    future, the breach state is cleared.
++    """
++    if priority not in PRIORITIES:
++        raise ValueError(f"Priority must be one of {PRIORITIES}")
++
++    ticket = await _fetch_ticket(company_id, ticket_id)
++    now = _utcnow()
++
++    company = await company_service.get_company(company_id)
++    policy = company_service.resolve_sla_policy(company)
++    cfg = policy.get(priority) or policy["medium"]
++
++    created_at = _as_utc_datetime(ticket.get("created_at")) or now
++    first_response_deadline = created_at + timedelta(hours=cfg["first_response_h"])
++    resolution_deadline = created_at + timedelta(hours=cfg["resolution_h"])
++
++    # Reset the breach flag if the new deadlines are still in the future.
++    sla_breached = bool(ticket.get("sla_breached", False))
++    sla_breach_reason = ticket.get("sla_breach_reason")
++    if sla_breached and first_response_deadline > now and resolution_deadline > now:
++        sla_breached = False
++        sla_breach_reason = None
++
++    entry = _activity_entry("priority_change", actor, priority=priority)
++
++    result = await db.email_tickets.find_one_and_update(
++        {"company_id": company_id, "id": ticket_id},
++        {
++            "$set": {
++                "priority": priority,
++                "sla_policy": policy,
++                "sla_first_response_deadline": first_response_deadline,
++                "sla_resolution_deadline": resolution_deadline,
++                "sla_breached": sla_breached,
++                "sla_breach_reason": sla_breach_reason,
++                "updated_at": now,
++            },
++            "$push": {"activity_log": entry},
++        },
++        return_document=ReturnDocument.AFTER,
++    )
++
++    if result:
++        _fire_company_notification(
++            company_id,
++            title="🚨 Ticket Priority Updated",
++            body=f"Ticket #{ticket_id} priority set to {priority}.",
++            type="ticket_priority",
++            data={"ticket_id": ticket_id, "priority": priority},
++        )
++
++    return result
++
++
++# ---------------------------------------------------------------------------
++# Auto-escalation
++# ---------------------------------------------------------------------------
++
++
++def _is_fallback_message(message: dict) -> bool:
++    content = (message.get("content") or "").strip()
++    return content.lower().startswith(FALLBACK_TEXT.lower())
++
++
++def _extract_customer_email(conversation: dict) -> str | None:
++    """Resolve a customer email from the conversation, or None if unavailable."""
++    email = conversation.get("sdk_user_email")
++    if email:
++        return email
++    for message in reversed(conversation.get("messages") or []):
++        if message.get("role") != "user":
++            continue
++        match = _EMAIL_RE.search(message.get("content") or "")
++        if match:
++            return match.group(0)
++    return None
++
++
++def should_escalate(conversation: dict, now: datetime | None = None) -> tuple[bool, str | None]:
++    """Heuristic pass over a widget conversation.
++
++    Returns ``(should_escalate, reason)`` where reason is one of:
++      - ``ai_fallback_response`` — the last assistant reply was the fallback text
++      - ``repeated_ai_failures`` — 2+ fallback replies (2+ consecutive unsuccessful AI answers)
++      - ``idle_unanswered`` — user's last message unanswered for >= 10 min and
++        the chat contains >= 2 user messages
++    """
++    now = now or _utcnow()
++    messages = conversation.get("messages") or []
++    if not messages:
++        return False, None
++
++    assistant_messages = [m for m in messages if m.get("role") == "assistant"]
++    user_messages = [m for m in messages if m.get("role") == "user"]
++
++    # Rule 1: last assistant message is the fallback text.
++    if assistant_messages and _is_fallback_message(assistant_messages[-1]):
++        return True, "ai_fallback_response"
++
++    # Rule 3: 2+ fallback replies => repeated AI failures.
++    if sum(1 for m in assistant_messages if _is_fallback_message(m)) >= 2:
++        return True, "repeated_ai_failures"
++
++    # Rule 2: user's last message unanswered for >= 10 min with >= 2 user messages.
++    if len(user_messages) >= MIN_USER_MESSAGES_FOR_IDLE and messages[-1].get("role") == "user":
++        last_user_ts = _as_utc_datetime(messages[-1].get("timestamp"))
++        if last_user_ts and (now - last_user_ts) >= timedelta(minutes=IDLE_ESCALATION_MINUTES):
++            return True, "idle_unanswered"
++
++    return False, None
++
++
++async def auto_escalate_chats(company_id: str) -> list[dict]:
++    """Scan un-escalated widget conversations and create tickets for stuck chats.
++
++    Tickets are created via ``company_email_service.create_ticket`` (which marks
++    the originating chat as escalated), with the detected ``escalation_reason``.
++    """
++    now = _utcnow()
++    cursor = db.widget_conversations.find({"company_id": company_id, "escalated": {"$ne": True}})
++    conversations = await cursor.to_list(length=None)
++
++    created: list[dict] = []
++    for conversation in conversations:
++        should, reason = should_escalate(conversation, now)
++        if not should or not reason:
++            continue
++
++        session_id = conversation.get("session_id")
++        if not session_id:
++            continue
++
++        customer_email = _extract_customer_email(conversation)
++        if not customer_email:
++            logger.info(
++                "Skipping auto-escalation for session %s: no customer email available",
++                session_id,
++            )
++            continue
++
++        subject = conversation.get("subject") or "Support Request (Auto-Escalated)"
++        chat_summary = "\n\n".join(
++            f"{m.get('role', 'user')}: {m.get('content', '')}"
++            for m in conversation.get("messages", [])
++        ) or "Auto-escalated chat."
++
++        try:
++            ticket = await company_email_service.create_ticket(
++                company_id=company_id,
++                customer_email=customer_email,
++                subject=subject,
++                chat_summary=chat_summary,
++                chat_session_id=session_id,
++                escalation_reason=reason,
++                priority="high",
++            )
++            created.append(
++                {"session_id": session_id, "ticket_id": ticket["id"], "reason": reason}
++            )
++            logger.info(
++                "Auto-escalated session %s -> ticket %s (%s)", session_id, ticket["id"], reason
++            )
++        except Exception as e:
++            logger.exception("Auto-escalation failed for session %s: %s", session_id, e)
++
++    return created
++
++
++# ---------------------------------------------------------------------------
++# SLA watch
++# ---------------------------------------------------------------------------
++
++
++async def sla_watch_loop() -> int:
++    """Flag tickets past their SLA deadlines and notify admins + assignee.
++
++    A ticket breaches when:
++      - it has no ``first_response_at`` and is past ``sla_first_response_deadline``, or
++      - it is unresolved and past ``sla_resolution_deadline``.
++
++    Returns the number of newly-flagged tickets.
++    """
++    now = _utcnow()
++    query = {
++        "status": {"$ne": "resolved"},
++        "sla_breached": {"$ne": True},
++        "$or": [
++            {
++                "first_response_at": {"$exists": False},
++                "sla_first_response_deadline": {"$lte": now},
++            },
++            {"sla_resolution_deadline": {"$lte": now}},
++        ],
++    }
++    cursor = db.email_tickets.find(query)
++    tickets = await cursor.to_list(length=None)
++
++    flagged = 0
++    for ticket in tickets:
++        ticket_id = ticket.get("id")
++        company_id = ticket.get("company_id")
++        if not ticket_id or not company_id:
++            continue
++
++        first_response_deadline = _as_utc_datetime(ticket.get("sla_first_response_deadline"))
++        resolution_deadline = _as_utc_datetime(ticket.get("sla_resolution_deadline"))
++
++        reasons = []
++        if not ticket.get("first_response_at") and first_response_deadline and first_response_deadline <= now:
++            reasons.append("first_response")
++        if resolution_deadline and resolution_deadline <= now:
++            reasons.append("resolution")
++        if not reasons:
++            continue
++
++        reason = ",".join(reasons)
++        entry = _activity_entry("sla_breach", "system", reason=reason)
++
++        await db.email_tickets.update_one(
++            {"company_id": company_id, "id": ticket_id},
++            {
++                "$set": {
++                    "sla_breached": True,
++                    "sla_breach_reason": reason,
++                    "updated_at": now,
++                },
++                "$push": {"activity_log": entry},
++            },
++        )
++        flagged += 1
++
++        _fire_company_notification(
++            company_id,
++            title="⏰ SLA Breach",
++            body=(
++                f"Ticket #{ticket_id} breached its SLA ({reason.replace('_', ' ')}). "
++                f"Subject: {ticket.get('subject', 'No subject')}"
++            ),
++            type="ticket_sla_breach",
++            data={"ticket_id": ticket_id, "reason": reason},
++        )
++
++        assignee = ticket.get("assigned_to")
++        if assignee:
++            asyncio.create_task(
++                notification_service.create_notification(
++                    user_id=assignee,
++                    title="⏰ SLA Breach",
++                    body=(
++                        f"Ticket #{ticket_id} assigned to you breached its SLA "
++                        f"({reason.replace('_', ' ')})."
++                    ),
++                    type="ticket_sla_breach",
++                    data={"ticket_id": ticket_id, "company_id": company_id, "reason": reason},
++                )
++            )
++
++    if flagged:
++        logger.info("SLA watch flagged %d tickets", flagged)
++    return flagged
+diff --git c/main.py w/main.py
+index a934929..d4a5650 100644
+--- c/main.py
++++ w/main.py
+@@ -41,6 +41,7 @@ from app.core.database import create_indexes
+ from app.services.stroll_service import init_browser, close_browser
+ from app.services.stroll_scheduler import init_scheduler, close_scheduler
+ from app.services import wrap_scheduler
++from app.services import ticket_scheduler
+ from app.core.langfuse import init_langfuse, shutdown_langfuse
+ 
+ # structured logging setup
+@@ -71,6 +72,7 @@ async def lifespan(app: FastAPI):
+     try:
+         await init_scheduler()
+         wrap_scheduler.init_scheduler()
++        ticket_scheduler.init_scheduler()
+     except Exception as e:
+         logging.getLogger(__name__).error(f"Scheduler init failed: {e}")
+ 
+@@ -79,6 +81,7 @@ async def lifespan(app: FastAPI):
+     try:
+         await close_scheduler()
+         wrap_scheduler.close_scheduler()
++        ticket_scheduler.close_scheduler()
+     except Exception:
+         pass
+ 
+diff --git c/tests/test_ticket_workflow.py w/tests/test_ticket_workflow.py
+new file mode 100644
+index 0000000..e9a6587
+--- /dev/null
++++ w/tests/test_ticket_workflow.py
+@@ -0,0 +1,943 @@
++"""Tests for the full ticket workflow: state machine, assignment, priority/SLA,
++auto-escalation heuristics, activity log, and the first-response hook."""
++
++from datetime import datetime, timedelta, timezone
++from unittest.mock import AsyncMock, MagicMock, patch
++
++import pytest
++
++from app.models.email_models import (
++    TicketAssignRequest,
++    TicketPriorityUpdate,
++    TicketStatusUpdate,
++)
++
++NOW = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
++
++
++def _ticket(**overrides) -> dict:
++    ticket = {
++        "id": "ABC12345",
++        "company_id": "comp_1",
++        "customer_email": "customer@example.com",
++        "subject": "Test subject",
++        "status": "pending",
++        "priority": "medium",
++        "created_at": NOW,
++        "updated_at": NOW,
++        "activity_log": [],
++    }
++    ticket.update(overrides)
++    return ticket
++
++
++@pytest.fixture
++def mock_ticket_db():
++    """A mock db focused on the collections ticket_service touches."""
++    db = MagicMock()
++    db.email_tickets = MagicMock()
++    db.users = MagicMock()
++    db.widget_conversations = MagicMock()
++    db.notifications = MagicMock()
++    db.companies = MagicMock()
++    return db
++
++
++@pytest.fixture(autouse=True)
++def silence_notification_tasks():
++    """Neutralize fire-and-forget notification tasks so tests stay clean."""
++    from app.services import ticket_service
++
++    def close_coroutine(coro):
++        try:
++            coro.close()
++        except Exception:
++            pass
++
++    with patch.object(ticket_service, "_fire_company_notification", MagicMock()):
++        with patch.object(ticket_service, "asyncio") as aio:
++            aio.create_task = close_coroutine
++            yield
++
++
++# ---------------------------------------------------------------------------
++# Model validation
++# ---------------------------------------------------------------------------
++
++
++class TestModelValidation:
++    def test_status_update_validates_status(self):
++        with pytest.raises(ValueError):
++            TicketStatusUpdate(status="bogus")
++        assert TicketStatusUpdate(status="in_progress").status == "in_progress"
++
++    def test_status_update_validates_priority(self):
++        with pytest.raises(ValueError):
++            TicketStatusUpdate(status="pending", priority="extreme")
++        assert TicketStatusUpdate(status="pending", priority="urgent").priority == "urgent"
++
++    def test_priority_update_defaults_to_medium(self):
++        assert TicketPriorityUpdate().priority == "medium"
++
++    def test_priority_update_validates(self):
++        with pytest.raises(ValueError):
++            TicketPriorityUpdate(priority="top")
++        assert TicketPriorityUpdate(priority="high").priority == "high"
++
++    def test_assign_request_defaults_to_unassign(self):
++        assert TicketAssignRequest().assignee_user_id is None
++
++
++# ---------------------------------------------------------------------------
++# Transition state machine
++# ---------------------------------------------------------------------------
++
++
++class TestTransitionTicket:
++    @pytest.mark.asyncio
++    async def test_valid_transition_matrix(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        valid_pairs = [
++            ("pending", "in_progress"),
++            ("in_progress", "pending"),
++            ("pending", "resolved"),
++            ("in_progress", "resolved"),
++            ("awaiting_customer", "resolved"),
++            ("follow_up", "resolved"),
++            ("open", "resolved"),
++            ("resolved", "open"),
++        ]
++        for from_status, to_status in valid_pairs:
++            mock_ticket_db.email_tickets.find_one = AsyncMock(
++                return_value=_ticket(status=from_status, updated_at=NOW)
++            )
++            mock_ticket_db.email_tickets.find_one_and_update = AsyncMock(
++                return_value=_ticket(status=to_status)
++            )
++            with patch.object(ticket_service, "db", mock_ticket_db):
++                with patch.object(ticket_service, "notification_service") as notif:
++                    notif.notify_company = AsyncMock()
++                    with patch.object(ticket_service, "_utcnow", return_value=NOW):
++                        result = await ticket_service.transition_ticket(
++                            "comp_1", "ABC12345", to_status, actor="user_1"
++                        )
++            assert result is not None, f"{from_status} -> {to_status} should be valid"
++
++    @pytest.mark.asyncio
++    async def test_invalid_transition_rejected(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        mock_ticket_db.email_tickets.find_one = AsyncMock(
++            return_value=_ticket(status="awaiting_customer")
++        )
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with pytest.raises(ValueError):
++                await ticket_service.transition_ticket(
++                    "comp_1", "ABC12345", "pending", actor="user_1"
++                )
++
++    @pytest.mark.asyncio
++    async def test_resolved_to_open_rejected_after_48h(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        stale = NOW - timedelta(hours=49)
++        mock_ticket_db.email_tickets.find_one = AsyncMock(
++            return_value=_ticket(status="resolved", updated_at=stale)
++        )
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "_utcnow", return_value=NOW):
++                with pytest.raises(ValueError):
++                    await ticket_service.transition_ticket(
++                        "comp_1", "ABC12345", "open", actor="user_1"
++                    )
++
++    @pytest.mark.asyncio
++    async def test_missing_ticket_raises(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        mock_ticket_db.email_tickets.find_one = AsyncMock(return_value=None)
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with pytest.raises(ValueError):
++                await ticket_service.transition_ticket(
++                    "comp_1", "NOPE", "resolved", actor="user_1"
++                )
++
++    @pytest.mark.asyncio
++    async def test_resolve_sets_resolved_at_and_activity(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        mock_ticket_db.email_tickets.find_one = AsyncMock(
++            return_value=_ticket(status="follow_up", activity_log=[])
++        )
++        updated = _ticket(status="resolved", resolved_at=NOW)
++        mock_ticket_db.email_tickets.find_one_and_update = AsyncMock(return_value=updated)
++
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "notification_service") as notif:
++                notif.notify_company = AsyncMock()
++                with patch.object(ticket_service, "_utcnow", return_value=NOW):
++                    await ticket_service.transition_ticket(
++                        "comp_1", "ABC12345", "resolved", actor="user_1", note="done"
++                    )
++
++        args, kwargs = mock_ticket_db.email_tickets.find_one_and_update.call_args
++        assert args[0] == {"company_id": "comp_1", "id": "ABC12345"}
++        update = args[1]
++        assert update["$set"]["resolved_at"] == NOW
++        assert update["$set"]["status"] == "resolved"
++        pushed = update["$push"]["activity_log"]
++        assert pushed["action"] == "status_change"
++        assert pushed["from_status"] == "follow_up"
++        assert pushed["to_status"] == "resolved"
++        assert pushed["actor"] == "user_1"
++        assert pushed["note"] == "done"
++        assert pushed["timestamp"] == NOW
++
++    @pytest.mark.asyncio
++    async def test_reopen_unsets_resolved_at(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        mock_ticket_db.email_tickets.find_one = AsyncMock(
++            return_value=_ticket(status="resolved", updated_at=NOW)
++        )
++        mock_ticket_db.email_tickets.find_one_and_update = AsyncMock(
++            return_value=_ticket(status="open")
++        )
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "notification_service") as notif:
++                notif.notify_company = AsyncMock()
++                with patch.object(ticket_service, "_utcnow", return_value=NOW):
++                    await ticket_service.transition_ticket(
++                        "comp_1", "ABC12345", "open", actor="user_1"
++                    )
++
++        args, _ = mock_ticket_db.email_tickets.find_one_and_update.call_args
++        assert "$unset" in args[1]
++        assert args[1]["$unset"] == {"resolved_at": ""}
++
++
++# ---------------------------------------------------------------------------
++# Assignment
++# ---------------------------------------------------------------------------
++
++
++class TestAssignTicket:
++    @pytest.mark.asyncio
++    async def test_assign_to_member_succeeds(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        mock_ticket_db.email_tickets.find_one = AsyncMock(return_value=_ticket())
++        mock_ticket_db.users.find_one = AsyncMock(
++            return_value={"user_id": "member_1", "email": "member@example.com"}
++        )
++        mock_ticket_db.email_tickets.find_one_and_update = AsyncMock(
++            return_value=_ticket(assigned_to="member_1", assigned_by="user_1", assigned_at=NOW)
++        )
++
++        company = {"id": "comp_1", "user_id": "owner_1", "members": [{"user_id": "member_1"}]}
++
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "company_service") as comp_svc:
++                comp_svc.get_company = AsyncMock(return_value=company)
++                with patch.object(ticket_service, "notification_service") as notif:
++                    notif.create_notification = AsyncMock()
++                    with patch.object(ticket_service, "_utcnow", return_value=NOW):
++                        await ticket_service.assign_ticket(
++                            "comp_1", "ABC12345", "member_1", actor="user_1"
++                        )
++
++        args, _ = mock_ticket_db.email_tickets.find_one_and_update.call_args
++        update = args[1]
++        assert update["$set"]["assigned_to"] == "member_1"
++        assert update["$set"]["assigned_by"] == "user_1"
++        assert update["$set"]["assigned_at"] == NOW
++        assert update["$push"]["activity_log"]["action"] == "assigned"
++
++    @pytest.mark.asyncio
++    async def test_assign_to_owner_succeeds(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        mock_ticket_db.email_tickets.find_one = AsyncMock(return_value=_ticket())
++        mock_ticket_db.users.find_one = AsyncMock(
++            return_value={"user_id": "owner_1", "email": "owner@example.com"}
++        )
++        mock_ticket_db.email_tickets.find_one_and_update = AsyncMock(return_value=_ticket())
++
++        company = {"id": "comp_1", "user_id": "owner_1", "members": []}
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "company_service") as comp_svc:
++                comp_svc.get_company = AsyncMock(return_value=company)
++                with patch.object(ticket_service, "notification_service") as notif:
++                    notif.create_notification = AsyncMock()
++                    await ticket_service.assign_ticket(
++                        "comp_1", "ABC12345", "owner_1", actor="owner_1"
++                    )
++
++        mock_ticket_db.email_tickets.find_one_and_update.assert_called_once()
++
++    @pytest.mark.asyncio
++    async def test_assign_to_non_member_rejected(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        mock_ticket_db.email_tickets.find_one = AsyncMock(return_value=_ticket())
++        mock_ticket_db.users.find_one = AsyncMock(
++            return_value={"user_id": "stranger", "email": "stranger@example.com"}
++        )
++        company = {"id": "comp_1", "user_id": "owner_1", "members": [{"user_id": "member_1"}]}
++
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "company_service") as comp_svc:
++                comp_svc.get_company = AsyncMock(return_value=company)
++                with pytest.raises(ValueError):
++                    await ticket_service.assign_ticket(
++                        "comp_1", "ABC12345", "stranger", actor="user_1"
++                    )
++
++        mock_ticket_db.email_tickets.find_one_and_update.assert_not_called()
++
++    @pytest.mark.asyncio
++    async def test_assign_to_unknown_user_rejected(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        mock_ticket_db.email_tickets.find_one = AsyncMock(return_value=_ticket())
++        mock_ticket_db.users.find_one = AsyncMock(return_value=None)
++
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with pytest.raises(ValueError):
++                await ticket_service.assign_ticket(
++                    "comp_1", "ABC12345", "ghost", actor="user_1"
++                )
++
++    @pytest.mark.asyncio
++    async def test_unassign_clears_assignment(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        mock_ticket_db.email_tickets.find_one = AsyncMock(
++            return_value=_ticket(assigned_to="member_1", assigned_by="user_1", assigned_at=NOW)
++        )
++        mock_ticket_db.email_tickets.find_one_and_update = AsyncMock(return_value=_ticket())
++
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "_utcnow", return_value=NOW):
++                await ticket_service.assign_ticket("comp_1", "ABC12345", None, actor="user_1")
++
++        args, _ = mock_ticket_db.email_tickets.find_one_and_update.call_args
++        update = args[1]
++        assert update["$unset"] == {"assigned_to": "", "assigned_by": "", "assigned_at": ""}
++        assert update["$push"]["activity_log"]["action"] == "unassigned"
++
++
++# ---------------------------------------------------------------------------
++# Priority + SLA
++# ---------------------------------------------------------------------------
++
++
++class TestSetPriority:
++    @pytest.mark.asyncio
++    async def test_invalid_priority_rejected(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        mock_ticket_db.email_tickets.find_one = AsyncMock(return_value=_ticket())
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with pytest.raises(ValueError):
++                await ticket_service.set_priority(
++                    "comp_1", "ABC12345", "extreme", actor="user_1"
++                )
++
++    @pytest.mark.asyncio
++    async def test_recomputes_deadlines_from_default_policy(self, mock_ticket_db):
++        from app.services import company_service as real_company_service
++        from app.services import ticket_service
++
++        mock_ticket_db.email_tickets.find_one = AsyncMock(return_value=_ticket())
++        mock_ticket_db.email_tickets.find_one_and_update = AsyncMock(return_value=_ticket())
++
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "company_service") as comp_svc:
++                comp_svc.get_company = AsyncMock(return_value=None)  # default policy
++                comp_svc.resolve_sla_policy = real_company_service.resolve_sla_policy
++                with patch.object(ticket_service, "notification_service") as notif:
++                    notif.notify_company = AsyncMock()
++                    with patch.object(ticket_service, "_utcnow", return_value=NOW):
++                        await ticket_service.set_priority(
++                            "comp_1", "ABC12345", "high", actor="user_1"
++                        )
++
++        args, _ = mock_ticket_db.email_tickets.find_one_and_update.call_args
++        update = args[1]
++        assert update["$set"]["priority"] == "high"
++        assert update["$set"]["sla_first_response_deadline"] == NOW + timedelta(hours=2)
++        assert update["$set"]["sla_resolution_deadline"] == NOW + timedelta(hours=8)
++        assert update["$set"]["sla_breached"] is False
++
++    @pytest.mark.asyncio
++    async def test_priority_change_resets_breach_when_deadlines_in_future(self, mock_ticket_db):
++        from app.services import company_service as real_company_service
++        from app.services import ticket_service
++
++        mock_ticket_db.email_tickets.find_one = AsyncMock(
++            return_value=_ticket(sla_breached=True, sla_breach_reason="resolution")
++        )
++        mock_ticket_db.email_tickets.find_one_and_update = AsyncMock(return_value=_ticket())
++
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "company_service") as comp_svc:
++                comp_svc.get_company = AsyncMock(return_value=None)
++                comp_svc.resolve_sla_policy = real_company_service.resolve_sla_policy
++                with patch.object(ticket_service, "notification_service") as notif:
++                    notif.notify_company = AsyncMock()
++                    with patch.object(ticket_service, "_utcnow", return_value=NOW):
++                        await ticket_service.set_priority(
++                            "comp_1", "ABC12345", "urgent", actor="user_1"
++                        )
++
++        args, _ = mock_ticket_db.email_tickets.find_one_and_update.call_args
++        assert args[1]["$set"]["sla_breached"] is False
++        assert args[1]["$set"]["sla_breach_reason"] is None
++
++
++class TestSlaPolicyResolution:
++    def test_default_policy_when_company_none(self):
++        from app.services import company_service
++
++        policy = company_service.resolve_sla_policy(None)
++        assert policy["low"]["first_response_h"] == 8
++        assert policy["medium"]["first_response_h"] == 4
++        assert policy["high"]["first_response_h"] == 2
++        assert policy["urgent"]["first_response_h"] == 1
++
++    def test_company_policy_merges_over_defaults(self):
++        from app.services import company_service
++
++        company = {
++            "sla_policy": {
++                "high": {"first_response_h": 1, "resolution_h": 4},
++                "urgent": {"first_response_h": 0.5},
++            }
++        }
++        policy = company_service.resolve_sla_policy(company)
++        assert policy["high"]["first_response_h"] == 1
++        assert policy["high"]["resolution_h"] == 4
++        # urgent only overrides first_response, resolution stays at default
++        assert policy["urgent"]["first_response_h"] == 0.5
++        assert policy["urgent"]["resolution_h"] == 4
++        # untouched priorities keep defaults
++        assert policy["low"]["first_response_h"] == 8
++
++
++class TestSlaWatchLoop:
++    @pytest.mark.asyncio
++    async def test_flags_first_response_breach(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        deadline = NOW - timedelta(minutes=1)
++        ticket = _ticket(
++            sla_first_response_deadline=deadline,
++            sla_resolution_deadline=NOW + timedelta(days=1),
++            sla_breached=False,
++        )
++        cursor = MagicMock()
++        cursor.to_list = AsyncMock(return_value=[ticket])
++        mock_ticket_db.email_tickets.find = MagicMock(return_value=cursor)
++        mock_ticket_db.email_tickets.update_one = AsyncMock()
++
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "notification_service") as notif:
++                notif.notify_company = AsyncMock()
++                with patch.object(ticket_service, "_utcnow", return_value=NOW):
++                    flagged = await ticket_service.sla_watch_loop()
++
++        assert flagged == 1
++        args, _ = mock_ticket_db.email_tickets.update_one.call_args
++        assert args[1]["$set"]["sla_breached"] is True
++        assert args[1]["$set"]["sla_breach_reason"] == "first_response"
++
++    @pytest.mark.asyncio
++    async def test_flags_resolution_breach(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        ticket = _ticket(
++            first_response_at=NOW - timedelta(hours=5),
++            sla_first_response_deadline=NOW - timedelta(hours=4),
++            sla_resolution_deadline=NOW - timedelta(minutes=1),
++        )
++        cursor = MagicMock()
++        cursor.to_list = AsyncMock(return_value=[ticket])
++        mock_ticket_db.email_tickets.find = MagicMock(return_value=cursor)
++        mock_ticket_db.email_tickets.update_one = AsyncMock()
++
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "notification_service") as notif:
++                notif.notify_company = AsyncMock()
++                with patch.object(ticket_service, "_utcnow", return_value=NOW):
++                    flagged = await ticket_service.sla_watch_loop()
++
++        assert flagged == 1
++        args, _ = mock_ticket_db.email_tickets.update_one.call_args
++        assert args[1]["$set"]["sla_breach_reason"] == "resolution"
++
++    @pytest.mark.asyncio
++    async def test_skips_ticket_within_deadlines(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        ticket = _ticket(
++            sla_first_response_deadline=NOW + timedelta(hours=2),
++            sla_resolution_deadline=NOW + timedelta(days=1),
++        )
++        cursor = MagicMock()
++        cursor.to_list = AsyncMock(return_value=[ticket])
++        mock_ticket_db.email_tickets.find = MagicMock(return_value=cursor)
++        mock_ticket_db.email_tickets.update_one = AsyncMock()
++
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "notification_service") as notif:
++                notif.notify_company = AsyncMock()
++                with patch.object(ticket_service, "_utcnow", return_value=NOW):
++                    flagged = await ticket_service.sla_watch_loop()
++
++        assert flagged == 0
++        mock_ticket_db.email_tickets.update_one.assert_not_called()
++
++
++# ---------------------------------------------------------------------------
++# Auto-escalation heuristics
++# ---------------------------------------------------------------------------
++
++
++FALLBACK = "I'm sorry, I wasn't able to find that information right now. Could you try rephrasing your question?"
++
++
++def _chat(*messages) -> dict:
++    return {
++        "company_id": "comp_1",
++        "session_id": "sess_1",
++        "subject": "Need help",
++        "sdk_user_email": "customer@example.com",
++        "messages": list(messages),
++    }
++
++
++def _msg(role: str, content: str, timestamp: datetime | None = None) -> dict:
++    return {
++        "role": role,
++        "content": content,
++        "timestamp": (timestamp or NOW).isoformat(),
++    }
++
++
++class TestShouldEscalate:
++    def test_healthy_chat_not_escalated(self):
++        from app.services import ticket_service
++
++        chat = _chat(
++            _msg("user", "How do I reset my password?"),
++            _msg("assistant", "Go to Settings > Security > Reset password."),
++        )
++        should, reason = ticket_service.should_escalate(chat, NOW)
++        assert should is False
++        assert reason is None
++
++    def test_fallback_text_triggers(self):
++        from app.services import ticket_service
++
++        chat = _chat(
++            _msg("user", "Tell me about quantum widgets"),
++            _msg("assistant", FALLBACK),
++        )
++        should, reason = ticket_service.should_escalate(chat, NOW)
++        assert should is True
++        assert reason == "ai_fallback_response"
++
++    def test_two_fallbacks_trigger_repeated_failures(self):
++        from app.services import ticket_service
++
++        chat = _chat(
++            _msg("user", "Question one"),
++            _msg("assistant", FALLBACK),
++            _msg("user", "Question two"),
++            _msg("assistant", "Here is a real answer this time."),
++            _msg("user", "Question three"),
++            _msg("assistant", FALLBACK),
++        )
++        should, reason = ticket_service.should_escalate(chat, NOW)
++        assert should is True
++        assert reason == "ai_fallback_response"
++
++    def test_idle_unanswered_user_message_triggers(self):
++        from app.services import ticket_service
++
++        chat = _chat(
++            _msg("user", "First question"),
++            _msg("assistant", "Answer one"),
++            _msg("user", "Second question, no answer", timestamp=NOW - timedelta(minutes=15)),
++        )
++        should, reason = ticket_service.should_escalate(chat, NOW)
++        assert should is True
++        assert reason == "idle_unanswered"
++
++    def test_idle_rule_requires_two_user_messages(self):
++        from app.services import ticket_service
++
++        chat = _chat(
++            _msg("user", "Only question, unanswered", timestamp=NOW - timedelta(minutes=30)),
++        )
++        should, reason = ticket_service.should_escalate(chat, NOW)
++        assert should is False
++
++    def test_recent_unanswered_message_not_escalated(self):
++        from app.services import ticket_service
++
++        chat = _chat(
++            _msg("user", "First question"),
++            _msg("assistant", "Answer"),
++            _msg("user", "Follow-up, unanswered", timestamp=NOW - timedelta(minutes=5)),
++        )
++        should, reason = ticket_service.should_escalate(chat, NOW)
++        assert should is False
++
++
++class TestAutoEscalateChats:
++    @pytest.mark.asyncio
++    async def test_creates_ticket_for_stuck_chat(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        chat = _chat(
++            _msg("user", "Help me please", timestamp=NOW - timedelta(minutes=15)),
++            _msg("assistant", FALLBACK, timestamp=NOW - timedelta(minutes=14)),
++        )
++        cursor = MagicMock()
++        cursor.to_list = AsyncMock(return_value=[chat])
++        mock_ticket_db.widget_conversations.find = MagicMock(return_value=cursor)
++
++        created_ticket = {"id": "TICKET01"}
++        create_ticket_mock = AsyncMock(return_value=created_ticket)
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "company_email_service") as email_svc:
++                email_svc.create_ticket = create_ticket_mock
++                with patch.object(ticket_service, "_utcnow", return_value=NOW):
++                    result = await ticket_service.auto_escalate_chats("comp_1")
++
++        assert result == [
++            {
++                "session_id": "sess_1",
++                "ticket_id": "TICKET01",
++                "reason": "ai_fallback_response",
++            }
++        ]
++        call_kwargs = create_ticket_mock.call_args.kwargs
++        assert call_kwargs["company_id"] == "comp_1"
++        assert call_kwargs["customer_email"] == "customer@example.com"
++        assert call_kwargs["escalation_reason"] == "ai_fallback_response"
++        assert call_kwargs["chat_session_id"] == "sess_1"
++
++    @pytest.mark.asyncio
++    async def test_skips_healthy_chats(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        chat = _chat(
++            _msg("user", "Question"),
++            _msg("assistant", "Solid answer"),
++        )
++        cursor = MagicMock()
++        cursor.to_list = AsyncMock(return_value=[chat])
++        mock_ticket_db.widget_conversations.find = MagicMock(return_value=cursor)
++
++        create_ticket_mock = AsyncMock()
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "company_email_service") as email_svc:
++                email_svc.create_ticket = create_ticket_mock
++                result = await ticket_service.auto_escalate_chats("comp_1")
++
++        assert result == []
++        create_ticket_mock.assert_not_called()
++
++    @pytest.mark.asyncio
++    async def test_skips_chat_without_customer_email(self, mock_ticket_db):
++        from app.services import ticket_service
++
++        chat = _chat(
++            _msg("user", "Help", timestamp=NOW - timedelta(minutes=20)),
++            _msg("assistant", FALLBACK),
++        )
++        chat.pop("sdk_user_email")
++        cursor = MagicMock()
++        cursor.to_list = AsyncMock(return_value=[chat])
++        mock_ticket_db.widget_conversations.find = MagicMock(return_value=cursor)
++
++        create_ticket_mock = AsyncMock()
++        with patch.object(ticket_service, "db", mock_ticket_db):
++            with patch.object(ticket_service, "company_email_service") as email_svc:
++                email_svc.create_ticket = create_ticket_mock
++                result = await ticket_service.auto_escalate_chats("comp_1")
++
++        assert result == []
++        create_ticket_mock.assert_not_called()
++
++
++# ---------------------------------------------------------------------------
++# create_ticket SLA stamping
++# ---------------------------------------------------------------------------
++
++
++class TestCreateTicketSla:
++    @pytest.mark.asyncio
++    async def test_create_ticket_stamps_sla_fields(self):
++        from app.services import company_email_service
++        from app.services import company_service as real_company_service
++
++        db = MagicMock()
++        db.email_tickets = MagicMock()
++        db.email_tickets.find_one = AsyncMock(return_value=None)
++        db.email_tickets.insert_one = AsyncMock()
++        db.widget_conversations = MagicMock()
++        db.widget_conversations.find_one = AsyncMock(return_value=None)
++
++        company = {"id": "comp_1", "sla_policy": {"high": {"first_response_h": 1, "resolution_h": 3}}}
++        created = {
++            "id": "TICKET01",
++            "company_id": "comp_1",
++            "status": "pending",
++        }
++
++        with patch.object(company_email_service, "db", db):
++            with patch.object(company_email_service, "company_service") as comp_svc:
++                comp_svc.get_company = AsyncMock(return_value=company)
++                comp_svc.resolve_sla_policy = real_company_service.resolve_sla_policy
++                with patch.object(company_email_service, "notification_service") as notif:
++                    notif.notify_company = AsyncMock()
++                    with patch.object(company_email_service, "_send_new_ticket_email", AsyncMock()):
++                        with patch.object(
++                            company_email_service, "_send_ticket_confirmation_email", AsyncMock()
++                        ):
++                            with patch("app.services.company_email_service.datetime") as dt:
++                                dt.now.return_value = NOW
++                                # first call: id-uniqueness loop -> None
++                                # second call: fetch of the created doc -> created
++                                db.email_tickets.find_one = AsyncMock(
++                                    side_effect=[None, created]
++                                )
++                                result = await company_email_service.create_ticket(
++                                    "comp_1",
++                                    "customer@example.com",
++                                    "Subject",
++                                    "Summary",
++                                    priority="high",
++                                    escalation_reason="ai_fallback_response",
++                                )
++
++        assert result is not None
++        doc = db.email_tickets.insert_one.call_args.args[0]
++        assert doc["priority"] == "high"
++        assert doc["sla_first_response_deadline"] == NOW + timedelta(hours=1)
++        assert doc["sla_resolution_deadline"] == NOW + timedelta(hours=3)
++        assert doc["sla_breached"] is False
++        assert doc["escalation_reason"] == "ai_fallback_response"
++        assert doc["escalated_at"] == NOW
++        assert doc["activity_log"][0]["action"] == "created"
++        assert doc["sla_policy"]["high"]["first_response_h"] == 1
++
++    @pytest.mark.asyncio
++    async def test_create_ticket_defaults_priority(self):
++        from app.services import company_email_service
++        from app.services import company_service as real_company_service
++
++        db = MagicMock()
++        db.email_tickets = MagicMock()
++        db.email_tickets.find_one = AsyncMock(return_value=None)
++        db.email_tickets.insert_one = AsyncMock()
++        db.widget_conversations = MagicMock()
++        db.widget_conversations.find_one = AsyncMock(return_value=None)
++        created = {"id": "TICKET02", "company_id": "comp_1", "status": "pending"}
++
++        with patch.object(company_email_service, "db", db):
++            with patch.object(company_email_service, "company_service") as comp_svc:
++                comp_svc.get_company = AsyncMock(return_value=None)
++                comp_svc.resolve_sla_policy = real_company_service.resolve_sla_policy
++                with patch.object(company_email_service, "notification_service") as notif:
++                    notif.notify_company = AsyncMock()
++                    with patch.object(company_email_service, "_send_new_ticket_email", AsyncMock()):
++                        with patch.object(
++                            company_email_service, "_send_ticket_confirmation_email", AsyncMock()
++                        ):
++                            with patch("app.services.company_email_service.datetime") as dt:
++                                dt.now.return_value = NOW
++                                db.email_tickets.find_one = AsyncMock(
++                                    side_effect=[None, created]
++                                )
++                                await company_email_service.create_ticket(
++                                    "comp_1",
++                                    "customer@example.com",
++                                    "Subject",
++                                    "Summary",
++                                    priority="bogus",
++                                )
++
++        doc = db.email_tickets.insert_one.call_args.args[0]
++        assert doc["priority"] == "medium"
++        # default policy: medium -> 4h first response, 24h resolution
++        assert doc["sla_first_response_deadline"] == NOW + timedelta(hours=4)
++        assert doc["sla_resolution_deadline"] == NOW + timedelta(hours=24)
++
++
++# ---------------------------------------------------------------------------
++# send_ticket_reply first-response hook
++# ---------------------------------------------------------------------------
++
++
++class TestFirstResponseHook:
++    @pytest.mark.asyncio
++    async def test_reply_stamps_first_response_and_clears_breach(self):
++        from app.services import company_email_service
++
++        ticket = {
++            "id": "ABC12345",
++            "company_id": "comp_1",
++            "customer_email": "customer@example.com",
++            "subject": "Subject",
++            "resolve_token": "tok",
++            "status": "follow_up",
++            "messages": [],
++            "sla_breached": True,
++            "sla_breach_reason": "first_response",
++        }
++        company = {"id": "comp_1", "name": "Test Co", "email_slug": "testco"}
++
++        db = MagicMock()
++        db.email_tickets = MagicMock()
++        db.email_tickets.update_one = AsyncMock()
++
++        with patch.object(company_email_service, "db", db):
++            with patch.object(company_email_service, "get_ticket", AsyncMock(return_value=ticket)):
++                with patch.object(company_email_service, "company_service") as comp_svc:
++                    comp_svc.get_company = AsyncMock(return_value=company)
++                    with patch.object(company_email_service, "asyncio") as aio:
++                        aio.to_thread = AsyncMock()
++                        with patch.object(
++                            company_email_service,
++                            "add_html_with_inline_images",
++                            MagicMock(),
++                        ):
++                            with patch.object(
++                                company_email_service, "get_random_avatar", return_value="/a.png"
++                            ):
++                                with patch(
++                                    "app.services.company_email_service.datetime"
++                                ) as dt:
++                                    dt.now.return_value = NOW
++                                    await company_email_service.send_ticket_reply(
++                                        "comp_1",
++                                        "ABC12345",
++                                        "Here is your answer",
++                                        agent_name="Agent",
++                                    )
++
++        args, _ = db.email_tickets.update_one.call_args
++        update = args[1]
++        assert update["$set"]["first_response_at"] == NOW
++        assert update["$set"]["sla_breached"] is False
++        assert update["$set"]["sla_breach_reason"] is None
++        assert update["$set"]["status"] == "awaiting_customer"
++        assert update["$push"]["activity_log"]["action"] == "agent_reply"
++
++    @pytest.mark.asyncio
++    async def test_reply_preserves_existing_first_response(self):
++        from app.services import company_email_service
++
++        first_response = NOW - timedelta(hours=1)
++        ticket = {
++            "id": "ABC12345",
++            "company_id": "comp_1",
++            "customer_email": "customer@example.com",
++            "subject": "Subject",
++            "resolve_token": "tok",
++            "status": "follow_up",
++            "messages": [],
++            "first_response_at": first_response,
++        }
++        company = {"id": "comp_1", "name": "Test Co", "email_slug": "testco"}
++
++        db = MagicMock()
++        db.email_tickets = MagicMock()
++        db.email_tickets.update_one = AsyncMock()
++
++        with patch.object(company_email_service, "db", db):
++            with patch.object(company_email_service, "get_ticket", AsyncMock(return_value=ticket)):
++                with patch.object(company_email_service, "company_service") as comp_svc:
++                    comp_svc.get_company = AsyncMock(return_value=company)
++                    with patch.object(company_email_service, "asyncio") as aio:
++                        aio.to_thread = AsyncMock()
++                        with patch.object(
++                            company_email_service,
++                            "add_html_with_inline_images",
++                            MagicMock(),
++                        ):
++                            with patch.object(
++                                company_email_service, "get_random_avatar", return_value="/a.png"
++                            ):
++                                with patch("app.services.company_email_service.datetime") as dt:
++                                    dt.now.return_value = NOW
++                                    await company_email_service.send_ticket_reply(
++                                        "comp_1",
++                                        "ABC12345",
++                                        "Another reply",
++                                        agent_name="Agent",
++                                    )
++
++        args, _ = db.email_tickets.update_one.call_args
++        assert args[1]["$set"]["first_response_at"] == first_response
++
++
++# ---------------------------------------------------------------------------
++# list_tickets filters
++# ---------------------------------------------------------------------------
++
++
++class TestListTicketsFilters:
++    @pytest.mark.asyncio
++    async def test_filters_build_query(self):
++        from app.services import company_email_service
++
++        db = MagicMock()
++        db.email_tickets = MagicMock()
++        cursor = MagicMock()
++        cursor.to_list = AsyncMock(return_value=[])
++        db.email_tickets.aggregate = MagicMock(return_value=cursor)
++
++        with patch.object(company_email_service, "db", db):
++            await company_email_service.list_tickets(
++                "comp_1",
++                status="follow_up",
++                priority="urgent",
++                assigned_to="member_1",
++                sla_breached=True,
++            )
++
++        pipeline = db.email_tickets.aggregate.call_args.args[0]
++        assert pipeline[0]["$match"]["status"] == "follow_up"
++        assert pipeline[0]["$match"]["priority"] == "urgent"
++        assert pipeline[0]["$match"]["assigned_to"] == "member_1"
++        assert pipeline[0]["$match"]["sla_breached"] is True
++        project = [s for s in pipeline if "$project" in s][0]["$project"]
++        assert project["priority"] == 1
++        assert project["assigned_to"] == 1
++        assert project["sla_breached"] == 1
++
++    @pytest.mark.asyncio
++    async def test_count_tickets_applies_filters(self):
++        from app.services import company_email_service
++
++        db = MagicMock()
++        db.email_tickets = MagicMock()
++        db.email_tickets.count_documents = AsyncMock(return_value=3)
++
++        with patch.object(company_email_service, "db", db):
++            total = await company_email_service.count_tickets(
++                "comp_1", priority="high", sla_breached=True
++            )
++
++        assert total == 3
++        query = db.email_tickets.count_documents.call_args.args[0]
++        assert query["priority"] == "high"
++        assert query["sla_breached"] is True
++        assert query["status"] == {"$ne": "resolved"}

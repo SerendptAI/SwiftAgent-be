@@ -14,8 +14,11 @@ from app.models.email_models import (
     EmailTicketResponse,
     EmailTicketSummary,
     TestDispatchRequest,
+    TicketAssignRequest,
+    TicketPriorityUpdate,
+    TicketStatusUpdate,
 )
-from app.services import company_service, company_email_service
+from app.services import company_service, company_email_service, ticket_service
 
 logger = logging.getLogger(__name__)
 
@@ -122,16 +125,37 @@ async def list_tickets(
     company_id: str,
     limit: int = Query(default=50, ge=1, le=100),
     skip: int = Query(default=0, ge=0),
+    status: Optional[str] = Query(default=None),
+    priority: Optional[str] = Query(default=None),
+    assigned_to: Optional[str] = Query(default=None),
+    sla_breached: Optional[bool] = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ):
-    """List unresolved email tickets for a company (Pending section)."""
+    """List unresolved email tickets for a company (Pending section).
+
+    Optional filters: status, priority, assigned_to, sla_breached.
+    """
     user_id = current_user["user_id"]
     company = await company_service.get_company(company_id, user_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    tickets = await company_email_service.list_tickets(company_id, limit, skip)
-    total = await company_email_service.count_tickets(company_id)
+    tickets = await company_email_service.list_tickets(
+        company_id,
+        limit,
+        skip,
+        status=status,
+        priority=priority,
+        assigned_to=assigned_to,
+        sla_breached=sla_breached,
+    )
+    total = await company_email_service.count_tickets(
+        company_id,
+        status=status,
+        priority=priority,
+        assigned_to=assigned_to,
+        sla_breached=sla_breached,
+    )
 
     return {
         "items": tickets,
@@ -140,6 +164,24 @@ async def list_tickets(
         "skip": skip,
         "has_next": (skip + len(tickets)) < total,
     }
+
+
+@router.post("/{company_id}/tickets/auto-escalate")
+async def auto_escalate_endpoint(
+    company_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Manually trigger the auto-escalation scan for a company (admin only)."""
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id, admin_only=True)
+    if not company:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the company owner can trigger auto-escalation",
+        )
+
+    created = await ticket_service.auto_escalate_chats(company_id)
+    return {"status": "complete", "escalated": created}
 
 
 @router.websocket("/{company_id}/tickets/ws")
@@ -472,6 +514,110 @@ async def reopen_ticket_endpoint(
         raise HTTPException(status_code=400, detail=str(e))
 
     return {"status": "reopened", "ticket_id": ticket_id}
+
+@router.patch("/{company_id}/tickets/{ticket_id}/priority")
+async def update_ticket_priority(
+    company_id: str,
+    ticket_id: str,
+    request: TicketPriorityUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Set a ticket's priority and recompute its SLA deadlines from policy."""
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    ticket = await company_email_service.get_ticket(company_id, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    try:
+        result = await ticket_service.set_priority(
+            company_id, ticket_id, request.priority, actor=current_user["user_id"]
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return result
+
+
+@router.patch("/{company_id}/tickets/{ticket_id}/assign")
+async def assign_ticket_endpoint(
+    company_id: str,
+    ticket_id: str,
+    request: TicketAssignRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Assign a ticket to a company member, or unassign it with a null body."""
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    ticket = await company_email_service.get_ticket(company_id, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    try:
+        result = await ticket_service.assign_ticket(
+            company_id,
+            ticket_id,
+            request.assignee_user_id,
+            actor=current_user["user_id"],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return result
+
+
+@router.patch("/{company_id}/tickets/{ticket_id}/status")
+async def update_ticket_status(
+    company_id: str,
+    ticket_id: str,
+    request: TicketStatusUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Transition a ticket through the workflow state machine.
+
+    An optional ``priority`` may be supplied to also update the ticket's
+    priority (and SLA deadlines) in the same request.
+    """
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    ticket = await company_email_service.get_ticket(company_id, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    try:
+        result = await ticket_service.transition_ticket(
+            company_id,
+            ticket_id,
+            request.status,
+            actor=current_user["user_id"],
+        )
+        if request.priority and request.priority != ticket.get("priority"):
+            await ticket_service.set_priority(
+                company_id,
+                ticket_id,
+                request.priority,
+                actor=current_user["user_id"],
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return result
+
 
 @router.post("/test-dispatch")
 async def dispatch_test_suite(

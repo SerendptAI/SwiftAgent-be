@@ -140,13 +140,25 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
         push_op = {}
 
         if not subject:
-            subject = await generate_chat_title(req.message, agent_key)
-            if not subject:
-                subject = "New Chat"
+            subject = "New Chat"
             yield _sse("subject", subject=subject)
             update_set["sdk_user_email"] = email
             update_set["source"] = "sdk"
             update_set["subject"] = subject
+
+            # Run title generation in background to avoid blocking the SSE stream
+            async def generate_and_update_title_sdk():
+                try:
+                    new_sub = await generate_chat_title(req.message, agent_key)
+                    if new_sub and new_sub != "New Chat":
+                        await db.widget_conversations.update_one(
+                            {"company_id": company_id, "session_id": req.session_id},
+                            {"$set": {"subject": new_sub}}
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to generate title in SDK: {e}")
+            
+            asyncio.create_task(generate_and_update_title_sdk())
         else:
             yield _sse("subject", subject=subject)
             if not conversation or conversation.get("sdk_user_email") != email or conversation.get("source") != "sdk":
@@ -287,6 +299,8 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
         for idx, provider_key in enumerate(agents_to_try):
             try:
                 response_text = ""
+                yield _sse("thinking", message="Thinking...")
+                
                 # Call chat_stream_graph with the injected message
                 async for event in chat_stream_graph(
                     company_id=company_id,
@@ -304,6 +318,8 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
 
                     if event_type == "tool":
                         yield _sse("tool", name=event.get("name", ""), label=event.get("label", ""))
+                    elif event_type == "ping":
+                        yield ": keepalive\n\n"
                     elif event_type == "text":
                         content = event.get("content", "")
                         response_text += content

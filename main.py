@@ -41,6 +41,7 @@ from app.core.database import create_indexes
 from app.services.stroll_service import init_browser, close_browser
 from app.services.stroll_scheduler import init_scheduler, close_scheduler
 from app.services import wrap_scheduler
+from app.services import ticket_scheduler
 from app.core.langfuse import init_langfuse, shutdown_langfuse
 
 # structured logging setup
@@ -71,6 +72,7 @@ async def lifespan(app: FastAPI):
     try:
         await init_scheduler()
         wrap_scheduler.init_scheduler()
+        ticket_scheduler.init_scheduler()
     except Exception as e:
         logging.getLogger(__name__).error(f"Scheduler init failed: {e}")
 
@@ -79,6 +81,7 @@ async def lifespan(app: FastAPI):
     try:
         await close_scheduler()
         wrap_scheduler.close_scheduler()
+        ticket_scheduler.close_scheduler()
     except Exception:
         pass
 

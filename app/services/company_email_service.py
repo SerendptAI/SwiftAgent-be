@@ -54,6 +54,8 @@ async def create_ticket(
     chat_summary: str,
     chat_session_id: str | None = None,
     customer_name: str | None = None,
+    priority: str = "medium",
+    escalation_reason: str | None = None,
 ) -> dict:
     """Create a new support ticket (called by the AI agent)."""
     # ensure ticket id is unique (avoid rare collisions)
@@ -62,6 +64,16 @@ async def create_ticket(
         ticket_id = str(uuid4())[:8].upper()
     resolve_token = str(uuid4())
     now = datetime.now(tz=timezone.utc)
+
+    if priority not in {"low", "medium", "high", "urgent"}:
+        priority = "medium"
+
+    # Compute SLA deadlines from the company's policy (defaults applied)
+    company = await company_service.get_company(company_id)
+    sla_policy = company_service.resolve_sla_policy(company)
+    priority_cfg = sla_policy.get(priority) or sla_policy["medium"]
+    sla_first_response_deadline = now + timedelta(hours=priority_cfg["first_response_h"])
+    sla_resolution_deadline = now + timedelta(hours=priority_cfg["resolution_h"])
 
     avatar = get_random_avatar()
     if chat_session_id:
@@ -79,6 +91,7 @@ async def create_ticket(
         "customer_name": customer_name,
         "subject": subject,
         "status": "pending",
+        "priority": priority,
         "resolve_token": resolve_token,
         "messages": [
             {
@@ -96,6 +109,20 @@ async def create_ticket(
         "chat_summary": chat_summary,
         "created_at": now,
         "updated_at": now,
+        "sla_policy": sla_policy,
+        "sla_first_response_deadline": sla_first_response_deadline,
+        "sla_resolution_deadline": sla_resolution_deadline,
+        "sla_breached": False,
+        "escalation_reason": escalation_reason,
+        "escalated_at": now if escalation_reason else None,
+        "activity_log": [
+            {
+                "action": "created",
+                "actor": "system",
+                "note": escalation_reason,
+                "timestamp": now,
+            }
+        ],
     }
 
     await db.email_tickets.insert_one(doc)
@@ -111,7 +138,6 @@ async def create_ticket(
             data={"ticket_id": ticket_id}
         )
     )
-    company = await company_service.get_company(company_id)
     if company:
         asyncio.create_task(_send_new_ticket_email(company, doc))
         asyncio.create_task(_send_ticket_confirmation_email(company, doc))
@@ -146,9 +172,21 @@ async def list_tickets(
     company_id: str,
     limit: int = 50,
     skip: int = 0,
+    status: str | None = None,
+    priority: str | None = None,
+    assigned_to: str | None = None,
+    sla_breached: bool | None = None,
 ) -> list:
-    """List only unresolved tickets (pending section)."""
+    """List only unresolved tickets (pending section), optionally filtered."""
     query: dict = {"company_id": company_id, "status": {"$ne": "resolved"}}
+    if status:
+        query["status"] = status
+    if priority:
+        query["priority"] = priority
+    if assigned_to:
+        query["assigned_to"] = assigned_to
+    if sla_breached is not None:
+        query["sla_breached"] = sla_breached
 
     pipeline = [
         {"$match": query},
@@ -179,6 +217,9 @@ async def list_tickets(
                 "customer_name": 1,
                 "subject": 1,
                 "status": 1,
+                "priority": 1,
+                "assigned_to": 1,
+                "sla_breached": 1,
                 "unseen_count": 1,
                 "avatar": {"$ifNull": ["$avatar", "/chat-avatars/newimg.svg"]},
                 "message_count": {"$size": {"$ifNull": ["$messages", []]}},
@@ -219,9 +260,23 @@ async def list_tickets(
     return await cursor.to_list(length=limit)
 
 
-async def count_tickets(company_id: str) -> int:
-    """Count only unresolved tickets."""
+async def count_tickets(
+    company_id: str,
+    status: str | None = None,
+    priority: str | None = None,
+    assigned_to: str | None = None,
+    sla_breached: bool | None = None,
+) -> int:
+    """Count only unresolved tickets, optionally filtered."""
     query: dict = {"company_id": company_id, "status": {"$ne": "resolved"}}
+    if status:
+        query["status"] = status
+    if priority:
+        query["priority"] = priority
+    if assigned_to:
+        query["assigned_to"] = assigned_to
+    if sla_breached is not None:
+        query["sla_breached"] = sla_breached
     return await db.email_tickets.count_documents(query)
 
 
@@ -413,10 +468,22 @@ async def send_ticket_reply(
     await db.email_tickets.update_one(
         {"id": ticket_id, "company_id": company_id},
         {
-            "$push": {"messages": outbound_msg},
+            "$push": {
+                "messages": outbound_msg,
+                "activity_log": {
+                    "action": "agent_reply",
+                    "actor": agent_display,
+                    "timestamp": now,
+                },
+            },
             "$set": {
                 "status": "awaiting_customer",
                 "updated_at": now,
+                # First company response: stamp the response time and clear any
+                # pending SLA breach state.
+                "first_response_at": ticket.get("first_response_at") or now,
+                "sla_breached": False,
+                "sla_breach_reason": None,
             },
         },
     )
