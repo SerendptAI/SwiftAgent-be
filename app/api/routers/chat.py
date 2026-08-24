@@ -178,11 +178,22 @@ async def _chat_sse_generator(
         push_op = {}
 
         if not subject:
-            subject = await generate_chat_title(req.message, agent_key)
-            if not subject:
-                subject = "New Chat"
+            subject = "New Chat"
             yield _sse("subject", subject=subject)
-            update_set["subject"] = subject
+            
+            # Run title generation in background to avoid blocking the SSE stream
+            async def generate_and_update_title():
+                try:
+                    new_sub = await generate_chat_title(req.message, agent_key)
+                    if new_sub and new_sub != "New Chat":
+                        await db.widget_conversations.update_one(
+                            {"company_id": company_id, "session_id": req.session_id},
+                            {"$set": {"subject": new_sub}}
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to generate title: {e}")
+            
+            asyncio.create_task(generate_and_update_title())
         else:
             yield _sse("subject", subject=subject)
 
@@ -354,6 +365,7 @@ async def _chat_sse_generator(
         actual_message_to_send = req.message
 
         response_text = ""
+        yield _sse("thinking", message="Thinking...")
 
         for idx, provider_key in enumerate(agents_to_try):
             try:
@@ -374,6 +386,9 @@ async def _chat_sse_generator(
 
                     if event_type == "tool":
                         yield _sse("tool", name=event.get("name", ""), label=event.get("label", ""))
+
+                    elif event_type == "ping":
+                        yield ": keepalive\n\n"
 
                     elif event_type == "text":
                         content = event.get("content", "")
