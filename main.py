@@ -35,6 +35,7 @@ from app.api.routers import (
     notifications,
     analytics,
     feedback,
+    handoff,
 )
 from app.core.config import settings
 from app.core.database import create_indexes
@@ -311,6 +312,7 @@ app.include_router(companies.router, prefix="/api/v1/companies")
 app.include_router(dashboard.router, prefix="/api/v1/dashboard")
 app.include_router(analytics.router, prefix="/api/v1/analytics")
 app.include_router(feedback.router)
+app.include_router(handoff.router, prefix="/api/v1/handoff")
 app.include_router(billing.router, prefix="/api/v1/billing")
 
 app.include_router(voice.router, prefix="/api/v1/voice")
