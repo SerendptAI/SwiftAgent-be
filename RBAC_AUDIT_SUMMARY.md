@@ -2,7 +2,7 @@
 Final RBAC + Audit Implementation Summary
 ===========================================
 
-✅ IMPLEMENTED
+ IMPLEMENTED
 -------------
 
 1. RBAC Core (app/core/rbac.py) — 165 lines
@@ -69,16 +69,16 @@ Final RBAC + Audit Implementation Summary
    - CSV export
    - Quick stats
 
-⚙️ MIDDLEWARE
+MIDDLEWARE
 --------------
 - AuditMiddleware added (outermost, captures all requests)
 - ensure_audit_indexes() runs on startup
 
-🔧 CONFIG
+CONFIG
 ---------
 - AUDIT_LOG_RETENTION_DAYS setting (default: 365)
 
-📋 REMAINING
+REMAINING
 ------------
 1. Set up .env properly (MONGO_URI, QDRANT_URL, etc.)
 2. Run: uvicorn main:app
