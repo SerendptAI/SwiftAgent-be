@@ -35,6 +35,7 @@ from app.api.routers import (
     notifications,
     analytics,
     feedback,
+    gdpr,
 )
 from app.core.config import settings
 from app.core.database import create_indexes
@@ -305,6 +306,7 @@ app.mount("/images", StaticFiles(directory="app/email_templates/images"), name="
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(auth.router, prefix="/api/v1/auth")
 app.include_router(knowledge.router, prefix="/api/v1/knowledge")
+app.include_router(gdpr.router, prefix="/api/v1/gdpr")
 app.include_router(diagnosis.router, prefix="/api/v1/diagnosis")
 app.include_router(conversations.router, prefix="/api/v1/conversations")
 app.include_router(companies.router, prefix="/api/v1/companies")
