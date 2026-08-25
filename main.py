@@ -35,6 +35,7 @@ from app.api.routers import (
     notifications,
     analytics,
     feedback,
+    knowledge_crawl,
 )
 from app.core.config import settings
 from app.core.database import create_indexes
@@ -42,6 +43,7 @@ from app.services.stroll_service import init_browser, close_browser
 from app.services.stroll_scheduler import init_scheduler, close_scheduler
 from app.services import wrap_scheduler
 from app.services import ticket_scheduler
+from app.services import knowledge_crawl_scheduler
 from app.core.langfuse import init_langfuse, shutdown_langfuse
 
 # structured logging setup
@@ -73,6 +75,7 @@ async def lifespan(app: FastAPI):
         await init_scheduler()
         wrap_scheduler.init_scheduler()
         ticket_scheduler.init_scheduler()
+        await knowledge_crawl_scheduler.init_scheduler()
     except Exception as e:
         logging.getLogger(__name__).error(f"Scheduler init failed: {e}")
 
@@ -82,6 +85,7 @@ async def lifespan(app: FastAPI):
         await close_scheduler()
         wrap_scheduler.close_scheduler()
         ticket_scheduler.close_scheduler()
+        await knowledge_crawl_scheduler.close_scheduler()
     except Exception:
         pass
 
@@ -305,6 +309,7 @@ app.mount("/images", StaticFiles(directory="app/email_templates/images"), name="
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(auth.router, prefix="/api/v1/auth")
 app.include_router(knowledge.router, prefix="/api/v1/knowledge")
+app.include_router(knowledge_crawl.router, prefix="/api/v1/knowledge-crawl")
 app.include_router(diagnosis.router, prefix="/api/v1/diagnosis")
 app.include_router(conversations.router, prefix="/api/v1/conversations")
 app.include_router(companies.router, prefix="/api/v1/companies")

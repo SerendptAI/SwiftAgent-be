@@ -46,6 +46,26 @@ async def create_indexes():
     await db.knowledge_sources.create_index("company_id")
     await db.knowledge_sources.create_index([("company_id", 1), ("uploaded_at", -1)])
 
+    # knowledge base auto-crawl
+    await db.knowledge_crawl_configs.create_index("company_id", unique=True)
+    await db.knowledge_crawl_configs.create_index([("enabled", 1), ("next_run_at", 1)])
+    await db.knowledge_crawl_runs.create_index("id", unique=True)
+    await db.knowledge_crawl_runs.create_index([("company_id", 1), ("started_at", -1)])
+    await db.knowledge_pages.create_index("id", unique=True)
+    await db.knowledge_pages.create_index(
+        [("company_id", 1), ("canonical_url", 1)], unique=True
+    )
+    await db.knowledge_pages.create_index([("company_id", 1), ("status", 1)])
+    await db.knowledge_gap_events.create_index([("company_id", 1), ("detected_at", -1)])
+    await db.knowledge_gap_events.create_index("session_id", sparse=True)
+    await db.knowledge_gaps.create_index("id", unique=True)
+    await db.knowledge_gaps.create_index(
+        [("company_id", 1), ("topic_key", 1), ("status", 1)]
+    )
+    await db.knowledge_gaps.create_index(
+        [("company_id", 1), ("status", 1), ("priority_score", -1)]
+    )
+
     await db.stroll_versions.create_index("company_id")
     await db.stroll_versions.create_index([("company_id", 1), ("status", 1), ("timestamp", -1)])
 
