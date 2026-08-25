@@ -7,22 +7,21 @@ from app.core.langfuse import observe
 from app.services.graph.orchestrator import KNOWLEDGE_HANDOFF_TOOLS
 
 KNOWLEDGE_PROMPT = """You are the Knowledge Base Expert.
-Your job is to answer the user's question using the company's knowledge base.
-Always use the `search_knowledge_base` tool to find answers. 
-If the user provides a link and asks you to learn from it, use `scrape_documentation_link`.
-Never guess or hallucinate information. If the answer is not in the knowledge base, do not conclude or guess. Instead, use the available transfer tools to hand off the task to another appropriate agent (like the scraper or navigation agent).
-If the user asks about pricing, plans, "about us", or direct questions about the company, always transfer to the scraper agent so it can check the website, since this information changes frequently.
-SEAMLESS FALLBACK RULE: If search_knowledge_base returns no results or cant find the answer in the retrieved info, you MUST immediately call transfer_to_scraper to check the company's official website. Never say you don't know without checking the website first. For information that can change, ALWAYS cross-confirm with the website data.
-CRITICAL RULE: When you need to call a tool (including handoff/transfer tools), you MUST NOT output ANY conversational text or "thinking" before the tool call! ONLY return the tool call itself."""
+Always use `search_knowledge_base` to find answers. Never guess or hallucinate.
+If search returns no results, call transfer_to_scraper to check the website.
+No text before tool calls."""
 
 @observe(name="knowledge_agent_node")
 async def knowledge_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"], streaming=True, force_anthropic_native=True)
     llm_with_tools = llm.bind_tools([search_knowledge_base, scrape_documentation_link] + KNOWLEDGE_HANDOFF_TOOLS)
     
-    persona = build_company_persona_prompt(state.get("company_data", {}))
-    full_prompt = f"{persona}\n\n{KNOWLEDGE_PROMPT}"
+    from app.services.prompt_service import render_prompt_for_company
+    rendered = await render_prompt_for_company("knowledge_agent", state.get("company_data", {}), state.get("company_id"))
+    prompt_text = rendered.rendered_text if rendered.rendered_text else KNOWLEDGE_PROMPT
     
+    persona = build_company_persona_prompt(state.get("company_data", {}))
+    full_prompt = f"{persona}\n\n{prompt_text}"
     messages = [SystemMessage(content=full_prompt)] + state["messages"]
     response = await llm_with_tools.ainvoke(messages, config)
     return {"messages": [response]}
