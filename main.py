@@ -42,6 +42,7 @@ from app.services.stroll_service import init_browser, close_browser
 from app.services.stroll_scheduler import init_scheduler, close_scheduler
 from app.services import wrap_scheduler
 from app.services import ticket_scheduler
+from app.core import queue
 from app.core.langfuse import init_langfuse, shutdown_langfuse
 
 # structured logging setup
@@ -57,6 +58,13 @@ async def lifespan(app: FastAPI):
         await create_indexes()
     except Exception as e:
         logging.getLogger(__name__).warning("DB index creation failed: %s", e)
+
+    # Warm the ARQ pool when Redis is configured; failure is non-fatal.
+    if settings.REDIS_URL:
+        try:
+            await queue.get_pool()
+        except Exception as e:
+            logging.getLogger(__name__).warning("ARQ pool init failed: %s", e)
 
     # Langfuse LLM observability (no-ops gracefully if keys are unset)
     init_langfuse()
@@ -91,6 +99,7 @@ async def lifespan(app: FastAPI):
         pass
 
     shutdown_langfuse()
+    await queue.close_pool()
 
 
 app = FastAPI(
