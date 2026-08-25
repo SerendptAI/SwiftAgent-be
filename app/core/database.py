@@ -46,6 +46,11 @@ async def create_indexes():
     await db.knowledge_sources.create_index("company_id")
     await db.knowledge_sources.create_index([("company_id", 1), ("uploaded_at", -1)])
 
+    # outbound webhooks
+    await db.webhook_endpoints.create_index([("company_id", 1), ("enabled", 1)])
+    await db.webhook_deliveries.create_index([("company_id", 1), ("created_at", -1)])
+    await db.webhook_deliveries.create_index("endpoint_id")
+
     await db.stroll_versions.create_index("company_id")
     await db.stroll_versions.create_index([("company_id", 1), ("status", 1), ("timestamp", -1)])
 
