@@ -35,6 +35,7 @@ from app.api.routers import (
     notifications,
     analytics,
     feedback,
+    audit_log,
 )
 from app.core.config import settings
 from app.core.database import create_indexes
@@ -42,6 +43,8 @@ from app.services.stroll_service import init_browser, close_browser
 from app.services.stroll_scheduler import init_scheduler, close_scheduler
 from app.services import wrap_scheduler
 from app.services import ticket_scheduler
+from app.core.audit_middleware import AuditLogMiddleware
+from app.services import audit_service
 from app.core.langfuse import init_langfuse, shutdown_langfuse
 
 # structured logging setup
@@ -55,6 +58,7 @@ logging.basicConfig(
 async def lifespan(app: FastAPI):
     try:
         await create_indexes()
+        await audit_service.ensure_audit_indexes()
     except Exception as e:
         logging.getLogger(__name__).warning("DB index creation failed: %s", e)
 
@@ -297,6 +301,7 @@ app.add_middleware(CORSMiddleware,
     allow_headers=["*"],
 )
 app.add_middleware(WidgetCorsBypassMiddleware)
+app.add_middleware(AuditLogMiddleware)
 
 # routers
 app.mount("/chat-avatars", StaticFiles(directory="app/chat-avatars"), name="chat-avatars")
@@ -305,6 +310,7 @@ app.mount("/images", StaticFiles(directory="app/email_templates/images"), name="
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(auth.router, prefix="/api/v1/auth")
 app.include_router(knowledge.router, prefix="/api/v1/knowledge")
+app.include_router(audit_log.router, prefix="/api/v1/audit")
 app.include_router(diagnosis.router, prefix="/api/v1/diagnosis")
 app.include_router(conversations.router, prefix="/api/v1/conversations")
 app.include_router(companies.router, prefix="/api/v1/companies")
