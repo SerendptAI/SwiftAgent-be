@@ -166,7 +166,7 @@ class TestAuditLogger:
         mock_collection.insert_one = AsyncMock(return_value=MagicMock(inserted_id="abc123"))
         mock_db.__getitem__ = MagicMock(return_value=mock_collection)
 
-        with patch("app.core.audit.db", mock_db):
+        with patch("app.core.database.db", mock_db):
             event_id = await AuditLogger.log_event(
                 actor_id="user_123",
                 company_id="comp_456",
@@ -186,7 +186,7 @@ class TestAuditLogger:
         mock_collection.insert_one = AsyncMock(side_effect=Exception("DB error"))
         mock_db.__getitem__ = MagicMock(return_value=mock_collection)
 
-        with patch("app.core.audit.db", mock_db):
+        with patch("app.core.database.db", mock_db):
             event_id = await AuditLogger.log_event(
                 actor_id="user_123",
                 action="write",
@@ -207,11 +207,13 @@ class TestQueryAuditEvents:
         mock_cursor.sort.return_value = mock_cursor
         mock_cursor.skip.return_value = mock_cursor
         mock_cursor.limit.return_value = mock_cursor
-        mock_cursor.__aiter__ = AsyncMock(return_value=iter([]))
+        async def dummy_gen():
+            if False: yield
+        mock_cursor.__aiter__ = MagicMock(return_value=dummy_gen())
         mock_collection.find.return_value = mock_cursor
         mock_db.__getitem__ = MagicMock(return_value=mock_collection)
 
-        with patch("app.core.audit.db", mock_db):
+        with patch("app.core.database.db", mock_db):
             events = await query_audit_events(company_id="comp_123")
 
         assert events == []

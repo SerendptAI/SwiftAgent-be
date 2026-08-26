@@ -120,11 +120,6 @@ def require_company_access():
         user: dict = Depends(get_current_user),
     ) -> dict:
         user_company = user.get("company_id")
-        user_permissions = user.get("permissions", [])
-        
-        # Owner/admin with wildcard can access any company
-        if "*" in user_permissions:
-            return user
         
         if user_company != company_id:
             raise HTTPException(
