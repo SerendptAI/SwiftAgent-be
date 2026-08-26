@@ -28,7 +28,10 @@ async def scraper_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"], streaming=True, force_anthropic_native=True)
     llm_with_tools = llm.bind_tools([read_website_page] + SCRAPER_HANDOFF_TOOLS)
     
-    persona = build_company_persona_prompt(state.get("company_data", {}))
+    persona = build_company_persona_prompt(
+        state.get("company_data", {}),
+        language_instruction=state.get("language_instruction", ""),
+    )
     website = state.get("company_data", {}).get("website", "")
     scraper_prompt = SCRAPER_PROMPT.format(website=website or "Not configured")
     full_prompt = f"{persona}\n\n{scraper_prompt}"

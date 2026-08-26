@@ -25,7 +25,10 @@ async def navigation_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"], streaming=True, force_anthropic_native=True)
     llm_with_tools = llm.bind_tools([get_dashboard_navigation, get_full_dashboard_documentation, render_navigation_guide] + NAVIGATION_HANDOFF_TOOLS)
     
-    persona = build_company_persona_prompt(state.get("company_data", {}))
+    persona = build_company_persona_prompt(
+        state.get("company_data", {}),
+        language_instruction=state.get("language_instruction", ""),
+    )
     full_prompt = f"{persona}\n\n{NAVIGATION_PROMPT}"
     
     messages = [SystemMessage(content=full_prompt)] + state["messages"]

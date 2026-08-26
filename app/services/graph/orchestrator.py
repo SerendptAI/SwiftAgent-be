@@ -93,8 +93,11 @@ async def orchestrator_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"], fast_routing=True, streaming=False)
     llm_with_tools = llm.bind_tools(ROUTING_TOOLS)
     
-    persona = build_company_persona_prompt(state.get("company_data", {}))
-    full_prompt = f"{persona}\\n\\n{ORCHESTRATOR_PROMPT}"
+    persona = build_company_persona_prompt(
+        state.get("company_data", {}),
+        language_instruction=state.get("language_instruction", ""),
+    )
+    full_prompt = f"{persona}\n\n{ORCHESTRATOR_PROMPT}"
     
     messages = [SystemMessage(content=full_prompt)] + state["messages"]
     
@@ -119,7 +122,7 @@ async def orchestrator_node(state: AgentState, config):
         elif tool_name == "escalate_to_human":
             intent = "human_escalation"
             escalate = True
-            
+        
         # We don't append the AIMessage to state if it's just a handoff, 
         # so the worker agent gets the original user message as the last message!
         return {"intent": intent, "escalate_to_human": escalate}

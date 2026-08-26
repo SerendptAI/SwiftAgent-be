@@ -95,6 +95,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., description="The user's input message.")
     user_id: str = Field(None, description="Optional ID of the user (used for memory generation).")
     user_email: Optional[str] = Field(None, description="Optional email address of the user. If provided, chats become aggregatable across SDK/Web widget.")
+    user_language: Optional[str] = Field(None, description="ISO 639-1 language code (e.g., 'en', 'fr', 'es'). If omitted and company has auto_detect, language will be detected from message content.")
     # Optional — if omitted, falls back to company.ai_provider, then global default
     agent: Optional[AgentType] = Field(
         None, 
@@ -382,6 +383,7 @@ async def _chat_sse_generator(
                     agent_provider=provider_key,
                     sdk_user_email=req.user_email,
                     user_timezone=req.user_timezone,
+                    user_language=req.user_language,
                 ):
                     event_type = event.get("type")
 
