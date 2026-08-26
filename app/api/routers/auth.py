@@ -27,6 +27,7 @@ from fastapi.responses import RedirectResponse
 from google_auth_oauthlib.flow import Flow
 
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission
 from app.core.config import settings
 from app.core.database import get_database
 from app.core.security import create_access_token, create_refresh_token, decode_refresh_token
@@ -88,9 +89,17 @@ def _smtp_guard():
         )
 
 
-def _token_pair(user_id: str) -> dict:
+def _token_pair(user_id: str, company_id: str | None = None, role: str | None = None, permissions: list[str] | None = None) -> dict:
+    token_data: dict = {"sub": user_id}
+    if company_id:
+        token_data["company_id"] = company_id
+    if role:
+        token_data["role"] = role
+    if permissions:
+        token_data["permissions"] = permissions
+    
     return {
-        "access_token": create_access_token(data={"sub": user_id}),
+        "access_token": create_access_token(data=token_data),
         "refresh_token": create_refresh_token(data={"sub": user_id}),
         "token_type": "bearer",
     }
@@ -252,7 +261,23 @@ async def callback(request: Request, db=Depends(get_database)):
         except Exception as e:
             logger.warning(f"Failed to send welcome email to {email}: {e}")
 
-    tokens = _token_pair(user["user_id"])
+    # Fetch company and role info for JWT
+    company = await db.companies.find_one(
+        {"user_id": user["user_id"], "setup_complete": True},
+        {"_id": 0, "id": 1},
+    )
+    role = "owner"
+    permissions = ["*"]
+    if company:
+        from app.core.rbac import get_role_permissions
+        permissions = get_role_permissions(role)
+
+    tokens = _token_pair(
+        user["user_id"],
+        company_id=company.get("id") if company else None,
+        role=role,
+        permissions=permissions,
+    )
 
     if redirect_url:
         fragment = urllib.parse.urlencode(tokens)
@@ -327,7 +352,7 @@ async def update_me(
 @router.patch("/me/name")
 async def update_name(
     data: UserNameUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
     db=Depends(get_database),
 ):
     """Update the authenticated user's display name."""
@@ -347,7 +372,7 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 @router.patch("/me/pfp")
 async def update_pfp(
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
     db=Depends(get_database),
 ):
     """Update the authenticated user's profile picture (pfp)."""
@@ -387,7 +412,7 @@ async def update_pfp(
 @router.patch("/me/security")
 async def update_user_security(
     data: UserSecurityUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
     db=Depends(get_database),
 ):
     """Update user-level backup email and access code (admin only)."""
@@ -511,7 +536,23 @@ async def verify_otp(request: Request, body: OTPVerifyRequest, db=Depends(get_da
         except Exception:
             pass
 
-    tokens = _token_pair(user["user_id"])
+    # Fetch company and role info for JWT
+    company = await db.companies.find_one(
+        {"user_id": user["user_id"], "setup_complete": True},
+        {"_id": 0, "id": 1},
+    )
+    role = "owner"
+    permissions = ["*"]
+    if company:
+        from app.core.rbac import get_role_permissions
+        permissions = get_role_permissions(role)
+
+    tokens = _token_pair(
+        user["user_id"],
+        company_id=company.get("id") if company else None,
+        role=role,
+        permissions=permissions,
+    )
     return LoginResponse(
         message="Verification successful. Welcome!",
         email=email,

@@ -93,7 +93,15 @@ async def chat_stream_graph(
         final_text = ""
         has_yielded_response = False
         
+        import time
+        last_ping_time = time.time()
+        
         async for event in compiled_graph.astream_events(state, config, version="v2"):
+            current_time = time.time()
+            if current_time - last_ping_time > 2.0:
+                last_ping_time = current_time
+                yield {"type": "ping"}
+
             kind = event["event"]
             
             if kind == "on_chat_model_stream":
