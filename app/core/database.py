@@ -163,6 +163,8 @@ async def create_indexes():
     await db.conversation_intelligence.create_index("session_id", unique=True)
     await db.conversation_intelligence.create_index("company_id")
     await db.conversation_intelligence.create_index([("company_id", 1), ("analyzed_at", -1)])
+    await db.conversation_intelligence.create_index([("company_id", 1), ("analyzed_at", -1), ("intent.primary", 1)])
+    await db.conversation_intelligence.create_index([("company_id", 1), ("tags.tag", 1)])
     await db.conversation_intelligence.create_index("requires_human_review")
     await db.conversation_intelligence.create_index([("company_id", 1), ("requires_human_review", 1)])
     await db.message_sentiment.create_index("session_id")
