@@ -47,6 +47,9 @@ def register_routers(app: FastAPI):
         notifications,
         analytics,
         feedback,
+        intelligence,
+        language,
+        users,
     )
 
     # routers
@@ -62,6 +65,8 @@ def register_routers(app: FastAPI):
     app.include_router(dashboard.router, prefix="/api/v1/dashboard")
     app.include_router(analytics.router, prefix="/api/v1/analytics")
     app.include_router(feedback.router)
+    app.include_router(intelligence.router, prefix="/api/v1/intelligence")
+    app.include_router(language.router, prefix="/api/v1")
     app.include_router(billing.router, prefix="/api/v1/billing")
 
     app.include_router(voice.router, prefix="/api/v1/voice")
@@ -79,6 +84,7 @@ def register_routers(app: FastAPI):
         tags=["API Integrations"],
     )
     app.include_router(notifications.router, prefix="/api/v1/notifications")
+    app.include_router(users.router, prefix="/api/v1/users")
 
 
 # structured logging setup
@@ -117,9 +123,18 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logging.getLogger(__name__).error(f"Scheduler init failed: {e}")
 
-    asyncio.create_task(_init_heavy_services())
+    heavy_services_task = asyncio.create_task(_init_heavy_services())
+    app.state.heavy_services_task = heavy_services_task
 
     yield
+    # Cancel heavy init task if it's still running
+    if getattr(app.state, "heavy_services_task", None) and not app.state.heavy_services_task.done():
+        app.state.heavy_services_task.cancel()
+        try:
+            await app.state.heavy_services_task
+        except asyncio.CancelledError:
+            pass
+
     # shutdown: close Playwright browser and scheduler
     try:
         await close_scheduler()
