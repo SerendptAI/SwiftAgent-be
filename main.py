@@ -35,6 +35,7 @@ from app.api.routers import (
     notifications,
     analytics,
     feedback,
+    intelligence,
     users,
 )
 from app.core.config import settings
@@ -320,6 +321,7 @@ app.include_router(companies.router, prefix="/api/v1/companies")
 app.include_router(dashboard.router, prefix="/api/v1/dashboard")
 app.include_router(analytics.router, prefix="/api/v1/analytics")
 app.include_router(feedback.router)
+app.include_router(intelligence.router, prefix="/api/v1/intelligence")
 app.include_router(billing.router, prefix="/api/v1/billing")
 
 app.include_router(voice.router, prefix="/api/v1/voice")
