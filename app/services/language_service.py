@@ -162,7 +162,7 @@ def build_language_instruction(
 # ============================================================================
 
 
-def get_kb_search_query(
+async def get_kb_search_query(
     query: str,
     user_language: str,
     kb_language: str,
@@ -190,15 +190,8 @@ def get_kb_search_query(
                 query=query[:500],
             )),
         ]
-        import asyncio
-        try:
-            loop = asyncio.get_running_loop()
-            # Already in async context, can't run sync
-            return query
-        except RuntimeError:
-            pass
 
-        response = llm.invoke(messages)
+        response = await llm.ainvoke(messages)
         result = response.content if isinstance(response.content, str) else str(response.content)
         return result.strip()
     except Exception as e:
@@ -206,15 +199,6 @@ def get_kb_search_query(
         return query
 
 
-def get_kb_collection_name(
-    base_collection: str,
-    company_id: str,
-    language: str,
-) -> str:
-    """Generate the language-specific Qdrant collection name."""
-    if language == "en":
-        return f"{company_id}_{base_collection}"
-    return f"{company_id}_{base_collection}_{language}"
 
 
 # ============================================================================
