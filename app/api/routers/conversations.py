@@ -3,6 +3,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission
 from app.models.conversation_models import (
     ConversationCreate,
     ConversationResponse,
@@ -17,7 +18,7 @@ router = APIRouter(tags=["Conversations"])
 @router.post("/", response_model=ConversationResponse, status_code=201)
 async def create_conversation(
     conversation: ConversationCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
     db=Depends(get_database),
 ):
     """Save a new conversation."""
@@ -37,7 +38,7 @@ async def create_conversation(
 
 @router.get("/")
 async def list_conversations(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("conversations:read")),
     db=Depends(get_database),
     limit: int = Query(
         default=settings.DEFAULT_CONVERSATION_LIMIT, ge=1, le=settings.MAX_PAGE_LIMIT
@@ -67,7 +68,7 @@ async def list_conversations(
 @router.get("/{conversation_id}", response_model=ConversationResponse)
 async def get_conversation(
     conversation_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
     db=Depends(get_database),
 ):
     """Retrieve a specific conversation by ID."""

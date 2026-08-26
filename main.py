@@ -37,6 +37,7 @@ from app.api.routers import (
     feedback,
     intelligence,
     language,
+    users,
 )
 from app.core.config import settings
 from app.core.database import create_indexes
@@ -45,6 +46,7 @@ from app.services.stroll_scheduler import init_scheduler, close_scheduler
 from app.services import wrap_scheduler
 from app.services import ticket_scheduler
 from app.core.langfuse import init_langfuse, shutdown_langfuse
+from app.core.audit import AuditMiddleware, ensure_audit_indexes
 
 # structured logging setup
 logging.basicConfig(
@@ -62,6 +64,12 @@ async def lifespan(app: FastAPI):
 
     # Langfuse LLM observability (no-ops gracefully if keys are unset)
     init_langfuse()
+
+    # Audit log indexes
+    try:
+        await ensure_audit_indexes()
+    except Exception as e:
+        logging.getLogger(__name__).warning("Audit index creation failed: %s", e)
 
     try:
         await init_browser()
@@ -287,9 +295,9 @@ class LoggingMiddleware:
 
 
 # Middleware execution order (Starlette reverses registration order):
-# WidgetCorsBypassMiddleware → LoggingMiddleware → RequestIdMiddleware → CORSMiddleware → app
-# WidgetCorsBypassMiddleware is registered last so it executes FIRST (outermost),
-# allowing it to overwrite CORS headers AFTER CORSMiddleware has already run.
+# AuditMiddleware → WidgetCorsBypassMiddleware → LoggingMiddleware → RequestIdMiddleware → CORSMiddleware → app
+# AuditMiddleware is registered last so it executes FIRST (outermost),
+# capturing all requests including those that may be blocked by other middleware.
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(CORSMiddleware,
@@ -299,6 +307,7 @@ app.add_middleware(CORSMiddleware,
     allow_headers=["*"],
 )
 app.add_middleware(WidgetCorsBypassMiddleware)
+app.add_middleware(AuditMiddleware)
 
 # routers
 app.mount("/chat-avatars", StaticFiles(directory="app/chat-avatars"), name="chat-avatars")
@@ -332,6 +341,7 @@ app.include_router(
     tags=["API Integrations"],
 )
 app.include_router(notifications.router, prefix="/api/v1/notifications")
+app.include_router(users.router, prefix="/api/v1", tags=["User Management"])
 
 # global exception handlers
 @app.exception_handler(RequestValidationError)
