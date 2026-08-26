@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse
 import asyncio
 
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission
 from app.core.security import decode_access_token
 from app.core.config import settings
 from app.models.email_models import (
@@ -129,7 +130,7 @@ async def list_tickets(
     priority: Optional[str] = Query(default=None),
     assigned_to: Optional[str] = Query(default=None),
     sla_breached: Optional[bool] = Query(default=None),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """List unresolved email tickets for a company (Pending section).
 
@@ -169,7 +170,7 @@ async def list_tickets(
 @router.post("/{company_id}/tickets/auto-escalate")
 async def auto_escalate_endpoint(
     company_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Manually trigger the auto-escalation scan for a company (admin only)."""
     user_id = current_user["user_id"]
@@ -352,7 +353,7 @@ async def _get_ticket_with_context(company_id: str, ticket_id: str) -> dict:
 async def get_ticket(
     company_id: str,
     ticket_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Get full ticket thread with attributed chat (if escalated from chat)."""
     user_id = current_user["user_id"]
@@ -379,7 +380,7 @@ async def reply_to_ticket(
     company_id: str,
     ticket_id: str,
     request: Request,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:write")),
 ):
     """Send a reply to a ticket, emailed from company@swfty.email.
 
@@ -459,7 +460,7 @@ async def reply_to_ticket(
 async def mark_ticket_seen(
     company_id: str,
     ticket_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Mark all messages in a ticket as seen."""
     user_id = current_user["user_id"]
@@ -479,7 +480,7 @@ async def mark_ticket_seen(
 async def resolve_ticket_by_agent_endpoint(
     company_id: str,
     ticket_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:write")),
 ):
     """Resolve a ticket manually from the dashboard and trigger an email to the customer."""
     user_id = current_user["user_id"]
@@ -498,7 +499,7 @@ async def resolve_ticket_by_agent_endpoint(
 async def reopen_ticket_endpoint(
     company_id: str,
     ticket_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:write")),
 ):
     """Reopen a resolved ticket."""
     user_id = current_user["user_id"]
@@ -520,7 +521,7 @@ async def update_ticket_priority(
     company_id: str,
     ticket_id: str,
     request: TicketPriorityUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:write")),
 ):
     """Set a ticket's priority and recompute its SLA deadlines from policy."""
     user_id = current_user["user_id"]
@@ -549,7 +550,7 @@ async def assign_ticket_endpoint(
     company_id: str,
     ticket_id: str,
     request: TicketAssignRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:write")),
 ):
     """Assign a ticket to a company member, or unassign it with a null body."""
     user_id = current_user["user_id"]
@@ -581,7 +582,7 @@ async def update_ticket_status(
     company_id: str,
     ticket_id: str,
     request: TicketStatusUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:write")),
 ):
     """Transition a ticket through the workflow state machine.
 
@@ -622,7 +623,7 @@ async def update_ticket_status(
 @router.post("/test-dispatch")
 async def dispatch_test_suite(
     request: TestDispatchRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     """Dispatch all templates securely from the backend to the target recipients."""
     success, msg = await company_email_service.dispatch_all_test_templates(

@@ -11,6 +11,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission
 from app.models.integration_models import (
     IntegrationCreate,
     IntegrationUpdate,
@@ -39,7 +40,7 @@ async def create_integration(
     company_id: str,
     data: IntegrationCreate,
     background_tasks: BackgroundTasks,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Register a new API integration. The API key is encrypted before storage."""
     await _require_company_admin(company_id, current_user["user_id"])
@@ -70,7 +71,7 @@ async def create_integration(
 @router.get("/", response_model=List[IntegrationResponse])
 async def list_integrations(
     company_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """List all active API integrations for the company."""
     await _require_company_admin(company_id, current_user["user_id"])
@@ -81,7 +82,7 @@ async def list_integrations(
 async def get_integration(
     company_id: str,
     integration_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Get details for a single integration."""
     await _require_company_admin(company_id, current_user["user_id"])
@@ -97,7 +98,7 @@ async def update_integration(
     integration_id: str,
     data: IntegrationUpdate,
     background_tasks: BackgroundTasks,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Update an integration. If a new API key is provided, it will be re-encrypted."""
     await _require_company_admin(company_id, current_user["user_id"])
@@ -123,7 +124,7 @@ async def update_integration(
 async def delete_integration(
     company_id: str,
     integration_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("integrations:write")),
 ):
     """Deactivate an integration (soft delete)."""
     await _require_company_admin(company_id, current_user["user_id"])
@@ -139,7 +140,7 @@ async def test_integration(
     company_id: str,
     integration_id: str,
     endpoint_name: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """
     Test-fire a GET endpoint to verify the integration works.

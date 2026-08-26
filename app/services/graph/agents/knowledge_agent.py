@@ -20,7 +20,10 @@ async def knowledge_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"], streaming=True, force_anthropic_native=True)
     llm_with_tools = llm.bind_tools([search_knowledge_base, scrape_documentation_link] + KNOWLEDGE_HANDOFF_TOOLS)
     
-    persona = build_company_persona_prompt(state.get("company_data", {}))
+    persona = build_company_persona_prompt(
+        state.get("company_data", {}),
+        language_instruction=state.get("language_instruction", ""),
+    )
     full_prompt = f"{persona}\n\n{KNOWLEDGE_PROMPT}"
     
     messages = [SystemMessage(content=full_prompt)] + state["messages"]

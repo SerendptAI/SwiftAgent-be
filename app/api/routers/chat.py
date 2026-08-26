@@ -57,6 +57,7 @@ from app.services.analytics_service import (
     record_ai_turn_metrics,
     record_conversation_resolution,
 )
+from app.services.conversation_intelligence_service import analyze_conversation
 import logging
 import asyncio
 import re
@@ -94,6 +95,7 @@ class ChatRequest(BaseModel):
     message: str = Field(..., description="The user's input message.")
     user_id: str = Field(None, description="Optional ID of the user (used for memory generation).")
     user_email: Optional[str] = Field(None, description="Optional email address of the user. If provided, chats become aggregatable across SDK/Web widget.")
+    user_language: Optional[str] = Field(None, description="ISO 639-1 language code (e.g., 'en', 'fr', 'es'). If omitted and company has auto_detect, language will be detected from message content.")
     # Optional — if omitted, falls back to company.ai_provider, then global default
     agent: Optional[AgentType] = Field(
         None, 
@@ -381,6 +383,7 @@ async def _chat_sse_generator(
                     agent_provider=provider_key,
                     sdk_user_email=req.user_email,
                     user_timezone=req.user_timezone,
+                    user_language=req.user_language,
                 ):
                     event_type = event.get("type")
 
@@ -463,6 +466,11 @@ async def _chat_sse_generator(
                 _generate_session_memory(company_id, req.session_id, req.user_id)
             )
 
+        # Run conversation intelligence analysis — fire-and-forget
+        asyncio.create_task(
+            _run_conversation_intelligence(company_id, req.session_id, req.user_id)
+        )
+
     except Exception:
         logger.exception(f"Chat SSE error for company {company_id}")
         # Only surface the error to the client if nothing was delivered yet —
@@ -495,6 +503,31 @@ async def _generate_session_memory(company_id: str, session_id: str, user_id: st
             await memory_service.delete_working_memory(session_id)
     except Exception:
         logger.exception(f"Failed to generate session memory for session {session_id}")
+
+
+async def _run_conversation_intelligence(
+    company_id: str,
+    session_id: str,
+    user_id: Optional[str],
+):
+    """Run conversation intelligence analysis post-chat.
+
+    Runs as a fire-and-forget task so its failures never surface in the SSE stream.
+    """
+    try:
+        conversation = await db.widget_conversations.find_one(
+            {"company_id": company_id, "session_id": session_id}
+        )
+        if conversation and len(conversation.get("messages", [])) >= 2:
+            messages = conversation.get("messages", [])
+            await analyze_conversation(
+                session_id=session_id,
+                company_id=company_id,
+                user_id=user_id,
+                messages=messages,
+            )
+    except Exception:
+        logger.exception(f"Failed to run conversation intelligence for {session_id}")
 
 
 # Endpoints
