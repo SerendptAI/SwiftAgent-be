@@ -16,7 +16,7 @@ from app.models.conversation_intelligence_models import (
 router = APIRouter(tags=["Conversation Intelligence"])
 
 
-@router.get("/intelligence/{session_id}", response_model=ConversationIntelligence)
+@router.get("/{session_id}", response_model=ConversationIntelligence)
 async def get_conversation_intelligence(
     session_id: str,
     response: Response,
@@ -41,7 +41,7 @@ async def get_conversation_intelligence(
     return intelligence
 
 
-@router.get("/intelligence/company/{company_id}/summary")
+@router.get("/company/{company_id}/summary")
 async def get_company_summary(
     response: Response,
     company_id: str,
@@ -69,7 +69,7 @@ async def get_company_summary(
         )
 
 
-@router.get("/intelligence/company/{company_id}/conversations")
+@router.get("/company/{company_id}/conversations")
 async def get_company_conversations(
     response: Response,
     company_id: str,
@@ -107,7 +107,7 @@ async def get_company_conversations(
         )
 
 
-@router.get("/intelligence/company/{company_id}/knowledge-gaps")
+@router.get("/company/{company_id}/knowledge-gaps")
 async def get_company_knowledge_gaps(
     response: Response,
     company_id: str,
@@ -138,7 +138,7 @@ async def get_company_knowledge_gaps(
     }
 
 
-@router.get("/intelligence/company/{company_id}/review-queue")
+@router.get("/company/{company_id}/review-queue")
 async def get_review_queue(
     response: Response,
     company_id: str,
@@ -175,7 +175,7 @@ async def get_review_queue(
     }
 
 
-@router.post("/intelligence/{session_id}/reanalyze")
+@router.post("/{session_id}/reanalyze")
 async def reanalyze_conversation(
     session_id: str,
     response: Response,

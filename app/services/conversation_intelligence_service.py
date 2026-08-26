@@ -172,17 +172,7 @@ INLINE_SENTIMENT_PROMPT = """Analyze the sentiment of this single customer messa
 # DB HELPERS
 # ============================================================================
 
-async def ensure_intelligence_indexes():
-    """Create indexes for conversation intelligence collection."""
-    await db.conversation_intelligence.create_index("session_id", unique=True)
-    await db.conversation_intelligence.create_index("company_id")
-    await db.conversation_intelligence.create_index([("company_id", 1), ("analyzed_at", -1)])
-    await db.conversation_intelligence.create_index([("company_id", 1), ("analyzed_at", -1), ("intent.primary", 1)])
-    await db.conversation_intelligence.create_index([("company_id", 1), ("tags.tag", 1)])
-    await db.conversation_intelligence.create_index("requires_human_review")
-    await db.conversation_intelligence.create_index([("company_id", 1), ("requires_human_review", 1)])
-    await db.message_sentiment.create_index("session_id")
-    await db.message_sentiment.create_index([("session_id", 1), ("turn_index", 1)])
+
 
 
 async def get_intelligence(session_id: str) -> Optional[ConversationIntelligence]:
@@ -612,12 +602,12 @@ async def get_company_intelligence_summary(
 
     return {
         "company_id": company_id,
-        "total_analyzed": summary.get("total_analyzed", 0),
-        "avg_sentiment_score": round(summary.get("avg_sentiment", 0.0), 3),
-        "avg_resolution_confidence": round(summary.get("avg_resolution_confidence", 0.0), 3),
-        "avg_risk_of_churn": round(summary.get("avg_risk_of_churn", 0.0), 3),
+        "total_analyzed": summary.get("total_analyzed") or 0,
+        "avg_sentiment_score": round(summary.get("avg_sentiment") or 0.0, 3),
+        "avg_resolution_confidence": round(summary.get("avg_resolution_confidence") or 0.0, 3),
+        "avg_risk_of_churn": round(summary.get("avg_risk_of_churn") or 0.0, 3),
         "top_intents": intent_volumes,
         "top_tags": [{"tag": t["_id"], "count": t["count"], "category": t.get("category", "topic")} for t in tags],
-        "total_knowledge_gaps": summary.get("total_kb_gaps", 0),
-        "requires_review_count": summary.get("review_count", 0),
+        "total_knowledge_gaps": summary.get("total_kb_gaps") or 0,
+        "requires_review_count": summary.get("review_count") or 0,
     }
