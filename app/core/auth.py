@@ -27,6 +27,11 @@ async def get_current_user(
         if not user:
             raise HTTPException(status_code=401, detail="Your account was not found. It may have been deleted or deactivated. Please sign in again.")
 
+        # Add RBAC fields from JWT
+        user["role"] = payload.get("role")
+        user["permissions"] = payload.get("permissions", [])
+        user["company_id"] = payload.get("company_id")
+
         return user
 
     except ValueError as e:

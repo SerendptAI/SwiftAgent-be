@@ -5,6 +5,7 @@ from fastapi.responses import RedirectResponse
 import urllib.parse
 from typing import List
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission, require_company_access
 from app.core.config import settings
 from app.models.company_models import (
     CompanyInfoCreate,
@@ -42,7 +43,7 @@ router = APIRouter(tags=["Companies"])
 @router.post("/", response_model=CompanyResponse, status_code=201)
 async def create_company(
     data: CompanyInfoCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings:write")),
 ):
     """Create a new company (onboarding step 1)."""
     user_id = current_user["user_id"]
@@ -63,7 +64,7 @@ async def create_company(
 @router.post("/scrape-website")
 async def scrape_website(
     request: ScrapeWebsiteRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings:write")),
 ):
     """Scrape a website and extract structured onboarding data."""
     url_str = str(request.url)
@@ -85,7 +86,7 @@ async def scrape_website(
 
 @router.get("/", response_model=List[CompanySummary])
 async def list_companies(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """List all companies for the current user."""
     user_id = current_user["user_id"]
@@ -95,7 +96,7 @@ async def list_companies(
 @router.get("/email-slug/check", response_model=EmailSlugCheckResponse)
 async def check_global_email_slug(
     slug: str = Query(..., min_length=3, max_length=30),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Check if an email slug is available globally (e.g. before company creation)."""
     slug = slug.strip().lower()
@@ -111,7 +112,7 @@ async def check_global_email_slug(
 @router.get("/{company_id}", response_model=CompanyResponse)
 async def get_company(
     company_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Get full company details."""
     user_id = current_user["user_id"]
@@ -147,7 +148,7 @@ async def get_company_public(
 async def update_identity(
     company_id: str,
     data: CompanyIdentityUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings:write")),
 ):
     """Update company identity (onboarding step 2)."""
     user_id = current_user["user_id"]
@@ -163,7 +164,7 @@ async def update_identity(
 async def update_company_info(
     company_id: str,
     data: CompanyInfoUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings:write")),
 ):
     """Update general company information (Settings page)."""
     user_id = current_user["user_id"]
@@ -179,7 +180,7 @@ async def update_company_info(
 async def update_security(
     company_id: str,
     data: CompanySecurityUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Update settings for security, like backup email and access code."""
     user_id = current_user["user_id"]
@@ -195,7 +196,7 @@ async def update_security(
 async def update_company_type(
     company_id: str,
     data: CompanyTypeUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Set company type — saas_finance or crypto (onboarding step 3 - final)."""
     user_id = current_user["user_id"]
@@ -218,7 +219,7 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 async def update_logo(
     company_id: str,
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Update company logo URL (uploads to Cloudinary)."""
     user_id = current_user["user_id"]
@@ -255,7 +256,7 @@ async def update_logo(
 async def check_email_slug(
     company_id: str,
     slug: str = Query(..., min_length=3, max_length=30),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings:read")),
 ):
     """Check if an email slug is available."""
     user_id = current_user["user_id"]
@@ -280,7 +281,7 @@ async def check_email_slug(
 async def update_email_slug(
     company_id: str,
     data: EmailSlugUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings:write")),
 ):
     """Set or update the company's email slug."""
     user_id = current_user["user_id"]
@@ -305,7 +306,7 @@ async def update_email_slug(
 async def invite_member(
     company_id: str,
     data: MemberInviteCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Invite a new member to the company (Admin only)."""
     user_id = current_user["user_id"]
@@ -326,7 +327,7 @@ async def invite_member(
 async def resend_member_invite(
     company_id: str,
     data: MemberInviteCreate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Resend a pending invite to a member, even if expired (Admin only)."""
     user_id = current_user["user_id"]
@@ -367,7 +368,7 @@ async def accept_invite_get(token: str, background_tasks: BackgroundTasks):
 @router.get("/{company_id}/members", response_model=List[CompanyMemberResponse])
 async def list_members(
     company_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("users:read")),
 ):
     """List all active members and pending invites for the company."""
     user_id = current_user["user_id"]
@@ -381,7 +382,7 @@ async def list_members(
 async def remove_member_or_invite(
     company_id: str,
     email: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("users:write")),
 ):
     """Remove a member or revoke an invite."""
     user_id = current_user["user_id"]
@@ -401,7 +402,7 @@ from typing import List
 async def create_api_key(
     company_id: str,
     req: ApiKeyCreateRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings:write")),
 ):
     """Generate a new SDK API key for the company. Raw key is returned ONLY once."""
     company = await company_service.get_company(company_id)
@@ -416,7 +417,7 @@ async def create_api_key(
 @router.get("/{company_id}/api-keys", response_model=List[ApiKeyListItem])
 async def list_api_keys(
     company_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings:read")),
 ):
     """List all SDK API keys for the company (returns prefixes only, never raw keys)."""
     company = await company_service.get_company(company_id)
@@ -432,7 +433,7 @@ async def list_api_keys(
 async def revoke_api_key(
     company_id: str,
     key_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings:write")),
 ):
     """Revoke an active API key."""
     company = await company_service.get_company(company_id)
