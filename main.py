@@ -15,7 +15,33 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+<<<<<<< HEAD
+from app.api.routers import (
+    auth,
+    knowledge,
+    diagnosis,
+    conversations,
+    companies,
+    dashboard,
+    voice,
+    billing,
+    chat,
+    stroll,
+    stroll_public,
+    email,
+    mobile,
+    sdk,
+    forms,
+    forms_public,
+    integrations,
+    notifications,
+    analytics,
+    feedback,
+    audit_log,
+)
+=======
 
+>>>>>>> origin/staging
 from app.core.config import settings
 from app.core.database import create_indexes
 from app.services.stroll_service import init_browser, close_browser
@@ -31,6 +57,7 @@ def register_routers(app: FastAPI):
     """Lazy-load routers to keep startup instant."""
     from app.api.routers import (
         auth,
+        audit_log,
         knowledge,
         diagnosis,
         conversations,
@@ -64,6 +91,7 @@ def register_routers(app: FastAPI):
     app.mount("/images", StaticFiles(directory="app/email_templates/images"), name="images")
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
     app.include_router(auth.router, prefix="/api/v1/auth")
+    app.include_router(audit_log.router, prefix="/api/v1/audit")
     app.include_router(knowledge.router, prefix="/api/v1/knowledge")
     app.include_router(diagnosis.router, prefix="/api/v1/diagnosis")
     app.include_router(conversations.router, prefix="/api/v1/conversations")
@@ -110,6 +138,7 @@ async def lifespan(app: FastAPI):
 
     try:
         await create_indexes()
+        await audit_service.ensure_audit_indexes()
     except Exception as e:
         logging.getLogger(__name__).warning("DB index creation failed: %s", e)
 
@@ -395,9 +424,6 @@ app.add_middleware(CORSMiddleware,
 )
 app.add_middleware(WidgetCorsBypassMiddleware)
 app.add_middleware(AuditMiddleware)
-
-
-
 
 
 # global exception handlers

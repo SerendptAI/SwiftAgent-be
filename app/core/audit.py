@@ -404,3 +404,57 @@ async def ensure_audit_indexes():
         expireAfterSeconds=ttl_days * 86400,
         name="ttl_audit_events",
     )
+
+
+async def list_events(
+    company_id: str,
+    *,
+    actor_id: Optional[str] = None,
+    action: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    outcome: Optional[str] = None,
+    limit: int = 50,
+    skip: int = 0,
+) -> dict:
+    """Query audit entries for a company, newest first."""
+    from app.core.database import db
+    query = {"company_id": company_id}
+    if actor_id:
+        query["actor_id"] = actor_id
+    if action:
+        query["action"] = action
+    if resource_type:
+        query["resource_type"] = resource_type
+    if outcome:
+        query["status"] = outcome
+        
+    cursor = (
+        db[AuditLogger.COLLECTION_NAME]
+        .find(query)
+        .sort("timestamp", -1)
+        .skip(skip)
+        .limit(limit)
+    )
+    items = []
+    async for doc in cursor:
+        doc.pop("_id", None)
+        items.append(doc)
+    total = await db[AuditLogger.COLLECTION_NAME].count_documents(query)
+    return {"items": items, "total": total}
+
+
+async def get_event(company_id: str, event_id: str) -> Optional[dict]:
+    from app.core.database import db
+    entry = await db[AuditLogger.COLLECTION_NAME].find_one({"event_id": event_id, "company_id": company_id})
+    if entry:
+        entry.pop("_id", None)
+    return entry
+
+
+def export_events_jsonl(entries: list[dict]) -> str:
+    """Serialize entries as JSON Lines for external SIEM ingestion."""
+    lines = []
+    for entry in entries:
+        record = {k: v for k, v in entry.items() if k != "_id"}
+        lines.append(json.dumps(record, default=str))
+    return "\n".join(lines)
