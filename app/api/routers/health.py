@@ -3,8 +3,6 @@ Health check endpoint for container orchestration.
 """
 
 from fastapi import APIRouter
-from motor.motor_asyncio import AsyncIOMotorClient
-from qdrant_client import AsyncQdrantClient
 
 from app.core.database import db, qdrant_client
 
@@ -39,10 +37,18 @@ async def readiness_check():
     except Exception as e:
         checks["qdrant"] = {"status": "unhealthy", "error": str(e)}
 
+    # Check job queue (only reported when Redis is configured)
+    from app.core.config import settings
+    from app.core.queue import get_pool
 
+    if settings.REDIS_URL:
+        try:
+            pool = await get_pool()
+            checks["queue"] = {"status": "healthy"} if pool else {"status": "unhealthy"}
+        except Exception as e:
+            checks["queue"] = {"status": "unhealthy", "error": str(e)}
 
     all_healthy = all(c["status"] == "healthy" for c in checks.values())
-
     return {
         "status": "ready" if all_healthy else "not_ready",
         "checks": checks,
