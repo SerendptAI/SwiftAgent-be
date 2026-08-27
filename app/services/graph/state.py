@@ -20,6 +20,15 @@ class AgentState(TypedDict):
     attachments: list[dict]
     agent_provider: str  # 'anthropic', 'gemini', 'openrouter'
     
+    # Multi-language support
+    user_language: str  # ISO 639-1 code (e.g., 'en', 'fr', 'es')
+    kb_language: str    # language for KB search (may differ from user_language)
+    language_instruction: str  # injected into system prompt
+    
+    # Handoff context
+    handoff_context: Optional[dict]
+    handoff_initiated: bool
+    
     # Internal Routing State
     intent: Optional[str]
     escalate_to_human: bool

@@ -51,6 +51,32 @@ async def create_indexes():
     await db.webhook_deliveries.create_index([("company_id", 1), ("created_at", -1)])
     await db.webhook_deliveries.create_index("endpoint_id")
 
+    # gdpr export/deletion jobs
+    await db.gdpr_export_jobs.create_index([("company_id", 1), ("created_at", -1)])
+    await db.gdpr_deletion_requests.create_index(
+        [("company_id", 1), ("created_at", -1)]
+    )
+
+    # knowledge base auto-crawl
+    await db.knowledge_crawl_configs.create_index("company_id", unique=True)
+    await db.knowledge_crawl_configs.create_index([("enabled", 1), ("next_run_at", 1)])
+    await db.knowledge_crawl_runs.create_index("id", unique=True)
+    await db.knowledge_crawl_runs.create_index([("company_id", 1), ("started_at", -1)])
+    await db.knowledge_pages.create_index("id", unique=True)
+    await db.knowledge_pages.create_index(
+        [("company_id", 1), ("canonical_url", 1)], unique=True
+    )
+    await db.knowledge_pages.create_index([("company_id", 1), ("status", 1)])
+    await db.knowledge_gap_events.create_index([("company_id", 1), ("detected_at", -1)])
+    await db.knowledge_gap_events.create_index("session_id", sparse=True)
+    await db.knowledge_gaps.create_index("id", unique=True)
+    await db.knowledge_gaps.create_index(
+        [("company_id", 1), ("topic_key", 1), ("status", 1)]
+    )
+    await db.knowledge_gaps.create_index(
+        [("company_id", 1), ("status", 1), ("priority_score", -1)]
+    )
+
     await db.stroll_versions.create_index("company_id")
     await db.stroll_versions.create_index([("company_id", 1), ("status", 1), ("timestamp", -1)])
 
@@ -163,3 +189,14 @@ async def create_indexes():
         [("status", 1), ("next_retry_at", 1)]
     )
     await db.pending_meter_events.create_index("company_id")
+
+    # Conversation intelligence indexes
+    await db.conversation_intelligence.create_index("session_id", unique=True)
+    await db.conversation_intelligence.create_index("company_id")
+    await db.conversation_intelligence.create_index([("company_id", 1), ("analyzed_at", -1)])
+    await db.conversation_intelligence.create_index([("company_id", 1), ("analyzed_at", -1), ("intent.primary", 1)])
+    await db.conversation_intelligence.create_index([("company_id", 1), ("tags.tag", 1)])
+    await db.conversation_intelligence.create_index("requires_human_review")
+    await db.conversation_intelligence.create_index([("company_id", 1), ("requires_human_review", 1)])
+    await db.message_sentiment.create_index("session_id")
+    await db.message_sentiment.create_index([("session_id", 1), ("turn_index", 1)])
