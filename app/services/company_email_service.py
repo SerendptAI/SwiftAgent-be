@@ -56,6 +56,7 @@ async def create_ticket(
     customer_name: str | None = None,
     priority: str = "medium",
     escalation_reason: str | None = None,
+    handoff_context: dict | None = None,
 ) -> dict:
     """Create a new support ticket (called by the AI agent)."""
     # ensure ticket id is unique (avoid rare collisions)
@@ -115,6 +116,7 @@ async def create_ticket(
         "sla_breached": False,
         "escalation_reason": escalation_reason,
         "escalated_at": now if escalation_reason else None,
+        "handoff_context": handoff_context,
         "activity_log": [
             {
                 "action": "created",

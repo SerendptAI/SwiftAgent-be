@@ -25,6 +25,10 @@ class AgentState(TypedDict):
     kb_language: str    # language for KB search (may differ from user_language)
     language_instruction: str  # injected into system prompt
     
+    # Handoff context
+    handoff_context: Optional[dict]
+    handoff_initiated: bool
+    
     # Internal Routing State
     intent: Optional[str]
     escalate_to_human: bool

@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+
 from app.core.config import settings
 from app.core.database import create_indexes
 from app.services.stroll_service import init_browser, close_browser
@@ -48,6 +49,7 @@ def register_routers(app: FastAPI):
         notifications,
         analytics,
         feedback,
+        handoff,
         intelligence,
         language,
         prompt_studio,
@@ -67,6 +69,7 @@ def register_routers(app: FastAPI):
     app.include_router(dashboard.router, prefix="/api/v1/dashboard")
     app.include_router(analytics.router, prefix="/api/v1/analytics")
     app.include_router(feedback.router)
+    app.include_router(handoff.router, prefix="/api/v1/handoff")
     app.include_router(intelligence.router, prefix="/api/v1/intelligence")
     app.include_router(language.router, prefix="/api/v1")
     app.include_router(prompt_studio.router, prefix="/api/v1/prompt-studio")
@@ -373,6 +376,7 @@ app.add_middleware(CORSMiddleware,
 )
 app.add_middleware(WidgetCorsBypassMiddleware)
 app.add_middleware(AuditMiddleware)
+
 
 
 
