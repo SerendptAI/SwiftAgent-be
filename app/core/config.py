@@ -109,6 +109,7 @@ class Settings(BaseSettings):
     ENABLE_STROLL_SCHEDULER: bool = True
     ENABLE_WRAP_SCHEDULER: bool = True
     ENABLE_TICKET_SCHEDULER: bool = True
+    ENABLE_KNOWLEDGE_CRAWL_SCHEDULER: bool = True
     PLAYWRIGHT_WS_ENDPOINT: Optional[str] = "ws://browserless:3000"
 
     # Expo Push Notifications (optional — push works without it but recommended)

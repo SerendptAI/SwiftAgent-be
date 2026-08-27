@@ -22,6 +22,7 @@ from app.services.stroll_service import init_browser, close_browser
 from app.services.stroll_scheduler import init_scheduler, close_scheduler
 from app.services import wrap_scheduler
 from app.services import ticket_scheduler
+from app.services import knowledge_crawl_scheduler
 from app.core.langfuse import init_langfuse, shutdown_langfuse
 from app.core.audit import AuditMiddleware, ensure_audit_indexes
 
@@ -51,6 +52,7 @@ def register_routers(app: FastAPI):
         feedback,
         handoff,
         intelligence,
+        knowledge_crawl,
         language,
         prompt_studio,
         users,
@@ -71,6 +73,7 @@ def register_routers(app: FastAPI):
     app.include_router(feedback.router)
     app.include_router(handoff.router, prefix="/api/v1/handoff")
     app.include_router(intelligence.router, prefix="/api/v1/intelligence")
+    app.include_router(knowledge_crawl.router, prefix="/api/v1/knowledge-crawl")
     app.include_router(language.router, prefix="/api/v1")
     app.include_router(prompt_studio.router, prefix="/api/v1/prompt-studio")
     app.include_router(billing.router, prefix="/api/v1/billing")
@@ -115,7 +118,22 @@ async def lifespan(app: FastAPI):
 
     # Audit log indexes
     try:
+<<<<<<< HEAD
+        await init_browser()
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "Playwright browser init failed — stroll feature unavailable"
+        )
+
+    # Start stroll schedules
+    try:
+        await init_scheduler()
+        wrap_scheduler.init_scheduler()
+        ticket_scheduler.init_scheduler()
+        await knowledge_crawl_scheduler.init_scheduler()
+=======
         await ensure_audit_indexes()
+>>>>>>> origin/staging
     except Exception as e:
         logging.getLogger(__name__).warning("Audit DB index creation failed: %s", e)
 
@@ -160,6 +178,7 @@ async def lifespan(app: FastAPI):
         await close_scheduler()
         wrap_scheduler.close_scheduler()
         ticket_scheduler.close_scheduler()
+        await knowledge_crawl_scheduler.close_scheduler()
     except Exception:
         pass
 
@@ -376,6 +395,7 @@ app.add_middleware(CORSMiddleware,
 )
 app.add_middleware(WidgetCorsBypassMiddleware)
 app.add_middleware(AuditMiddleware)
+
 
 
 

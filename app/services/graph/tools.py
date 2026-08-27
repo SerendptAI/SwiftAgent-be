@@ -38,7 +38,12 @@ async def search_knowledge_base(query: str, config: RunnableConfig) -> dict:
     )
 
     search_result = await knowledge_service.search_knowledge(
-        user_id, translated_query, limit=3, threshold=0.5, company_id=company_id
+        user_id,
+        translated_query,
+        limit=3,
+        threshold=0.5,
+        company_id=company_id,
+        session_id=state.get("session_id"),
     )
     results = search_result.get("results", [])
     if not results:
