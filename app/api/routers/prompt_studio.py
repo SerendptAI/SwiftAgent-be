@@ -18,10 +18,7 @@ from app.models.prompt_models import (
 router = APIRouter(tags=["Prompt Studio"])
 
 
-@router.on_event("startup")
-async def init_prompt_studio():
-    await ensure_prompt_indexes()
-    await seed_default_prompts()
+
 
 
 @router.get("/prompt-studio/templates")

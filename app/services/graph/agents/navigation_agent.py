@@ -20,7 +20,10 @@ async def navigation_agent_node(state: AgentState, config):
     rendered = await render_prompt_for_company("navigation_agent", state.get("company_data", {}), state.get("company_id"))
     prompt_text = rendered.rendered_text if rendered.rendered_text else NAVIGATION_PROMPT
     
-    persona = build_company_persona_prompt(state.get("company_data", {}))
+    persona = build_company_persona_prompt(
+        state.get("company_data", {}),
+        language_instruction=state.get("language_instruction", ""),
+    )
     full_prompt = f"{persona}\n\n{prompt_text}"
     messages = [SystemMessage(content=full_prompt)] + state["messages"]
     response = await llm_with_tools.ainvoke(messages, config)

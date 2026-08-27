@@ -22,9 +22,17 @@ async def scraper_agent_node(state: AgentState, config):
     
     from app.services.prompt_service import render_prompt_for_company
     rendered = await render_prompt_for_company("scraper_agent", state.get("company_data", {}), state.get("company_id"))
-    prompt_text = rendered.rendered_text if rendered.rendered_text else SCRAPER_PROMPT
     
-    persona = build_company_persona_prompt(state.get("company_data", {}))
+    if rendered.rendered_text:
+        prompt_text = rendered.rendered_text
+    else:
+        website = state.get("company_data", {}).get("website", "")
+        prompt_text = SCRAPER_PROMPT.format(website=website or "Not configured")
+        
+    persona = build_company_persona_prompt(
+        state.get("company_data", {}),
+        language_instruction=state.get("language_instruction", ""),
+    )
     full_prompt = f"{persona}\n\n{prompt_text}"
     messages = [SystemMessage(content=full_prompt)] + state["messages"]
     response = await llm_with_tools.ainvoke(messages, config)

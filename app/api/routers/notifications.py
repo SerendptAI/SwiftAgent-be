@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission
 from app.core.config import settings
 from app.models.notification_models import NotificationListResponse, NotificationResponse, VapidPublicKeyResponse
 from app.models.otp_challenge_models import RegisterDeviceRequest, TestPushNotificationRequest
@@ -24,7 +25,7 @@ async def get_vapid_public_key():
 @router.post("/devices/register")
 async def register_push_device(
     body: RegisterDeviceRequest,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Register a push token (Expo or Web Push subscription)."""
     user_id = user["user_id"]
@@ -39,7 +40,7 @@ async def register_push_device(
 @router.delete("/devices/{device_token}")
 async def unregister_push_device(
     device_token: str,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Unregister a push token."""
     removed = await unregister_device(user["user_id"], device_token)
@@ -50,7 +51,7 @@ async def unregister_push_device(
 @router.post("/test-push")
 async def send_test_push_notification(
     body: TestPushNotificationRequest,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Send a test push notification to all registered devices of the authenticated user."""
     # Also save it to history for testing purposes
@@ -80,7 +81,7 @@ async def send_test_push_notification(
 async def get_notifications(
     limit: int = Query(50, ge=1, le=100),
     skip: int = Query(0, ge=0),
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Get the notification history for the authenticated user."""
     return await notification_service.get_user_notifications(
@@ -92,7 +93,7 @@ async def get_notifications(
 @router.put("/{notification_id}/read")
 async def mark_notification_as_read(
     notification_id: str,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Mark a specific notification as read."""
     success = await notification_service.mark_as_read(user["user_id"], notification_id)
@@ -102,7 +103,7 @@ async def mark_notification_as_read(
 
 @router.post("/read-all")
 async def mark_all_notifications_as_read(
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Mark all unread notifications as read."""
     updated_count = await notification_service.mark_all_as_read(user["user_id"])
@@ -111,7 +112,7 @@ async def mark_all_notifications_as_read(
 @router.delete("/{notification_id}")
 async def delete_notification(
     notification_id: str,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Delete a specific notification from history."""
     success = await notification_service.delete_notification(user["user_id"], notification_id)

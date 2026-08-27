@@ -86,7 +86,10 @@ async def orchestrator_node(state: AgentState, config):
     rendered = await render_prompt_for_company("orchestrator", state.get("company_data", {}), state.get("company_id"))
     prompt_text = rendered.rendered_text if rendered.rendered_text else ORCHESTRATOR_PROMPT
     
-    persona = build_company_persona_prompt(state.get("company_data", {}))
+    persona = build_company_persona_prompt(
+        state.get("company_data", {}),
+        language_instruction=state.get("language_instruction", ""),
+    )
     full_prompt = f"{persona}\n\n{prompt_text}"
     messages = [SystemMessage(content=full_prompt)] + state["messages"]
     response = await llm_with_tools.ainvoke(messages, config)
@@ -95,12 +98,24 @@ async def orchestrator_node(state: AgentState, config):
     escalate = False
     
     if getattr(response, "tool_calls", None):
-        tool_name = response.tool_calls[0]["name"]
-        if tool_name == "transfer_to_knowledge": intent = "knowledge"
-        elif tool_name == "transfer_to_navigation": intent = "navigation"
-        elif tool_name == "transfer_to_api": intent = "api"
-        elif tool_name == "transfer_to_scraper": intent = "scraper"
-        elif tool_name == "escalate_to_human": intent = "human_escalation"; escalate = True
+        tool_call = response.tool_calls[0]
+        tool_name = tool_call["name"]
+        
+        if tool_name == "transfer_to_knowledge":
+            intent = "knowledge"
+        elif tool_name == "transfer_to_navigation":
+            intent = "navigation"
+        elif tool_name == "transfer_to_api":
+            intent = "api"
+        elif tool_name == "transfer_to_scraper":
+            intent = "scraper"
+        elif tool_name == "escalate_to_human":
+            intent = "human_escalation"
+            escalate = True
+        
+        # We don't append the AIMessage to state if it's just a handoff, 
+        # so the worker agent gets the original user message as the last message!
+>>>>>>> origin/staging
         return {"intent": intent, "escalate_to_human": escalate}
         
     return {"intent": intent, "messages": [response]}
