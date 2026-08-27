@@ -36,6 +36,7 @@ async def create_indexes():
     await db.widget_conversations.create_index([("company_id", 1), ("session_id", 1)], unique=True)
     await db.widget_conversations.create_index([("company_id", 1), ("created_at", -1)])
     await db.widget_conversations.create_index([("created_at", -1)])
+    await db.widget_conversations.create_index([("company_id", 1), ("updated_at", 1)])
 
     await db.visitors.create_index("company_id")
     await db.visitors.create_index([("company_id", 1), ("visitor_id", 1), ("timestamp", 1)])

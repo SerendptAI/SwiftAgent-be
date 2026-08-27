@@ -170,10 +170,15 @@ async def _sdk_chat_sse_generator(company_id: str, email: str, req: SdkChatReque
 
         # Save user message to widget_conversations if it's a chat that is NOT YET escalated
         if not is_escalated and not ticket:
+            from app.services import conversation_privacy_service
+
+            stored_message = await conversation_privacy_service.redact_message_on_ingest(
+                company_id, req.message
+            )
             user_msg_doc = {
                 "id": str(uuid4()),
                 "role": "user",
-                "content": req.message,
+                "content": stored_message,
                 "timestamp": user_timestamp or now_iso,
                 "attachments": attachments_raw
             }

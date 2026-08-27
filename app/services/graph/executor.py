@@ -232,10 +232,15 @@ async def chat_stream_graph(
 
         # Store assistant message in DB
         if final_text:
+            from app.services import conversation_privacy_service
+
+            stored_text = await conversation_privacy_service.redact_message_on_ingest(
+                company_id, final_text
+            )
             assistant_msg_doc = {
                 "id": str(uuid4()),
                 "role": "assistant",
-                "content": final_text,
+                "content": stored_text,
                 "timestamp": datetime.now(tz=timezone.utc).isoformat()
             }
             await db.widget_conversations.update_one(
