@@ -218,6 +218,9 @@ class Settings(BaseSettings):
             raise ValueError(f"LOG_LEVEL must be one of {valid}")
         return v.upper()
 
+    # Audit log
+    AUDIT_LOG_RETENTION_DAYS: int = 365
+
     @property
     def is_development(self) -> bool:
         return self.ENVIRONMENT.lower() in ("development", "dev", "local")

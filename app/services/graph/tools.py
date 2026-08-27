@@ -11,6 +11,7 @@ from app.services import (
     integration_service,
     page_reader_service,
 )
+from app.services.language_service import get_kb_search_query
 from app.core.database import db
 
 logger = logging.getLogger(__name__)
@@ -30,9 +31,15 @@ async def search_knowledge_base(query: str, config: RunnableConfig) -> dict:
     if not company_id or not user_id:
         return {"error": "Company context not available"}
 
+    translated_query = await get_kb_search_query(
+        query=query,
+        user_language=state.get("user_language", "en"),
+        kb_language=state.get("kb_language", "en"),
+    )
+
     search_result = await knowledge_service.search_knowledge(
         user_id,
-        query,
+        translated_query,
         limit=3,
         threshold=0.5,
         company_id=company_id,

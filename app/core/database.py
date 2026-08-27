@@ -178,3 +178,14 @@ async def create_indexes():
         [("status", 1), ("next_retry_at", 1)]
     )
     await db.pending_meter_events.create_index("company_id")
+
+    # Conversation intelligence indexes
+    await db.conversation_intelligence.create_index("session_id", unique=True)
+    await db.conversation_intelligence.create_index("company_id")
+    await db.conversation_intelligence.create_index([("company_id", 1), ("analyzed_at", -1)])
+    await db.conversation_intelligence.create_index([("company_id", 1), ("analyzed_at", -1), ("intent.primary", 1)])
+    await db.conversation_intelligence.create_index([("company_id", 1), ("tags.tag", 1)])
+    await db.conversation_intelligence.create_index("requires_human_review")
+    await db.conversation_intelligence.create_index([("company_id", 1), ("requires_human_review", 1)])
+    await db.message_sentiment.create_index("session_id")
+    await db.message_sentiment.create_index([("session_id", 1), ("turn_index", 1)])

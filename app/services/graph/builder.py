@@ -87,6 +87,7 @@ async def human_handoff_node(state: AgentState, config):
     from app.services import company_email_service
     from langchain_core.messages import AIMessage
     import logging
+    import re
     
     logger = logging.getLogger(__name__)
     company_id = state.get("company_id")
@@ -96,7 +97,6 @@ async def human_handoff_node(state: AgentState, config):
     # Try to extract email from the last user message if not already known
     if not customer_email and state.get("messages"):
         last_msg = state["messages"][-1]
-        import re
         if getattr(last_msg, "type", None) == "human":
             match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', last_msg.content)
             if match:
@@ -104,32 +104,66 @@ async def human_handoff_node(state: AgentState, config):
     
     if not customer_email:
         return {"messages": [AIMessage(content="I will escalate your request to our human support team. Please provide your email address below so we can create a ticket and get back to you shortly.")]}
-        
+    
     try:
-        # Load chat history for summary
+        # Load conversation for enhanced handoff
         from app.core.database import db
+        from app.services.handoff_service import create_enhanced_handoff
+        
         conversation = await db.widget_conversations.find_one({"company_id": company_id, "session_id": session_id})
         subject = conversation.get("subject", "Support Request via Escalation") if conversation else "Support Request"
-        chat_summary = "User escalated chat."
-        if conversation and "messages" in conversation:
-            history_texts = [f"{m.get('role', 'user')}: {m.get('content', '')}" for m in conversation.get("messages", [])]
-            chat_summary = "\n\n".join(history_texts)
-            
+        messages = conversation.get("messages", []) if conversation else []
+        
+        # Build rich handoff context
+        handoff_data = await create_enhanced_handoff(
+            session_id=session_id,
+            company_id=company_id,
+            messages=messages,
+            escalation_reason="human_request",
+            customer_email=customer_email,
+            intent=state.get("intent") or "general_chat",
+            page_url=state.get("page_url"),
+        )
+        
+        # Create ticket with handoff context
+        chat_summary = handoff_data["handoff_context"]["conversation_summary"]
+        
         ticket = await company_email_service.create_ticket(
-            company_id=state["company_id"],
+            company_id=company_id,
             customer_email=customer_email,
             subject=subject,
             chat_summary=chat_summary,
             chat_session_id=session_id,
             customer_name=None,
+            handoff_context=handoff_data["handoff_context"],
         )
         
         await db.widget_conversations.update_one(
-            {"company_id": state["company_id"], "session_id": session_id},
+            {"company_id": company_id, "session_id": session_id},
             {"$set": {"escalated": True, "ticket_id": ticket["id"]}}
         )
         
-        msg = f"Thank you! Your chat has been escalated to our human support team as Ticket #{ticket['id']}. We will reach out to you at {customer_email} shortly."
+        # Build customer-facing message with agent name and wait time
+        wait_time = handoff_data["wait_time_estimate"]
+        available_agents = handoff_data["available_agents"]
+        
+        if available_agents and wait_time["has_agents_available"]:
+            agent_name = available_agents[0]["name"]
+            wait_minutes = wait_time["estimated_wait_minutes"]
+            if wait_minutes <= 5:
+                msg = f"I'm connecting you to {agent_name} from our support team. They'll be with you shortly (estimated wait: under 5 minutes). Your ticket is #{ticket['id']}."
+            else:
+                msg = f"I'm connecting you to {agent_name} from our support team. Estimated wait time: {wait_minutes} minutes. Your ticket is #{ticket['id']}."
+        else:
+            msg = f"Thank you! Your chat has been escalated to our human support team as Ticket #{ticket['id']}. We will reach out to you at {customer_email} shortly."
+        
+        # Store handoff context in state for the SSE generator
+        return {
+            "messages": [AIMessage(content=msg)],
+            "escalate_to_human": True,
+            "handoff_context": handoff_data,
+            "handoff_initiated": True,
+        }
     except Exception as e:
         logger.exception("Failed to create support ticket in graph")
         msg = "We are currently unable to create a ticket automatically. Please email our support team directly."

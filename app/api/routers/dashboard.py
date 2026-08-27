@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import Optional
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission
 from app.core.database import db
 from app.models.dashboard_models import (
     DashboardStats,
@@ -19,7 +20,7 @@ router = APIRouter(tags=["Dashboard"])
 @router.get("/{company_id}/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
     company_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("analytics:read")),
 ):
     """Get dashboard stat cards for a company."""
     user_id = current_user["user_id"]
@@ -36,7 +37,7 @@ async def get_visitors(
         default=settings.DEFAULT_PAGE_LIMIT, ge=1, le=settings.MAX_PAGE_LIMIT
     ),
     skip: int = Query(default=0, ge=0),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("analytics:read")),
 ):
     """Get recent visitor records for a company."""
     user_id = current_user["user_id"]
@@ -59,7 +60,7 @@ async def get_chats(
     company_id: str,
     limit: int = Query(default=50, ge=1, le=settings.MAX_PAGE_LIMIT),
     skip: int = Query(default=0, ge=0),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("conversations:read")),
 ):
     """Get resolved items: non-escalated chats + resolved tickets (Resolved section)."""
     user_id = current_user["user_id"]
@@ -81,7 +82,7 @@ async def get_chats(
 async def get_chat_by_id(
     company_id: str,
     chat_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Get the full history of a specific chat session."""
     user_id = current_user["user_id"]
@@ -99,7 +100,7 @@ async def get_chat_by_id(
 async def mark_chat_seen(
     company_id: str,
     chat_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Mark a chat session as seen."""
     user_id = current_user["user_id"]

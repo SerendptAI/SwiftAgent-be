@@ -5,6 +5,7 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission
 from app.core.security import decode_access_token
 from app.core.database import db
 from app.services.company_service import get_company
@@ -56,7 +57,7 @@ async def get_authorized_company(company_id: str, current_user: dict):
 async def create_website_form(
     company_id: str,
     form_data: WebsiteFormCreate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     return await form_service.create_website_form(company_id, form_data)
@@ -66,7 +67,7 @@ async def create_website_form(
 async def create_online_form(
     company_id: str,
     form_data: OnlineFormCreate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     return await form_service.create_online_form(company_id, form_data)
@@ -77,7 +78,7 @@ async def create_online_form(
 @router.get("/{company_id}/delete/websites", response_model=List[WebsiteDeleteInfo])
 async def list_websites_for_delete(
     company_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     return await form_service.get_websites_for_company(company_id)
@@ -87,7 +88,7 @@ async def list_websites_for_delete(
 async def list_pages_for_delete(
     company_id: str,
     form_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     return await form_service.get_pages_for_form(form_id, company_id)
@@ -98,7 +99,7 @@ async def list_forms_for_delete(
     company_id: str,
     form_id: str,
     page_path: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     return await form_service.get_forms_for_page(form_id, company_id, page_path)
@@ -112,7 +113,7 @@ async def list_entries_for_delete(
     form_identifier: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     return await form_service.get_entries_for_form_group(form_id, company_id, page_path, form_identifier, skip, limit)
@@ -122,7 +123,7 @@ async def list_entries_for_delete(
 async def delete_website(
     company_id: str,
     website: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     deleted = await form_service.delete_website(company_id, website)
@@ -135,7 +136,7 @@ async def delete_form_group(
     form_id: str,
     page_path: str,
     form_identifier: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     deleted_count = await form_service.delete_by_form_identifier(form_id, company_id, page_path, form_identifier)
@@ -147,7 +148,7 @@ async def delete_page(
     company_id: str,
     form_id: str,
     page_path: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     # This overlaps with legacy delete_page, but uses form_id instead of website url
     await get_authorized_company(company_id, current_user)
@@ -159,7 +160,7 @@ async def delete_page(
 async def bulk_delete_submissions(
     company_id: str,
     request: BulkDeleteRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     deleted_count = await form_service.delete_submissions_bulk(request.submission_ids, company_id)
@@ -172,7 +173,7 @@ async def bulk_delete_submissions(
 async def get_form_overview(
     company_id: str,
     form_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     overview = await form_service.get_website_overview(form_id, company_id)
@@ -190,7 +191,7 @@ async def list_form_group_submissions(
     is_read: Optional[bool] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     return await form_service.get_submissions_by_form_group(form_id, company_id, page_path, form_identifier, is_read, skip, limit)
@@ -204,7 +205,7 @@ async def list_page_submissions(
     is_read: Optional[bool] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     return await form_service.get_submissions_by_page(form_id, company_id, page_path, is_read, skip, limit)
@@ -216,7 +217,7 @@ async def list_page_submissions(
 async def get_form_keys(
     company_id: str,
     form_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     keys = await form_service.get_form_keys(form_id, company_id)
@@ -229,7 +230,7 @@ async def get_form_keys(
 async def regenerate_form_keys(
     company_id: str,
     form_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     keys = await form_service.regenerate_form_keys(form_id, company_id)
@@ -252,7 +253,7 @@ async def rename_form_group(
     page_path: str,
     form_identifier: str,
     request: FormRenameRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     success = await form_service.rename_form_group(form_id, company_id, page_path, form_identifier, request.new_name)
@@ -265,7 +266,7 @@ async def rename_form_group(
 async def update_website_label(
     company_id: str,
     payload: WebsiteLabelUpdate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     updated = await form_service.rename_website_label(company_id, payload.old_website, payload.new_website)
@@ -276,7 +277,7 @@ async def update_website_label(
 async def update_page_label(
     company_id: str,
     payload: PageLabelUpdate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     updated = await form_service.rename_page_label(company_id, payload.website, payload.old_page, payload.new_page)
@@ -290,7 +291,7 @@ async def list_forms(
     company_id: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     return await form_service.get_forms_for_company(company_id, skip, limit)
@@ -302,7 +303,7 @@ async def list_all_submissions(
     is_read: Optional[bool] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     return await form_service.get_all_submissions_for_company(company_id, is_read, skip, limit)
@@ -311,7 +312,7 @@ async def list_all_submissions(
 @router.get("/{company_id}/labels", response_model=LabelsResponse)
 async def get_labels(
     company_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     return await form_service.get_labels_for_company(company_id)
@@ -322,7 +323,7 @@ async def delete_page_legacy(
     company_id: str,
     website: str,
     page: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     deleted = await form_service.delete_page(company_id, website, page)
@@ -333,7 +334,7 @@ async def delete_page_legacy(
 async def get_form(
     company_id: str,
     form_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     form = await form_service.get_form_by_id(form_id)
@@ -347,7 +348,7 @@ async def update_form(
     company_id: str,
     form_id: str,
     update_data: FormUpdate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     form = await form_service.update_form(form_id, company_id, update_data)
@@ -360,7 +361,7 @@ async def update_form(
 async def delete_form(
     company_id: str,
     form_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     success = await form_service.delete_form(form_id, company_id)
@@ -373,7 +374,7 @@ async def delete_form(
 async def pause_form_endpoint(
     company_id: str,
     form_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     form = await form_service.pause_form(form_id, company_id)
@@ -386,7 +387,7 @@ async def pause_form_endpoint(
 async def resume_form_endpoint(
     company_id: str,
     form_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     form = await form_service.resume_form(form_id, company_id)
@@ -402,7 +403,7 @@ async def list_form_submissions(
     is_read: Optional[bool] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     return await form_service.get_submissions_for_form(form_id, company_id, is_read, skip, limit)
@@ -412,7 +413,7 @@ async def list_form_submissions(
 async def mark_submission_read(
     company_id: str,
     submission_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     submission = await form_service.mark_submission_as_read(submission_id, company_id)
@@ -425,7 +426,7 @@ async def mark_submission_read(
 async def get_submission(
     company_id: str,
     submission_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     submission = await form_service.get_submission_by_id(submission_id, company_id)
@@ -438,7 +439,7 @@ async def get_submission(
 async def delete_submission(
     company_id: str,
     submission_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     await get_authorized_company(company_id, current_user)
     success = await form_service.delete_submission(submission_id, company_id)
@@ -451,7 +452,7 @@ async def reply_to_submission(
     company_id: str,
     submission_id: str,
     request: FormReplyRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     company = await get_authorized_company(company_id, current_user)
     
