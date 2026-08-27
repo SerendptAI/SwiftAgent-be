@@ -18,6 +18,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission
 from app.core.database import db
 from app.services import stroll_service, company_service
 from app.services.billing_service import billing_service
@@ -82,7 +83,7 @@ async def _run_stroll_background(company_id: str):
         mark_stroll_done(company_id)
 
 @router.get("/{company_id}/config")
-async def get_config(company_id: str, user: dict = Depends(get_current_user)):
+async def get_config(company_id: str, user: dict = Depends(require_permission("tickets:read"))):
     """Get the stroll configuration for a company."""
     await _verify_company_access(user["user_id"], company_id)
     config = await stroll_service.get_stroll_config(company_id)
@@ -98,7 +99,7 @@ async def get_config(company_id: str, user: dict = Depends(get_current_user)):
 async def update_config(
     company_id: str,
     data: StrollConfigCreate,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Create or update the stroll configuration for a company."""
     user_id = user["user_id"]
@@ -125,7 +126,7 @@ async def update_config(
 async def trigger_stroll(
     company_id: str,
     background_tasks: BackgroundTasks,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Trigger a manual stroll (runs in the background)."""
     company = await _verify_company_access(user["user_id"], company_id)
@@ -152,7 +153,7 @@ async def trigger_stroll(
 async def list_versions(
     company_id: str,
     limit: int = 10,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """List stroll versions for a company."""
     await _verify_company_access(user["user_id"], company_id)
@@ -163,7 +164,7 @@ async def list_versions(
 @router.get("/{company_id}/versions/latest")
 async def get_latest_stroll_version(
     company_id: str,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Get the latest successful stroll version with full graph data."""
     await _verify_company_access(user["user_id"], company_id)
@@ -177,7 +178,7 @@ async def get_latest_stroll_version(
 async def get_version(
     company_id: str,
     version_id: str,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Get a specific stroll version with full graph data."""
     await _verify_company_access(user["user_id"], company_id)
@@ -192,7 +193,7 @@ async def get_version(
 
 
 @router.get("/{company_id}/status")
-async def get_status(company_id: str, user: dict = Depends(get_current_user)):
+async def get_status(company_id: str, user: dict = Depends(require_permission("tickets:read"))):
     """Get the latest stroll status for a company."""
     await _verify_company_access(user["user_id"], company_id)
     version = await stroll_service.get_latest_version(company_id)
@@ -213,7 +214,7 @@ async def get_status(company_id: str, user: dict = Depends(get_current_user)):
 @router.get("/{company_id}/documentation")
 async def get_documentation(
     company_id: str,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Get the full dashboard documentation derived from the latest stroll graph."""
     await _verify_company_access(user["user_id"], company_id)

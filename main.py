@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 import uuid
@@ -14,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+<<<<<<< HEAD
 from app.api.routers import (
     auth,
     knowledge,
@@ -35,15 +37,90 @@ from app.api.routers import (
     notifications,
     analytics,
     feedback,
-    gdpr,
-)
+
 from app.core.config import settings
 from app.core.database import create_indexes
 from app.services.stroll_service import init_browser, close_browser
 from app.services.stroll_scheduler import init_scheduler, close_scheduler
 from app.services import wrap_scheduler
 from app.services import ticket_scheduler
+from app.services import knowledge_crawl_scheduler
 from app.core.langfuse import init_langfuse, shutdown_langfuse
+from app.core.audit import AuditMiddleware, ensure_audit_indexes
+
+
+def register_routers(app: FastAPI):
+    """Lazy-load routers to keep startup instant."""
+    from app.api.routers import (
+        auth,
+        audit_log,
+        gdpr,
+        knowledge,
+        diagnosis,
+        conversations,
+        companies,
+        dashboard,
+        voice,
+        billing,
+        chat,
+        stroll,
+        stroll_public,
+        email,
+        mobile,
+        sdk,
+        forms,
+        forms_public,
+        integrations,
+        notifications,
+        analytics,
+        feedback,
+        handoff,
+        intelligence,
+        knowledge_crawl,
+        language,
+        prompt_studio,
+        users,
+    )
+
+    # routers
+    app.mount("/chat-avatars", StaticFiles(directory="app/chat-avatars"), name="chat-avatars")
+    app.mount("/email-fonts", StaticFiles(directory="app/email_templates/fonts"), name="email-fonts")
+    app.mount("/images", StaticFiles(directory="app/email_templates/images"), name="images")
+    app.mount("/static", StaticFiles(directory="app/static"), name="static")
+    app.include_router(auth.router, prefix="/api/v1/auth")
+    app.include_router(audit_log.router, prefix="/api/v1/audit")
+    app.include_router(gdpr.router, prefix="/api/v1/gdpr")
+    app.include_router(knowledge.router, prefix="/api/v1/knowledge")
+    app.include_router(diagnosis.router, prefix="/api/v1/diagnosis")
+    app.include_router(conversations.router, prefix="/api/v1/conversations")
+    app.include_router(companies.router, prefix="/api/v1/companies")
+    app.include_router(dashboard.router, prefix="/api/v1/dashboard")
+    app.include_router(analytics.router, prefix="/api/v1/analytics")
+    app.include_router(feedback.router)
+    app.include_router(handoff.router, prefix="/api/v1/handoff")
+    app.include_router(intelligence.router, prefix="/api/v1/intelligence")
+    app.include_router(knowledge_crawl.router, prefix="/api/v1/knowledge-crawl")
+    app.include_router(language.router, prefix="/api/v1")
+    app.include_router(prompt_studio.router, prefix="/api/v1/prompt-studio")
+    app.include_router(billing.router, prefix="/api/v1/billing")
+
+    app.include_router(voice.router, prefix="/api/v1/voice")
+    app.include_router(chat.router, prefix="/api/v1/chat")
+    app.include_router(stroll.router, prefix="/api/v1/stroll")
+    app.include_router(stroll_public.router, prefix="/api/v1/public/stroll")
+    app.include_router(email.router, prefix="/api/v1/email")
+    app.include_router(mobile.router, prefix="/api/v1/mobile")
+    app.include_router(sdk.router, prefix="/api/v1/sdk", tags=["SDK"])
+    app.include_router(forms.router, prefix="/api/v1/forms", tags=["Forms"])
+    app.include_router(forms_public.router, prefix="/api/v1/public/forms", tags=["Forms"])
+    app.include_router(
+        integrations.router,
+        prefix="/api/v1/companies/{company_id}/integrations",
+        tags=["API Integrations"],
+    )
+    app.include_router(notifications.router, prefix="/api/v1/notifications")
+    app.include_router(users.router, prefix="/api/v1", tags=["User Management"])
+
 
 # structured logging setup
 logging.basicConfig(
@@ -54,15 +131,21 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Register routes (lazy imports happen here, but app is already created)
+    register_routers(app)
+
     try:
         await create_indexes()
+        await audit_service.ensure_audit_indexes()
     except Exception as e:
         logging.getLogger(__name__).warning("DB index creation failed: %s", e)
 
     # Langfuse LLM observability (no-ops gracefully if keys are unset)
     init_langfuse()
 
+    # Audit log indexes
     try:
+<<<<<<< HEAD
         await init_browser()
     except Exception:
         logging.getLogger(__name__).warning(
@@ -74,15 +157,55 @@ async def lifespan(app: FastAPI):
         await init_scheduler()
         wrap_scheduler.init_scheduler()
         ticket_scheduler.init_scheduler()
+        await knowledge_crawl_scheduler.init_scheduler()
+=======
+        await ensure_audit_indexes()
+>>>>>>> origin/staging
     except Exception as e:
-        logging.getLogger(__name__).error(f"Scheduler init failed: {e}")
+        logging.getLogger(__name__).warning("Audit DB index creation failed: %s", e)
+
+    # Prompt Studio initialization
+    from app.api.routers.prompt_studio import ensure_prompt_indexes, seed_default_prompts
+    try:
+        await ensure_prompt_indexes()
+        await seed_default_prompts()
+    except Exception as e:
+        logging.getLogger(__name__).warning("Prompt studio initialization failed: %s", e)
+
+    # Start heavy services in background — app is already serving
+    async def _init_heavy_services():
+        try:
+            await init_browser()
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Playwright browser init failed — stroll feature unavailable"
+            )
+
+        try:
+            await init_scheduler()
+            wrap_scheduler.init_scheduler()
+            ticket_scheduler.init_scheduler()
+        except Exception as e:
+            logging.getLogger(__name__).error(f"Scheduler init failed: {e}")
+
+    heavy_services_task = asyncio.create_task(_init_heavy_services())
+    app.state.heavy_services_task = heavy_services_task
 
     yield
+    # Cancel heavy init task if it's still running
+    if getattr(app.state, "heavy_services_task", None) and not app.state.heavy_services_task.done():
+        app.state.heavy_services_task.cancel()
+        try:
+            await app.state.heavy_services_task
+        except asyncio.CancelledError:
+            pass
+
     # shutdown: close Playwright browser and scheduler
     try:
         await close_scheduler()
         wrap_scheduler.close_scheduler()
         ticket_scheduler.close_scheduler()
+        await knowledge_crawl_scheduler.close_scheduler()
     except Exception:
         pass
 
@@ -286,9 +409,9 @@ class LoggingMiddleware:
 
 
 # Middleware execution order (Starlette reverses registration order):
-# WidgetCorsBypassMiddleware → LoggingMiddleware → RequestIdMiddleware → CORSMiddleware → app
-# WidgetCorsBypassMiddleware is registered last so it executes FIRST (outermost),
-# allowing it to overwrite CORS headers AFTER CORSMiddleware has already run.
+# AuditMiddleware → WidgetCorsBypassMiddleware → LoggingMiddleware → RequestIdMiddleware → CORSMiddleware → app
+# AuditMiddleware is registered last so it executes FIRST (outermost),
+# capturing all requests including those that may be blocked by other middleware.
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(CORSMiddleware,
@@ -298,7 +421,9 @@ app.add_middleware(CORSMiddleware,
     allow_headers=["*"],
 )
 app.add_middleware(WidgetCorsBypassMiddleware)
+app.add_middleware(AuditMiddleware)
 
+<<<<<<< HEAD
 # routers
 app.mount("/chat-avatars", StaticFiles(directory="app/chat-avatars"), name="chat-avatars")
 app.mount("/email-fonts", StaticFiles(directory="app/email_templates/fonts"), name="email-fonts")
@@ -330,6 +455,8 @@ app.include_router(
     tags=["API Integrations"],
 )
 app.include_router(notifications.router, prefix="/api/v1/notifications")
+=======
+>>>>>>> origin/staging
 
 # global exception handlers
 @app.exception_handler(RequestValidationError)

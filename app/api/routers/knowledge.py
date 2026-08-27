@@ -13,6 +13,7 @@ from fastapi import (
 )
 from typing import Optional
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission, require_company_access
 from app.models.knowledge_models import (
     DocumentIngest,
     DocumentResponse,
@@ -36,7 +37,7 @@ router = APIRouter(tags=["Knowledge"])
 async def ingest_document(
     document: DocumentIngest,
     background_tasks: BackgroundTasks,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("knowledge:write")),
     db=Depends(get_database),
 ):
     """Ingest a new knowledge document."""
@@ -79,7 +80,7 @@ async def ingest_document(
 
 @router.get("/")
 async def list_documents(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("knowledge:read")),
     db=Depends(get_database),
     limit: int = Query(
         default=settings.DEFAULT_PAGE_LIMIT, ge=1, le=settings.MAX_PAGE_LIMIT
@@ -110,7 +111,7 @@ async def list_documents(
 @router.get("/{document_id}", response_model=DocumentResponse)
 async def get_document(
     document_id: str,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
     db=Depends(get_database),
 ):
     """Get a specific knowledge document by ID."""
@@ -126,7 +127,7 @@ async def get_document(
 @router.post("/query", response_model=QueryResponse)
 async def query_knowledge(
     request: QueryRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Semantic search over knowledge base."""
     user_id = current_user["user_id"]
@@ -146,7 +147,7 @@ async def upload_knowledge_document(
     company_id: str = Form(...),
     category: str = Form("general"),
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
     db=Depends(get_database),
 ):
     """Upload a document to Cloudinary and ingest its content as knowledge."""
