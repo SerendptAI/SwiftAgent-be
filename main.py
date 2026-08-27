@@ -55,6 +55,7 @@ def register_routers(app: FastAPI):
         auth,
         audit_log,
         gdpr,
+        webhooks,
         knowledge,
         diagnosis,
         conversations,
@@ -90,6 +91,7 @@ def register_routers(app: FastAPI):
     app.include_router(auth.router, prefix="/api/v1/auth")
     app.include_router(audit_log.router, prefix="/api/v1/audit")
     app.include_router(gdpr.router, prefix="/api/v1/gdpr")
+    app.include_router(webhooks.router, prefix="/api/v1/webhooks")
     app.include_router(knowledge.router, prefix="/api/v1/knowledge")
     app.include_router(diagnosis.router, prefix="/api/v1/diagnosis")
     app.include_router(conversations.router, prefix="/api/v1/conversations")
@@ -431,7 +433,11 @@ app.mount("/images", StaticFiles(directory="app/email_templates/images"), name="
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(auth.router, prefix="/api/v1/auth")
 app.include_router(knowledge.router, prefix="/api/v1/knowledge")
+<<<<<<< HEAD
+app.include_router(webhooks.router, prefix="/api/v1/webhooks")
+=======
 app.include_router(gdpr.router, prefix="/api/v1/gdpr")
+>>>>>>> origin/staging
 app.include_router(diagnosis.router, prefix="/api/v1/diagnosis")
 app.include_router(conversations.router, prefix="/api/v1/conversations")
 app.include_router(companies.router, prefix="/api/v1/companies")
