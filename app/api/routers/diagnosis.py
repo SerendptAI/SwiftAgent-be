@@ -1,6 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission
 from app.models.diagnosis_models import DiagnosisRequest, DiagnosisResponse
 from app.services import chain_service
 
@@ -12,7 +13,7 @@ router = APIRouter(tags=["Diagnosis"])
 @router.post("/", response_model=DiagnosisResponse)
 async def diagnose_transaction(
     request: DiagnosisRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
 ):
     """Diagnose an on-chain transaction."""
     try:
