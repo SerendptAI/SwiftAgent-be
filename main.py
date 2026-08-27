@@ -37,11 +37,7 @@ from app.api.routers import (
     notifications,
     analytics,
     feedback,
-    audit_log,
-)
-=======
 
->>>>>>> origin/staging
 from app.core.config import settings
 from app.core.database import create_indexes
 from app.services.stroll_service import init_browser, close_browser
@@ -58,6 +54,7 @@ def register_routers(app: FastAPI):
     from app.api.routers import (
         auth,
         audit_log,
+        gdpr,
         knowledge,
         diagnosis,
         conversations,
@@ -92,6 +89,7 @@ def register_routers(app: FastAPI):
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
     app.include_router(auth.router, prefix="/api/v1/auth")
     app.include_router(audit_log.router, prefix="/api/v1/audit")
+    app.include_router(gdpr.router, prefix="/api/v1/gdpr")
     app.include_router(knowledge.router, prefix="/api/v1/knowledge")
     app.include_router(diagnosis.router, prefix="/api/v1/diagnosis")
     app.include_router(conversations.router, prefix="/api/v1/conversations")
@@ -425,6 +423,40 @@ app.add_middleware(CORSMiddleware,
 app.add_middleware(WidgetCorsBypassMiddleware)
 app.add_middleware(AuditMiddleware)
 
+<<<<<<< HEAD
+# routers
+app.mount("/chat-avatars", StaticFiles(directory="app/chat-avatars"), name="chat-avatars")
+app.mount("/email-fonts", StaticFiles(directory="app/email_templates/fonts"), name="email-fonts")
+app.mount("/images", StaticFiles(directory="app/email_templates/images"), name="images")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.include_router(auth.router, prefix="/api/v1/auth")
+app.include_router(knowledge.router, prefix="/api/v1/knowledge")
+app.include_router(gdpr.router, prefix="/api/v1/gdpr")
+app.include_router(diagnosis.router, prefix="/api/v1/diagnosis")
+app.include_router(conversations.router, prefix="/api/v1/conversations")
+app.include_router(companies.router, prefix="/api/v1/companies")
+app.include_router(dashboard.router, prefix="/api/v1/dashboard")
+app.include_router(analytics.router, prefix="/api/v1/analytics")
+app.include_router(feedback.router)
+app.include_router(billing.router, prefix="/api/v1/billing")
+
+app.include_router(voice.router, prefix="/api/v1/voice")
+app.include_router(chat.router, prefix="/api/v1/chat")
+app.include_router(stroll.router, prefix="/api/v1/stroll")
+app.include_router(stroll_public.router, prefix="/api/v1/public/stroll")
+app.include_router(email.router, prefix="/api/v1/email")
+app.include_router(mobile.router, prefix="/api/v1/mobile")
+app.include_router(sdk.router, prefix="/api/v1/sdk", tags=["SDK"])
+app.include_router(forms.router, prefix="/api/v1/forms", tags=["Forms"])
+app.include_router(forms_public.router, prefix="/api/v1/public/forms", tags=["Forms"])
+app.include_router(
+    integrations.router,
+    prefix="/api/v1/companies/{company_id}/integrations",
+    tags=["API Integrations"],
+)
+app.include_router(notifications.router, prefix="/api/v1/notifications")
+=======
+>>>>>>> origin/staging
 
 # global exception handlers
 @app.exception_handler(RequestValidationError)

@@ -46,6 +46,12 @@ async def create_indexes():
     await db.knowledge_sources.create_index("company_id")
     await db.knowledge_sources.create_index([("company_id", 1), ("uploaded_at", -1)])
 
+    # gdpr export/deletion jobs
+    await db.gdpr_export_jobs.create_index([("company_id", 1), ("created_at", -1)])
+    await db.gdpr_deletion_requests.create_index(
+        [("company_id", 1), ("created_at", -1)]
+    )
+
     # knowledge base auto-crawl
     await db.knowledge_crawl_configs.create_index("company_id", unique=True)
     await db.knowledge_crawl_configs.create_index([("enabled", 1), ("next_run_at", 1)])
