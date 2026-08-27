@@ -5,7 +5,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 
 from app.core.auth import get_current_user
-from app.services import audit_service, company_service
+from app.core import audit
+from app.services import company_service
 
 router = APIRouter(tags=["Audit Log"])
 
@@ -36,12 +37,12 @@ async def list_audit_events(
     actor_id: Annotated[str | None, Query()] = None,
     action: Annotated[str | None, Query()] = None,
     resource_type: Annotated[str | None, Query()] = None,
-    outcome: Annotated[str | None, Query(pattern="^(success|failure)$")] = None,
+    outcome: Annotated[str | None, Query(pattern="^(success|error|failure)$")] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     skip: Annotated[int, Query(ge=0)] = 0,
 ):
     await _require_admin(company_id, current_user)
-    result = await audit_service.list_events(
+    result = await audit.list_events(
         company_id,
         actor_id=actor_id,
         action=action,
@@ -61,7 +62,7 @@ async def get_audit_event(
     company_id: str, event_id: str, current_user: CurrentUser
 ):
     await _require_admin(company_id, current_user)
-    event = await audit_service.get_event(company_id, event_id)
+    event = await audit.get_event(company_id, event_id)
     if not event:
         from fastapi import HTTPException
 
