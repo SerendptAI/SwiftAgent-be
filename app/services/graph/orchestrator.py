@@ -115,7 +115,6 @@ async def orchestrator_node(state: AgentState, config):
         
         # We don't append the AIMessage to state if it's just a handoff, 
         # so the worker agent gets the original user message as the last message!
->>>>>>> origin/staging
         return {"intent": intent, "escalate_to_human": escalate}
         
     return {"intent": intent, "messages": [response]}
