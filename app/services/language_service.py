@@ -118,8 +118,8 @@ async def get_company_language_config(company_data: Dict) -> CompanyLanguageConf
 
     if company_data:
         config.primary_language = company_data.get("primary_language", "en")
-        supported = company_data.get("supported_languages", [])
-        if supported:
+        supported = company_data.get("supported_languages")
+        if supported is not None:
             config.supported_languages = supported
         config.auto_detect = company_data.get("auto_detect_language", True)
         config.language_specific_kb = company_data.get("language_specific_kb", True)
@@ -143,7 +143,7 @@ def build_language_instruction(
     user_lang_name = get_language_name(user_language)
     primary_lang_name = get_language_name(company_config.primary_language)
 
-    if user_language in company_config.supported_languages:
+    if not company_config.supported_languages or user_language in company_config.supported_languages:
         return (
             f"\nLANGUAGE INSTRUCTION: The user is writing in {user_lang_name}. "
             f"Respond in {user_lang_name} to match their language. "
