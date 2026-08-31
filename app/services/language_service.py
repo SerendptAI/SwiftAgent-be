@@ -25,13 +25,13 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 _DETECTION_PROMPT = """Detect the language of this text. Return ONLY a JSON object:
-{"language_code": "en", "confidence": 0.98}
+{{"language_code": "en", "confidence": 0.98}}
 
 Rules:
 - Use ISO 639-1 codes (en, fr, es, de, it, pt, nl, ru, zh, ja, ko, ar, hi, tr, pl, sv, da, no, fi, cs, el, he, th, vi, id, ms, uk, ro, hu, bg, hr, sk, sl, lt, lv, et, sr, ca)
 - Be confident only for clear, unambiguous text
 - For very short text (1-2 words) or mixed language, set confidence lower (0.3-0.6)
-- For empty or whitespace-only text, return {"language_code": "en", "confidence": 0.0}
+- For empty or whitespace-only text, return {{"language_code": "en", "confidence": 0.0}}
 
 Text to analyze:
 "{text}" """
@@ -79,7 +79,7 @@ async def detect_language(text: str) -> Optional[LanguageDetection]:
             if text_resp.endswith("```"):
                 text_resp = text_resp[:-3]
             text_resp = text_resp.strip()
-
+            
         import json
         result = json.loads(text_resp)
         code = result.get("language_code", "en").lower()
