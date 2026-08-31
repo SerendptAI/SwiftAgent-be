@@ -141,20 +141,12 @@ def build_language_instruction(
         return ""
 
     user_lang_name = get_language_name(user_language)
-    primary_lang_name = get_language_name(company_config.primary_language)
 
-    if not company_config.supported_languages or user_language in company_config.supported_languages:
-        return (
-            f"\nLANGUAGE INSTRUCTION: The user is writing in {user_lang_name}. "
-            f"Respond in {user_lang_name} to match their language. "
-            f"Do NOT switch to {primary_lang_name} unless the user does first.\n"
-        )
-    else:
-        return (
-            f"\nLANGUAGE INSTRUCTION: The user is writing in {user_lang_name} "
-            f"which is NOT in the company's supported languages ({', '.join(company_config.supported_languages)}). "
-            f"Respond in {primary_lang_name} (the company's primary language) but acknowledge their language.\n"
-        )
+    return (
+        f"\nLANGUAGE INSTRUCTION: The user is writing in {user_lang_name}. "
+        f"You MUST explicitly match the customer's incoming language ({user_lang_name}) for maximum customer service satisfaction. "
+        f"Respond in {user_lang_name}.\n"
+    )
 
 
 # ============================================================================
