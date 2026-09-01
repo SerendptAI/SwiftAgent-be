@@ -53,6 +53,7 @@ def register_routers(app: FastAPI):
         notifications,
         analytics,
         feedback,
+        webmcp,
     )
 
     # routers
@@ -71,6 +72,7 @@ def register_routers(app: FastAPI):
     app.include_router(companies.router, prefix="/api/v1/companies")
     app.include_router(dashboard.router, prefix="/api/v1/dashboard")
     app.include_router(analytics.router, prefix="/api/v1/analytics")
+    app.include_router(webmcp.router, prefix="/api/v1/webmcp")
     app.include_router(feedback.router)
     app.include_router(billing.router, prefix="/api/v1/billing")
 
