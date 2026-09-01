@@ -7,6 +7,7 @@ class DiagnosisRequest(BaseModel):
     wallet_address: Optional[str] = None
 
 class DiagnosisResponse(BaseModel):
-    status: str
-    diagnosis: str
-    details: Dict[str, Any] = {}
+    overall_severity: str
+    issues_found: int
+    issues: list
+    tx_summary: Dict[str, Any]
