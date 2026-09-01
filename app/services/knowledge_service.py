@@ -108,7 +108,7 @@ async def _record_gap(
 
 
 async def search_knowledge(
-    user_id: str,
+    user_id: str | None,
     query: str,
     limit: int = 5,
     threshold: float = 0.7,
@@ -150,7 +150,10 @@ async def search_knowledge(
         )
         return {"results": [], "confidence": 0.0, "escalate": True}
 
-    must_conditions = [models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id))]
+    must_conditions = []
+    if user_id:
+        must_conditions.append(models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id)))
+        
     if company_id:
         must_conditions.append(
             models.FieldCondition(key="company_id", match=models.MatchValue(value=company_id))
