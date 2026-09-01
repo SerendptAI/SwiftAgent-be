@@ -84,8 +84,8 @@ async def webmcp_navigation(company: dict = Depends(verify_api_key)):
         if not version:
             return {"nodes": {}, "edges": []}
             
-        # Return the raw nav_graph as a dict
-        return version.nav_graph.model_dump()
+        # Return the raw graph as a dict
+        return version.graph.model_dump()
     except Exception as e:
         logger.exception("WebMCP Navigation failed")
         raise HTTPException(status_code=500, detail="Navigation service unavailable")
