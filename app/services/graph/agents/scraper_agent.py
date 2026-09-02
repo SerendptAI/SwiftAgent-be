@@ -7,32 +7,33 @@ from app.core.langfuse import observe
 from app.services.graph.orchestrator import SCRAPER_HANDOFF_TOOLS
 
 SCRAPER_PROMPT = """You are the Web Scraper Expert.
-Your job is to read and extract information from public URLs provided by the user.
-
 COMPANY WEBSITE: {website}
-
-WORKFLOW:
-1. If the user asks about pricing, features, eligibility, use cases, "about us", or general information and doesn't provide a specific URL, use the `read_website_page` tool to fetch the company's official website: {website}
-2. Use the `read_website_page` tool to fetch the text content and links of the URL.
-3. If the information you need is NOT on the current page, look at the `links` returned by the tool and call `read_website_page` AGAIN on the most relevant link (e.g., a link containing "pricing", "plans", "features", "about", or "use-cases") to find the information.
-4. RETRY RULE: If you called `read_website_page` and the returned content does not contain the information the user needs (e.g. it's a cached page missing the relevant section), you MUST retry the call with `force_refresh=True` to fetch a fresh copy. Do NOT give up after one attempt.
-5. Summarize or answer the user's specific questions based ONLY on the content of the page.
-6. If after retrying with force_refresh and following relevant links you still cannot find the information, use the available transfer tools to hand off the task to another appropriate agent (like the knowledge agent). Do NOT tell the user you don't know without first exhausting these options.
-
-FALLBACK RULE: If the `read_website_page` tool returns an error, no content, or you cannot find the answer on the website, immediately call `transfer_to_knowledge` to check the knowledge base. Do NOT output any conversational text when transferring. Never go silent.
-
-CRITICAL RULE: When you need to call a tool (including handoff/transfer tools), you MUST NOT output ANY conversational text or "thinking" before the tool call! ONLY return the tool call itself."""
+1. If user asks about pricing/features, fetch: {website}
+2. Use `read_website_page` to fetch content and links.
+3. If info not on page, follow relevant links.
+4. RETRY: If content missing, retry with force_refresh=True.
+5. Answer based ONLY on page content.
+FALLBACK: If tool fails, call transfer_to_knowledge. No text when transferring."""
 
 @observe(name="scraper_agent_node")
 async def scraper_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"], streaming=True, force_anthropic_native=True)
     llm_with_tools = llm.bind_tools([read_website_page] + SCRAPER_HANDOFF_TOOLS)
     
-    persona = build_company_persona_prompt(state.get("company_data", {}))
-    website = state.get("company_data", {}).get("website", "")
-    scraper_prompt = SCRAPER_PROMPT.format(website=website or "Not configured")
-    full_prompt = f"{persona}\n\n{scraper_prompt}"
+    from app.services.prompt_service import render_prompt_for_company
+    rendered = await render_prompt_for_company("scraper_agent", state.get("company_data", {}), state.get("company_id"))
     
+    if rendered.rendered_text:
+        prompt_text = rendered.rendered_text
+    else:
+        website = state.get("company_data", {}).get("website", "")
+        prompt_text = SCRAPER_PROMPT.format(website=website or "Not configured")
+        
+    persona = build_company_persona_prompt(
+        state.get("company_data", {}),
+        language_instruction=state.get("language_instruction", ""),
+    )
+    full_prompt = f"{persona}\n\n{prompt_text}"
     messages = [SystemMessage(content=full_prompt)] + state["messages"]
     response = await llm_with_tools.ainvoke(messages, config)
     return {"messages": [response]}

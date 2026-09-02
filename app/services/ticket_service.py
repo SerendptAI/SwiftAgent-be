@@ -168,6 +168,25 @@ async def transition_ticket(
     )
 
     if result:
+        from app.services import webhook_service
+
+        if to_status == "escalated":
+            event_type = "ticket.escalated"
+        elif from_status == "pending" and to_status == "open":
+            event_type = "ticket.created"
+        else:
+            event_type = None
+        if event_type:
+            await webhook_service.emit_event(
+                company_id,
+                event_type,
+                {
+                    "ticket_id": ticket_id,
+                    "from_status": from_status,
+                    "to_status": to_status,
+                    "actor": actor,
+                },
+            )
         if to_status == "resolved":
             _fire_company_notification(
                 company_id,

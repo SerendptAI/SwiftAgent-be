@@ -1,10 +1,11 @@
-from typing import List, Dict, Any
 import logging
 from uuid import uuid4
-from qdrant_client.http import models
-from app.core.database import qdrant_client
-from app.core.config import settings
+
 from google import genai
+from qdrant_client.http import models
+
+from app.core.config import settings
+from app.core.database import qdrant_client
 
 logger = logging.getLogger(__name__)
 COLLECTION_NAME = settings.QDRANT_COLLECTION_NAME
@@ -26,16 +27,28 @@ async def ensure_collection():
 
     # ensure index exists for filtering
     await qdrant_client.create_payload_index(
-        collection_name=COLLECTION_NAME, field_name="user_id", field_schema="keyword"
+        collection_name=COLLECTION_NAME,
+        field_name="user_id",
+        field_schema=models.PayloadSchemaType.KEYWORD,
     )
     await qdrant_client.create_payload_index(
-        collection_name=COLLECTION_NAME, field_name="company_id", field_schema="keyword"
+        collection_name=COLLECTION_NAME,
+        field_name="company_id",
+        field_schema=models.PayloadSchemaType.KEYWORD,
+    )
+    await qdrant_client.create_payload_index(
+        collection_name=COLLECTION_NAME,
+        field_name="page_id",
+        field_schema=models.PayloadSchemaType.KEYWORD,
+    )
+    await qdrant_client.create_payload_index(
+        collection_name=COLLECTION_NAME,
+        field_name="content_hash",
+        field_schema=models.PayloadSchemaType.KEYWORD,
     )
 
 
-async def ingest_document(
-    user_id: str, doc_id: str, title: str, content: str, metadata: dict
-):
+async def ingest_document(user_id: str, doc_id: str, title: str, content: str, metadata: dict):
     await ensure_collection()
 
     gemini_client = _get_gemini_client()
@@ -68,15 +81,51 @@ async def ingest_document(
     )
 
 
+async def _record_gap(
+    *,
+    company_id: str | None,
+    query: str,
+    confidence: float,
+    threshold: float,
+    session_id: str | None,
+    enabled: bool,
+) -> None:
+    if not enabled or not company_id or confidence >= threshold:
+        return
+    try:
+        from app.services.knowledge_gap_service import record_gap_event
+
+        await record_gap_event(
+            company_id=company_id,
+            query=query,
+            confidence=confidence,
+            threshold=threshold,
+            session_id=session_id,
+            escalated=True,
+        )
+    except Exception:
+        logger.exception("Failed to record knowledge gap")
+
+
 async def search_knowledge(
-    user_id: str,
+    user_id: str | None,
     query: str,
     limit: int = 5,
     threshold: float = 0.7,
-    company_id: str = None,
+    company_id: str | None = None,
+    session_id: str | None = None,
+    record_gap: bool = True,
 ) -> dict:
     # ensure collection exists
     if not await qdrant_client.collection_exists(COLLECTION_NAME):
+        await _record_gap(
+            company_id=company_id,
+            query=query,
+            confidence=0.0,
+            threshold=threshold,
+            session_id=session_id,
+            enabled=record_gap,
+        )
         return {"results": [], "confidence": 0.0, "escalate": True}
 
     gemini_client = _get_gemini_client()
@@ -89,18 +138,25 @@ async def search_knowledge(
             config={"task_type": "RETRIEVAL_QUERY"},
         )
         query_vector = response.embeddings[0].values
-    except Exception as e:
+    except Exception:
         logger.exception("Embedding error during knowledge search")
+        await _record_gap(
+            company_id=company_id,
+            query=query,
+            confidence=0.0,
+            threshold=threshold,
+            session_id=session_id,
+            enabled=record_gap,
+        )
         return {"results": [], "confidence": 0.0, "escalate": True}
 
-    must_conditions = [
-        models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id))
-    ]
+    must_conditions = []
+    if user_id:
+        must_conditions.append(models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id)))
+        
     if company_id:
         must_conditions.append(
-            models.FieldCondition(
-                key="company_id", match=models.MatchValue(value=company_id)
-            )
+            models.FieldCondition(key="company_id", match=models.MatchValue(value=company_id))
         )
 
     search_result = await qdrant_client.query_points(
@@ -132,5 +188,13 @@ async def search_knowledge(
     # confidence is the top score, or 0 if no results
     confidence = results[0]["score"] if results else 0.0
     escalate = confidence < threshold
+    await _record_gap(
+        company_id=company_id,
+        query=query,
+        confidence=confidence,
+        threshold=threshold,
+        session_id=session_id,
+        enabled=record_gap,
+    )
 
     return {"results": results, "confidence": confidence, "escalate": escalate}

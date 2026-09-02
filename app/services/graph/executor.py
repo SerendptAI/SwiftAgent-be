@@ -23,6 +23,7 @@ async def chat_stream_graph(
     sdk_user_email: str | None = None,
     user_timezone: str | None = None,
     llm_message: str | None = None,
+    user_language: str | None = None,
 ):
     try:
         # Load conversation
@@ -45,13 +46,35 @@ async def chat_stream_graph(
         current_date = now.strftime("%A, %B %d, %Y")
         current_time_str = now.strftime("%I:%M %p %Z")
 
+        # Determine user language and build language instruction
+        from app.services.language_service import (
+            detect_language,
+            get_company_language_config,
+            build_language_instruction,
+            build_language_state_update,
+        )
+
+        company_lang_config = await get_company_language_config(company)
+        detected_lang = user_language or company.get("primary_language", "en")
+
+        if company_lang_config.auto_detect and not user_language:
+            detected = await detect_language(message)
+            if detected and detected.is_reliable:
+                detected_lang = detected.language_code
+
+        lang_instruction = build_language_instruction(detected_lang, company_lang_config)
+        lang_state = build_language_state_update(detected_lang, company_lang_config, lang_instruction)
+
         company_data = {
             "name": company.get("name", "Unknown Company"),
             "description": company.get("description", ""),
             "industry": company.get("industry", ""),
             "brand_tone": company.get("brand_tone", "professional"),
             "voice_style": company.get("voice_style", "professional"),
-            "primary_language": company.get("primary_language", "English"),
+            "primary_language": company.get("primary_language", "en"),
+            "supported_languages": company.get("supported_languages", ["en"]),
+            "auto_detect_language": company.get("auto_detect_language", True),
+            "language_specific_kb": company.get("language_specific_kb", True),
             "answer_boundaries": company.get("answer_boundaries", []),
             "current_date": current_date,
             "current_time": current_time_str,
@@ -84,6 +107,9 @@ async def chat_stream_graph(
             "page_url": page_url,
             "attachments": attachments or [],
             "agent_provider": agent_provider,
+            "user_language": lang_state["user_language"],
+            "kb_language": lang_state["kb_language"],
+            "language_instruction": lang_state["language_instruction"],
             "intent": None,
             "escalate_to_human": False
         }
@@ -206,10 +232,15 @@ async def chat_stream_graph(
 
         # Store assistant message in DB
         if final_text:
+            from app.services import conversation_privacy_service
+
+            stored_text = await conversation_privacy_service.redact_message_on_ingest(
+                company_id, final_text
+            )
             assistant_msg_doc = {
                 "id": str(uuid4()),
                 "role": "assistant",
-                "content": final_text,
+                "content": stored_text,
                 "timestamp": datetime.now(tz=timezone.utc).isoformat()
             }
             await db.widget_conversations.update_one(

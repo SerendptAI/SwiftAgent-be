@@ -109,7 +109,12 @@ class Settings(BaseSettings):
     ENABLE_STROLL_SCHEDULER: bool = True
     ENABLE_WRAP_SCHEDULER: bool = True
     ENABLE_TICKET_SCHEDULER: bool = True
+    ENABLE_KNOWLEDGE_CRAWL_SCHEDULER: bool = True
     PLAYWRIGHT_WS_ENDPOINT: Optional[str] = "ws://browserless:3000"
+
+    # Durable background jobs (ARQ + Redis). Unset REDIS_URL disables the
+    # queue and callers fall back to in-process execution.
+    REDIS_URL: Optional[str] = None
 
     # Expo Push Notifications (optional — push works without it but recommended)
     EXPO_ACCESS_TOKEN: str = ""
@@ -216,6 +221,9 @@ class Settings(BaseSettings):
         if v.upper() not in valid:
             raise ValueError(f"LOG_LEVEL must be one of {valid}")
         return v.upper()
+
+    # Audit log
+    AUDIT_LOG_RETENTION_DAYS: int = 365
 
     @property
     def is_development(self) -> bool:

@@ -90,18 +90,25 @@ class BachsBillingService:
             # Attach discount_code to metadata for webhook consumption
             payload["metadata"]["discount_code"] = discount.get("code")
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self.api_url}/checkout-sessions",
-                headers=headers, json=payload
-            )
-            if response.status_code not in (200, 201):
-                logger.error(f"Bachs checkout failed: {response.text}")
-                return f"https://sandbox.bachs.io/checkout/dummy?company_id={company_id}"
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.api_url}/checkout-sessions",
+                    headers=headers, json=payload
+                )
+                if response.status_code not in (200, 201):
+                    logger.error(f"Bachs checkout failed: {response.text}")
+                    return f"https://sandbox.bachs.io/checkout/dummy?company_id={company_id}"
 
-            data = response.json()
-            # Try a few common response fields
-            return data.get("url") or data.get("checkout_url") or data.get("data", {}).get("url", f"https://sandbox.bachs.io/checkout/dummy?company_id={company_id}")
+                data = response.json()
+                # Try a few common response fields
+                return data.get("url") or data.get("checkout_url") or data.get("data", {}).get("url", f"https://sandbox.bachs.io/checkout/dummy?company_id={company_id}")
+        except httpx.RequestError as e:
+            logger.error(f"Bachs API connection failed: {e}")
+            return f"https://sandbox.bachs.io/checkout/dummy?company_id={company_id}"
+        except Exception as e:
+            logger.error(f"Bachs checkout error: {e}")
+            return f"https://sandbox.bachs.io/checkout/dummy?company_id={company_id}"
 
     async def create_customer_portal_session(self, customer_id: str) -> str:
         """Create a Bachs customer portal session URL."""

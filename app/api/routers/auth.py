@@ -27,6 +27,7 @@ from fastapi.responses import RedirectResponse
 from google_auth_oauthlib.flow import Flow
 
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission
 from app.core.config import settings
 from app.core.database import get_database
 from app.core.security import create_access_token, create_refresh_token, decode_refresh_token
@@ -88,24 +89,32 @@ def _smtp_guard():
         )
 
 
-def _token_pair(user_id: str) -> dict:
+def _token_pair(user_id: str, company_id: str | None = None, role: str | None = None, permissions: list[str] | None = None) -> dict:
+    token_data: dict = {"sub": user_id}
+    if company_id:
+        token_data["company_id"] = company_id
+    if role:
+        token_data["role"] = role
+    if permissions:
+        token_data["permissions"] = permissions
+    
     return {
-        "access_token": create_access_token(data={"sub": user_id}),
+        "access_token": create_access_token(data=token_data),
         "refresh_token": create_refresh_token(data={"sub": user_id}),
         "token_type": "bearer",
     }
 
 
-async def _assert_email_approved(db, email: str):
+async def _assert_email_registered(db, email: str):
     """
-    Ensure a completely new email is allowed to sign up.
+    Ensure a completely new email is allowed to sign in.
     Allowed if:
-    1. Exists in pending_registrations with status 'approved'
+    1. Exists in pending_registrations
     2. Has been invited to a company
     """
     # check registrations
     reg = await db.pending_registrations.find_one({"company_email": email})
-    if reg and reg.get("status") == "approved":
+    if reg:
         return
 
     # check if invited
@@ -120,7 +129,7 @@ async def _assert_email_approved(db, email: str):
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN, 
-        detail="Your email has not been approved for registration. Please fill out the registration form first."
+        detail="Account not found. Please sign up via the registration page first."
     )
 
 
@@ -133,6 +142,8 @@ async def _upsert_google_user(db, google_id: str, email: str, name: str, picture
         patch: dict = {"updated_at": now}
         if not existing.get("google_id"):
             patch["google_id"] = google_id
+        if not existing.get("is_verified"):
+            patch["is_verified"] = True
         await db.users.update_one({"email": email}, {"$set": patch})
         return {**existing, **patch}
 
@@ -240,19 +251,38 @@ async def callback(request: Request, db=Depends(get_database)):
     if not google_id or not email:
         raise HTTPException(status_code=400, detail="Google sign-in failed. Could not retrieve your account information. Please try again.")
 
-    is_new = not bool(await db.users.find_one({"email": email}))
+    existing_user = await db.users.find_one({"email": email})
+    is_new = not bool(existing_user)
+    is_effectively_new = is_new or not existing_user.get("is_verified")
+    
     if is_new:
-        await _assert_email_approved(db, email)
+        await _assert_email_registered(db, email)
         
     user = await _upsert_google_user(db, google_id, email, name, user_info.get("picture"))
 
-    if is_new:
+    if is_effectively_new:
         try:
             asyncio.create_task(send_welcome_email(email, name))
         except Exception as e:
             logger.warning(f"Failed to send welcome email to {email}: {e}")
 
-    tokens = _token_pair(user["user_id"])
+    # Fetch company and role info for JWT
+    company = await db.companies.find_one(
+        {"user_id": user["user_id"], "setup_complete": True},
+        {"_id": 0, "id": 1},
+    )
+    role = "owner"
+    permissions = ["*"]
+    if company:
+        from app.core.rbac import get_role_permissions
+        permissions = get_role_permissions(role)
+
+    tokens = _token_pair(
+        user["user_id"],
+        company_id=company.get("id") if company else None,
+        role=role,
+        permissions=permissions,
+    )
 
     if redirect_url:
         fragment = urllib.parse.urlencode(tokens)
@@ -327,7 +357,7 @@ async def update_me(
 @router.patch("/me/name")
 async def update_name(
     data: UserNameUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
     db=Depends(get_database),
 ):
     """Update the authenticated user's display name."""
@@ -347,7 +377,7 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 @router.patch("/me/pfp")
 async def update_pfp(
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
     db=Depends(get_database),
 ):
     """Update the authenticated user's profile picture (pfp)."""
@@ -387,7 +417,7 @@ async def update_pfp(
 @router.patch("/me/security")
 async def update_user_security(
     data: UserSecurityUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("tickets:read")),
     db=Depends(get_database),
 ):
     """Update user-level backup email and access code (admin only)."""
@@ -431,8 +461,8 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
     _UNIFORM_MSG = "If this email is registered, a verification code has been sent."
 
     if not user:
-        # Check if they are allowed to register before proceeding
-        await _assert_email_approved(db, email)
+        # Check if they have registered first
+        await _assert_email_registered(db, email)
         
         # brand new user -> unverified document placeholder
         otp_code = generate_otp()
@@ -511,7 +541,23 @@ async def verify_otp(request: Request, body: OTPVerifyRequest, db=Depends(get_da
         except Exception:
             pass
 
-    tokens = _token_pair(user["user_id"])
+    # Fetch company and role info for JWT
+    company = await db.companies.find_one(
+        {"user_id": user["user_id"], "setup_complete": True},
+        {"_id": 0, "id": 1},
+    )
+    role = "owner"
+    permissions = ["*"]
+    if company:
+        from app.core.rbac import get_role_permissions
+        permissions = get_role_permissions(role)
+
+    tokens = _token_pair(
+        user["user_id"],
+        company_id=company.get("id") if company else None,
+        role=role,
+        permissions=permissions,
+    )
     return LoginResponse(
         message="Verification successful. Welcome!",
         email=email,

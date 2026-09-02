@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission
 from app.core.database import db
 from app.models.otp_challenge_models import (
     ChallengeResponseRequest,
@@ -34,7 +35,7 @@ router = APIRouter(tags=["Mobile"])
 @router.post("/devices/register")
 async def register_push_device(
     body: RegisterDeviceRequest,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Register an Expo push token for push notifications."""
     user_id = user["user_id"]
@@ -50,7 +51,7 @@ async def register_push_device(
 @router.delete("/devices/{device_token}")
 async def unregister_push_device(
     device_token: str,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Unregister an Expo push token."""
     removed = await unregister_device(user["user_id"], device_token)
@@ -62,7 +63,7 @@ async def unregister_push_device(
 @router.post("/test-notification")
 async def send_test_notification(
     body: TestPushNotificationRequest,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Send a test push notification to all registered devices of the authenticated user."""
     result = await send_test_push(
@@ -83,7 +84,7 @@ async def send_test_notification(
 # OTP Challenges 
 
 @router.get("/challenges")
-async def list_challenges(user: dict = Depends(get_current_user)):
+async def list_challenges(user: dict = Depends(require_permission("tickets:read"))):
     """List all pending OTP challenges for the authenticated user."""
     challenges = await otp_challenge_service.get_pending_challenges(user["user_id"])
     return {"challenges": challenges}
@@ -92,7 +93,7 @@ async def list_challenges(user: dict = Depends(get_current_user)):
 @router.get("/challenges/{challenge_id}")
 async def get_challenge(
     challenge_id: str,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Get details of a specific OTP challenge."""
     challenge = await otp_challenge_service.get_challenge(challenge_id)
@@ -112,7 +113,7 @@ async def get_challenge(
 async def respond_to_challenge(
     challenge_id: str,
     body: ChallengeResponseRequest,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_permission("tickets:read")),
 ):
     """Submit an OTP value for a pending challenge."""
     success = await otp_challenge_service.respond_to_challenge(

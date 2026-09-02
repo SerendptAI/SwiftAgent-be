@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query, Backgroun
 import logging
 
 from app.core.auth import get_current_user
+from app.core.rbac import require_permission
 from app.core.database import db
 from app.core.config import settings
 from app.core.plan_enforcement import get_usage_summary
@@ -42,7 +43,7 @@ async def get_billing_plans(timezone: str = Query("", description="User timezone
 
 
 @router.get("/{company_id}/status")
-async def get_billing_status(company_id: str, current_user: dict = Depends(get_current_user)):
+async def get_billing_status(company_id: str, current_user: dict = Depends(require_permission("tickets:read"))):
     """Retrieve the company's current subscription status and usage."""
     user_id = current_user["user_id"]
     company = await get_company(company_id, user_id)
@@ -56,7 +57,7 @@ async def get_billing_status(company_id: str, current_user: dict = Depends(get_c
 async def create_checkout_session(
     body: CheckoutSessionRequest,
     request: Request,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     """Generate a Polar checkout session with region-aware pricing."""
     company = await db.companies.find_one(
@@ -114,6 +115,8 @@ async def create_checkout_session(
         return CheckoutSessionResponse(checkout_url=checkout_url)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Checkout session creation failed: {e}")
         raise HTTPException(
@@ -125,7 +128,7 @@ async def create_checkout_session(
 @router.post("/{company_id}/portal", response_model=PortalSessionResponse)
 async def create_portal_session(
     company_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_permission("tickets:read"))
 ):
     """Generate a Polar customer portal URL so the user can manage/cancel their subscription."""
     company = await db.companies.find_one(
@@ -153,6 +156,7 @@ async def create_portal_session(
         )
 
 
+@router.post("/webhooks/polar/", response_model=WebhookResponse, include_in_schema=False)
 @router.post("/webhooks/polar", response_model=WebhookResponse)
 async def polar_webhook(request: Request, background_tasks: BackgroundTasks):
     """Handle Polar webhooks."""
@@ -183,6 +187,7 @@ async def polar_webhook(request: Request, background_tasks: BackgroundTasks):
     return WebhookResponse(received=True)
 
 
+@router.post("/webhooks/bachs/", response_model=WebhookResponse, include_in_schema=False)
 @router.post("/webhooks/bachs", response_model=WebhookResponse)
 async def bachs_webhook(request: Request, background_tasks: BackgroundTasks):
     """Handle Bachs webhooks."""
