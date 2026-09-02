@@ -105,16 +105,16 @@ def _token_pair(user_id: str, company_id: str | None = None, role: str | None = 
     }
 
 
-async def _assert_email_approved(db, email: str):
+async def _assert_email_registered(db, email: str):
     """
-    Ensure a completely new email is allowed to sign up.
+    Ensure a completely new email is allowed to sign in.
     Allowed if:
-    1. Exists in pending_registrations with status 'approved'
+    1. Exists in pending_registrations
     2. Has been invited to a company
     """
     # check registrations
     reg = await db.pending_registrations.find_one({"company_email": email})
-    if reg and reg.get("status") == "approved":
+    if reg:
         return
 
     # check if invited
@@ -129,7 +129,7 @@ async def _assert_email_approved(db, email: str):
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN, 
-        detail="Your email has not been approved for registration. Please fill out the registration form first."
+        detail="Account not found. Please sign up via the registration page first."
     )
 
 
@@ -251,7 +251,7 @@ async def callback(request: Request, db=Depends(get_database)):
 
     is_new = not bool(await db.users.find_one({"email": email}))
     if is_new:
-        await _assert_email_approved(db, email)
+        await _assert_email_registered(db, email)
         
     user = await _upsert_google_user(db, google_id, email, name, user_info.get("picture"))
 
@@ -456,8 +456,8 @@ async def send_otp(request: Request, body: OTPSendRequest, db=Depends(get_databa
     _UNIFORM_MSG = "If this email is registered, a verification code has been sent."
 
     if not user:
-        # Check if they are allowed to register before proceeding
-        await _assert_email_approved(db, email)
+        # Check if they have registered first
+        await _assert_email_registered(db, email)
         
         # brand new user -> unverified document placeholder
         otp_code = generate_otp()
