@@ -115,6 +115,8 @@ async def create_checkout_session(
         return CheckoutSessionResponse(checkout_url=checkout_url)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Checkout session creation failed: {e}")
         raise HTTPException(
@@ -154,6 +156,7 @@ async def create_portal_session(
         )
 
 
+@router.post("/webhooks/polar/", response_model=WebhookResponse, include_in_schema=False)
 @router.post("/webhooks/polar", response_model=WebhookResponse)
 async def polar_webhook(request: Request, background_tasks: BackgroundTasks):
     """Handle Polar webhooks."""
@@ -184,6 +187,7 @@ async def polar_webhook(request: Request, background_tasks: BackgroundTasks):
     return WebhookResponse(received=True)
 
 
+@router.post("/webhooks/bachs/", response_model=WebhookResponse, include_in_schema=False)
 @router.post("/webhooks/bachs", response_model=WebhookResponse)
 async def bachs_webhook(request: Request, background_tasks: BackgroundTasks):
     """Handle Bachs webhooks."""
