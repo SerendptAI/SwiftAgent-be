@@ -89,7 +89,7 @@ async def submit_registration(data: RegistrationInterestRequest) -> dict:
         "company_description": data.company_description,
         "customer_size": data.customer_size,
         "company_website": data.company_website,
-        "status": "pending",
+        "status": "approved",
         "token": token,
         "created_at": now,
         "updated_at": now
@@ -100,9 +100,17 @@ async def submit_registration(data: RegistrationInterestRequest) -> dict:
     except DuplicateKeyError:
         pass # Should be caught by the pre-checks above, but safe to ignore if it happens
         
-    # Dispatch email
-    asyncio.create_task(_send_notification_email(doc, token))
-    return {"status": "success", "message": "Registration submitted for approval"}
+    # Trigger welcome email to user immediately
+    try:
+        asyncio.create_task(send_welcome_email(email, data.company_name))
+    except Exception as e:
+        logger.error(f"Failed to queue welcome email for {email}: {e}")
+
+    # Trigger background scrape if website is provided
+    if data.company_website:
+        asyncio.create_task(_scrape_and_save_registration(token, data.company_website))
+
+    return {"status": "success", "message": "Registration successful. You can now log in."}
 
 
 async def _send_notification_email(doc: dict, token: str):
