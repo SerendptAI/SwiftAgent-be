@@ -20,26 +20,6 @@ class KnowledgeQueryRequest(BaseModel):
     limit: int = 5
     threshold: float = 0.7
 
-@router.post("/diagnose", response_model=DiagnosisResponse)
-async def webmcp_diagnose(
-    request: DiagnosisRequest,
-    company: dict = Depends(verify_api_key),
-):
-    """Diagnose a blockchain transaction."""
-    try:
-        # Pass a mock tx_data dict since actual blockchain fetching is not yet implemented
-        tx_data = {
-            "tx_hash": request.tx_hash,
-            "chain": str(request.chain_id),
-            "status": "failed",
-            "gas_used": 21000,
-            "gas_limit": 21000
-        }
-        return await chain_service.diagnose_transaction(tx_data)
-    except Exception as e:
-        logger.exception("WebMCP Diagnosis failed")
-        raise HTTPException(status_code=500, detail="Diagnosis service unavailable")
-
 @router.get("/stats")
 async def webmcp_stats(company: dict = Depends(verify_api_key)):
     """Fetch live dashboard stats."""
