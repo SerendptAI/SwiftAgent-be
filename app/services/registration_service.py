@@ -100,17 +100,34 @@ async def submit_registration(data: RegistrationInterestRequest) -> dict:
     except DuplicateKeyError:
         pass # Should be caught by the pre-checks above, but safe to ignore if it happens
         
-    # Trigger welcome email to user immediately
-    try:
-        asyncio.create_task(send_welcome_email(email, data.company_name))
-    except Exception as e:
-        logger.error(f"Failed to queue welcome email for {email}: {e}")
-
     # Trigger background scrape if website is provided
     if data.company_website:
         asyncio.create_task(_scrape_and_save_registration(token, data.company_website))
 
-    return {"status": "success", "message": "Registration successful. You can now log in."}
+    # Generate and send OTP
+    from app.services.credential_auth_service import generate_otp, build_new_passwordless_user, send_otp_email
+    from datetime import timedelta
+    
+    otp_code = generate_otp()
+    ttl = settings.OTP_TTL_SIGNUP_MINUTES
+    new_user = build_new_passwordless_user(data.company_name, email, otp_code, ttl)
+    
+    existing_user = await db.users.find_one({"email": email})
+    if not existing_user:
+        await db.users.insert_one(new_user)
+    else:
+        await db.users.update_one(
+            {"email": email},
+            {"$set": {"otp_code": otp_code, "otp_expires": now + timedelta(minutes=ttl), "updated_at": now}}
+        )
+        
+    purpose = "email verification" if not existing_user else "login verification"
+    # Send email synchronously or dispatch in background. OTP flow uses await.
+    sent = await send_otp_email(email, otp_code, ttl, purpose_label=purpose)
+    if not sent:
+        raise HTTPException(status_code=503, detail="We couldn't deliver the verification email. Please check the email address and try again.")
+
+    return {"status": "success", "message": "Registration successful. We've sent a verification code to your email."}
 
 
 async def _send_notification_email(doc: dict, token: str):

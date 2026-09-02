@@ -142,6 +142,8 @@ async def _upsert_google_user(db, google_id: str, email: str, name: str, picture
         patch: dict = {"updated_at": now}
         if not existing.get("google_id"):
             patch["google_id"] = google_id
+        if not existing.get("is_verified"):
+            patch["is_verified"] = True
         await db.users.update_one({"email": email}, {"$set": patch})
         return {**existing, **patch}
 
@@ -249,13 +251,16 @@ async def callback(request: Request, db=Depends(get_database)):
     if not google_id or not email:
         raise HTTPException(status_code=400, detail="Google sign-in failed. Could not retrieve your account information. Please try again.")
 
-    is_new = not bool(await db.users.find_one({"email": email}))
+    existing_user = await db.users.find_one({"email": email})
+    is_new = not bool(existing_user)
+    is_effectively_new = is_new or not existing_user.get("is_verified")
+    
     if is_new:
         await _assert_email_registered(db, email)
         
     user = await _upsert_google_user(db, google_id, email, name, user_info.get("picture"))
 
-    if is_new:
+    if is_effectively_new:
         try:
             asyncio.create_task(send_welcome_email(email, name))
         except Exception as e:
