@@ -7,6 +7,7 @@ from app.services import chain_service
 from app.services import dashboard_service
 from app.services import knowledge_service
 from app.services import stroll_service
+from app.services import stroll_index_service
 from app.models.diagnosis_models import DiagnosisRequest, DiagnosisResponse
 from pydantic import BaseModel
 
@@ -31,7 +32,7 @@ async def webmcp_stats(company: dict = Depends(verify_api_key)):
         raise HTTPException(status_code=500, detail="Stats service unavailable")
 
 @router.get("/visitors")
-async def webmcp_visitors(limit: int = 10, company: dict = Depends(verify_api_key)):
+async def webmcp_visitors(limit: int = 100, company: dict = Depends(verify_api_key)):
     """Fetch recent dashboard visitors."""
     try:
         company_id = company["id"]
@@ -52,7 +53,7 @@ async def webmcp_query(
         company_id = company["id"]
         
         results = await knowledge_service.search_knowledge(
-            user_id=user_id,
+            user_id=None,
             query=request.query,
             limit=request.limit,
             threshold=request.threshold,
@@ -68,12 +69,12 @@ async def webmcp_navigation(company: dict = Depends(verify_api_key)):
     """Fetch the latest Stroll Navigation Graph."""
     try:
         company_id = company["id"]
-        version = await stroll_service.get_latest_version(company_id)
-        if not version:
-            return {"nodes": {}, "edges": []}
+        report_data = await stroll_index_service.generate_navigation_report(company_id)
+        if not report_data:
+            return {"report": "No navigation data available. A stroll has not been run yet."}
             
-        # Return the raw graph as a dict
-        return version.graph.model_dump()
+        # Return the markdown report optimized for LLMs
+        return {"report": report_data["report"]}
     except Exception as e:
         logger.exception("WebMCP Navigation failed")
         raise HTTPException(status_code=500, detail="Navigation service unavailable")
