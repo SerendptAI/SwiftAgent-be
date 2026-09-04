@@ -108,7 +108,11 @@ async def human_handoff_node(state: AgentState, config):
     try:
         # Load conversation for enhanced handoff
         from app.core.database import db
-        from app.services.handoff_service import create_enhanced_handoff
+        from app.services.handoff_service import (
+            create_enhanced_handoff,
+            format_structured_briefing,
+            calculate_escalation_priority,
+        )
         
         conversation = await db.widget_conversations.find_one({"company_id": company_id, "session_id": session_id})
         subject = conversation.get("subject", "Support Request via Escalation") if conversation else "Support Request"
@@ -125,8 +129,18 @@ async def human_handoff_node(state: AgentState, config):
             page_url=state.get("page_url"),
         )
         
-        # Create ticket with handoff context
-        chat_summary = handoff_data["handoff_context"]["conversation_summary"]
+        # Create ticket with structured handoff briefing:
+        # [Customer Intent] + [Failed Steps/Friction] + [Suggested Action]
+        handoff_ctx = handoff_data.get("handoff_context", {})
+        structured_briefing = format_structured_briefing(handoff_ctx)
+
+        history_texts = [
+            f"{m.get('role', 'user')}: {m.get('content', '')}"
+            for m in messages
+        ]
+        full_transcript = "\n\n".join(history_texts) if history_texts else "No transcript."
+        chat_summary = f"{structured_briefing}\n\n---\n### 💬 Full Transcript\n\n{full_transcript}"
+        priority = calculate_escalation_priority(handoff_ctx, default_priority="medium")
         
         ticket = await company_email_service.create_ticket(
             company_id=company_id,
@@ -135,7 +149,9 @@ async def human_handoff_node(state: AgentState, config):
             chat_summary=chat_summary,
             chat_session_id=session_id,
             customer_name=None,
-            handoff_context=handoff_data["handoff_context"],
+            priority=priority,
+            escalation_reason="human_request",
+            handoff_context=handoff_ctx,
         )
         
         await db.widget_conversations.update_one(

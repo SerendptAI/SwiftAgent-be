@@ -55,6 +55,7 @@ class EmailTicket(BaseModel):
     # escalation (auto-escalated chats)
     escalation_reason: Optional[str] = None
     escalated_at: Optional[datetime] = None
+    handoff_context: Optional[dict] = None
     # audit trail
     activity_log: List[dict] = []
 
@@ -178,6 +179,7 @@ class EmailTicketResponse(BaseModel):
     sla_breach_reason: Optional[str] = None
     escalation_reason: Optional[str] = None
     escalated_at: Optional[datetime] = None
+    handoff_context: Optional[dict] = None
     activity_log: List[dict] = []
 
 

@@ -16,7 +16,12 @@ from datetime import datetime, timedelta, timezone
 from pymongo import ReturnDocument
 
 from app.core.database import db
-from app.services import company_email_service, company_service, notification_service
+from app.services import (
+    company_email_service,
+    company_service,
+    handoff_service,
+    notification_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -268,7 +273,7 @@ async def assign_ticket(
         asyncio.create_task(
             notification_service.create_notification(
                 user_id=assignee_user_id,
-                title="🎫 Ticket Assigned",
+                title="🎟 Ticket Assigned",
                 body=(
                     f"You have been assigned Ticket #{ticket_id}: "
                     f"{ticket.get('subject', 'No subject')}"
@@ -406,7 +411,8 @@ async def auto_escalate_chats(company_id: str) -> list[dict]:
     """Scan un-escalated widget conversations and create tickets for stuck chats.
 
     Tickets are created via ``company_email_service.create_ticket`` (which marks
-    the originating chat as escalated), with the detected ``escalation_reason``.
+    the originating chat as escalated), with structured handoff briefing containing
+    [Customer Intent] + [Failed Steps/Friction] + [Suggested Action].
     """
     now = _utcnow()
     cutoff = now - timedelta(hours=24)
@@ -434,11 +440,41 @@ async def auto_escalate_chats(company_id: str) -> list[dict]:
             )
             continue
 
-        subject = conversation.get("subject") or "Support Request (Auto-Escalated)"
-        chat_summary = "\n\n".join(
+        messages = conversation.get("messages", [])
+
+        # Generate structured handoff briefing
+        handoff_ctx: dict = {}
+        try:
+            handoff_data = await handoff_service.create_enhanced_handoff(
+                session_id=session_id,
+                company_id=company_id,
+                messages=messages,
+                escalation_reason=reason,
+                customer_email=customer_email,
+                intent=conversation.get("intent") or "support_request",
+                page_url=conversation.get("page_url"),
+            )
+            handoff_ctx = handoff_data.get("handoff_context") or {}
+            briefing = handoff_service.format_structured_briefing(handoff_ctx)
+            priority = handoff_service.calculate_escalation_priority(handoff_ctx, default_priority="high")
+        except Exception as e:
+            logger.warning("Failed to generate rich handoff briefing for %s: %s", session_id, e)
+            briefing = (
+                f"### 📋 AI Handoff Briefing\n\n"
+                f"🎯 **Customer Intent**\nAuto-escalated support request.\n"
+                f"- **Escalation Reason:** {reason}"
+            )
+            priority = "high"
+
+        history_texts = [
             f"{m.get('role', 'user')}: {m.get('content', '')}"
-            for m in conversation.get("messages", [])
-        ) or "Auto-escalated chat."
+            for m in messages
+        ]
+        full_transcript = "\n\n".join(history_texts) if history_texts else "No transcript available."
+        chat_summary = f"{briefing}\n\n---\n### 💬 Full Transcript\n\n{full_transcript}"
+
+        default_intent_title = str(handoff_ctx.get("intent", "Auto-Escalated")).replace("_", " ").title()
+        subject = conversation.get("subject") or f"Support Request: {default_intent_title}"
 
         try:
             ticket = await company_email_service.create_ticket(
@@ -448,7 +484,8 @@ async def auto_escalate_chats(company_id: str) -> list[dict]:
                 chat_summary=chat_summary,
                 chat_session_id=session_id,
                 escalation_reason=reason,
-                priority="high",
+                priority=priority,
+                handoff_context=handoff_ctx,
             )
             created.append(
                 {"session_id": session_id, "ticket_id": ticket["id"], "reason": reason}
