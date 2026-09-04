@@ -11,6 +11,9 @@ from app.core.rbac import require_permission
 from app.core.security import decode_access_token
 from app.core.config import settings
 from app.models.email_models import (
+    CopilotExecuteActionRequest,
+    CopilotSuggestRequest,
+    CopilotSuggestResponse,
     EmailReplyRequest,
     EmailTicketResponse,
     EmailTicketSummary,
@@ -19,7 +22,12 @@ from app.models.email_models import (
     TicketPriorityUpdate,
     TicketStatusUpdate,
 )
-from app.services import company_service, company_email_service, ticket_service
+from app.services import (
+    company_service,
+    company_email_service,
+    ticket_service,
+    ticket_copilot_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +70,7 @@ async def inbound_email_webhook(request: Request):
         return {"status": "processed"}
 
 
-@router.get("/resolve/{token}", response_class=HTMLResponse)
+@router.get("/resolve/{token}", response_class=HTMLResponse):
 async def resolve_ticket_page(token: str):
     """Show a confirmation page when customer clicks 'Mark as Resolved'."""
     ticket = await company_email_service.get_ticket_by_resolve_token(token)
@@ -516,6 +524,7 @@ async def reopen_ticket_endpoint(
 
     return {"status": "reopened", "ticket_id": ticket_id}
 
+
 @router.patch("/{company_id}/tickets/{ticket_id}/priority")
 async def update_ticket_priority(
     company_id: str,
@@ -587,8 +596,7 @@ async def update_ticket_status(
     """Transition a ticket through the workflow state machine.
 
     An optional ``priority`` may be supplied to also update the ticket's
-    priority (and SLA deadlines) in the same request.
-    """
+    priority (and SLA deadlines) in the same request."""
     user_id = current_user["user_id"]
     company = await company_service.get_company(company_id, user_id)
     if not company:
@@ -618,6 +626,67 @@ async def update_ticket_status(
     if not result:
         raise HTTPException(status_code=404, detail="Ticket not found")
     return result
+
+
+@router.post(
+    "/{company_id}/tickets/{ticket_id}/suggest-reply",
+    response_model=CopilotSuggestResponse,
+)
+async def suggest_ticket_reply_endpoint(
+    company_id: str,
+    ticket_id: str,
+    req: CopilotSuggestRequest = CopilotSuggestRequest(),
+    current_user: dict = Depends(require_permission("tickets:read")),
+):
+    """Generate an AI-drafted reply and next-best-actions based on ticket context, handoff, and KB."""
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    try:
+        result = await ticket_copilot_service.generate_copilot_reply(
+            company_id=company_id,
+            ticket_id=ticket_id,
+            tone=req.tone or "empathic_professional",
+            instruction=req.instruction,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("Copilot suggest-reply error: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to generate copilot reply suggestion")
+
+
+@router.post("/{company_id}/tickets/{ticket_id}/execute-action")
+async def execute_ticket_action_endpoint(
+    company_id: str,
+    ticket_id: str,
+    req: CopilotExecuteActionRequest,
+    current_user: dict = Depends(require_permission("tickets:write")),
+):
+    """Execute a 1-click next-best-action (status change, priority update, internal note)."""
+    user_id = current_user["user_id"]
+    company = await company_service.get_company(company_id, user_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    try:
+        result = await ticket_copilot_service.execute_copilot_action(
+            company_id=company_id,
+            ticket_id=ticket_id,
+            action_type=req.action_type,
+            parameters=req.parameters,
+            actor=current_user.get("name") or user_id,
+            reason=req.reason,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Copilot action execution error: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to execute copilot action")
 
 
 @router.post("/test-dispatch")

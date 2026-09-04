@@ -349,6 +349,30 @@ async def set_priority(
     return result
 
 
+async def add_internal_note(
+    company_id: str,
+    ticket_id: str,
+    note: str,
+    actor: str,
+) -> dict | None:
+    """Add an internal note to a ticket's audit activity log without customer visibility."""
+    if not note or not note.strip():
+        raise ValueError("Internal note cannot be empty")
+
+    await _fetch_ticket(company_id, ticket_id)
+    now = _utcnow()
+    entry = _activity_entry("internal_note", actor, note=note.strip())
+
+    return await db.email_tickets.find_one_and_update(
+        {"company_id": company_id, "id": ticket_id},
+        {
+            "$set": {"updated_at": now},
+            "$push": {"activity_log": entry},
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Auto-escalation
 # ---------------------------------------------------------------------------

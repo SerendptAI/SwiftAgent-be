@@ -201,6 +201,40 @@ class EmailTicketSummary(BaseModel):
     assigned_to: Optional[str] = None
     sla_breached: bool = False
 
+
 class TestDispatchRequest(BaseModel):
     company_id: str
     recipients: List[str]
+
+
+# ============================================================================
+# AGENT COPILOT SCHEMAS
+# ============================================================================
+
+
+class CopilotSuggestRequest(BaseModel):
+    tone: Optional[str] = "empathic_professional"  # empathic_professional | concise | technical | apologetic
+    instruction: Optional[str] = None  # Custom instruction from the human agent
+
+
+class CopilotActionSuggestion(BaseModel):
+    action_type: str  # status_change | priority_change | internal_note | navigation_guide | api_action
+    label: str
+    confidence: float = 1.0
+    parameters: dict = {}
+    reason: Optional[str] = None
+
+
+class CopilotSuggestResponse(BaseModel):
+    suggested_reply: str
+    suggested_subject: Optional[str] = None
+    customer_sentiment: str = "neutral"
+    sources_used: List[str] = []
+    suggested_actions: List[CopilotActionSuggestion] = []
+    reasoning: Optional[str] = None
+
+
+class CopilotExecuteActionRequest(BaseModel):
+    action_type: str  # status_change | priority_change | internal_note
+    parameters: dict = {}
+    reason: Optional[str] = None
