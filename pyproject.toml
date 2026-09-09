@@ -49,6 +49,7 @@ dependencies = [
     "nest-asyncio>=1.6.0,<2.0.0",
     "cencori>=0.1.0",
     "pycountry>=26.2.16",
+    "sibyl-memory-client>=0.1.0",
 ]
 
 [project.optional-dependencies]
@@ -74,3 +75,10 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.uv]
+# arq declares redis<6 in its metadata but works fine with redis 7.x at runtime.
+# This override tells uv to use our pinned redis>=7.4.0 regardless.
+override-dependencies = [
+    "redis>=7.4.0",
+]
