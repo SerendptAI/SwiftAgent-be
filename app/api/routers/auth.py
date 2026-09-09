@@ -295,15 +295,48 @@ async def callback(request: Request, db=Depends(get_database)):
 # --- token management ---
 
 @router.post("/refresh")
-async def refresh_token(request: RefreshTokenRequest):
-    """Exchange a valid refresh token for a new access token."""
+async def refresh_token(request: RefreshTokenRequest, db=Depends(get_database)):
+    """Exchange a valid refresh token for a new access token (with full RBAC claims)."""
     payload = decode_refresh_token(request.refresh_token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid refresh token payload")
-    return {"access_token": create_access_token(data={"sub": user_id}), "token_type": "bearer"}
+
+    # Re-fetch company + role so the new access token has full RBAC claims,
+    # exactly as issued at login. Without this, refreshed tokens have no
+    # permissions and every require_permission() guard returns 403.
+    company = await db.companies.find_one(
+        {
+            "$or": [
+                {"user_id": user_id, "setup_complete": True},
+                {"members.user_id": user_id, "setup_complete": True},
+            ]
+        },
+        {"_id": 0, "id": 1, "user_id": 1, "members": 1},
+    )
+
+    role = "owner"
+    if company and company.get("user_id") != user_id:
+        # User is a member, not the owner — find their role
+        member = next(
+            (m for m in company.get("members", []) if m.get("user_id") == user_id),
+            None,
+        )
+        role = member.get("role", "agent") if member else "agent"
+
+    from app.core.rbac import get_role_permissions
+    permissions = get_role_permissions(role)
+
+    tokens = _token_pair(
+        user_id,
+        company_id=company.get("id") if company else None,
+        role=role,
+        permissions=permissions,
+    )
+    return {**tokens, "token_type": "bearer"}
+
 
 
 # --- current user ---
