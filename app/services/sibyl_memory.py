@@ -6,9 +6,10 @@ from sibyl_memory_client import MemoryClient
 logger = logging.getLogger(__name__)
 
 class SibylMemoryService:
-    def __init__(self, base_dir: str = "/home/lambda/SwiftAgent-be/app/data/memory"):
-        self.base_dir = base_dir
+    def __init__(self, base_dir: str = "app/data/memory"):
+        self.base_dir = os.path.abspath(base_dir)
         os.makedirs(self.base_dir, exist_ok=True)
+
         self.clients: Dict[str, MemoryClient] = {}
 
     def get_client(self, company_id: str) -> MemoryClient:
