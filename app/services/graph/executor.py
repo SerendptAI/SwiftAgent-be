@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 from app.core.database import db
 from app.services.graph.builder import compiled_graph
+from app.services.sibyl_memory import sibyl_memory
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +98,9 @@ async def chat_stream_graph(
         # Insert the message into the DB is now handled upstream in chat.py and sdk.py
         # to ensure atomic updates and prevent multiple websocket empty message fires.
 
+        # Fetch pre-existing HOT state from Sibyl Memory if available
+        hot_pref = sibyl_memory.get_state(company_id, "user_preferences")
+
         state = {
             "messages": langchain_messages,
             "session_id": session_id,
@@ -110,6 +114,7 @@ async def chat_stream_graph(
             "user_language": lang_state["user_language"],
             "kb_language": lang_state["kb_language"],
             "language_instruction": lang_state["language_instruction"],
+            "sibyl_memories": hot_pref or {},
             "intent": None,
             "escalate_to_human": False
         }
