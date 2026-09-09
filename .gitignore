@@ -25,3 +25,10 @@ public_key.pem
 # Swift Wrap donut rings are rendered on demand; only the fallback is tracked
 app/email_templates/images/swift-wrap-ring-*.png
 !app/email_templates/images/swift-wrap-ring-67.png
+
+# Sibyl Agentic Memory DBs
+data/memory/
+app/data/memory/
+*.db
+*.sqlite
+

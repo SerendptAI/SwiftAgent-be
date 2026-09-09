@@ -14,6 +14,11 @@ from app.services.graph.tools import (
     get_api_documentation, query_company_api,
     read_website_page, render_navigation_guide
 )
+from app.services.graph.tools_crypto import get_wallet_balance, get_transaction_status
+from app.services.graph.tools_memory import (
+    set_working_state, get_working_state, remember_entity,
+    recall_entity, log_event, search_memory
+)
 
 
 def route_from_orchestrator(state: AgentState):
@@ -186,10 +191,10 @@ def build_graph():
     builder.add_node("scraper_agent", scraper_agent_node)
     
     # Tool nodes tailored for each agent (solves routing back ambiguity)
-    builder.add_node("knowledge_tools", ToolNode([search_knowledge_base, scrape_documentation_link]))
-    builder.add_node("navigation_tools", ToolNode([get_dashboard_navigation, get_full_dashboard_documentation, render_navigation_guide]))
-    builder.add_node("api_tools", ToolNode([get_api_documentation, query_company_api]))
-    builder.add_node("scraper_tools", ToolNode([read_website_page]))
+    builder.add_node("knowledge_tools", ToolNode([search_knowledge_base, scrape_documentation_link, set_working_state, get_working_state, remember_entity, recall_entity, log_event, search_memory, get_wallet_balance, get_transaction_status]))
+    builder.add_node("navigation_tools", ToolNode([get_dashboard_navigation, get_full_dashboard_documentation, render_navigation_guide, set_working_state, get_working_state, remember_entity, recall_entity, log_event, search_memory]))
+    builder.add_node("api_tools", ToolNode([get_api_documentation, query_company_api, set_working_state, get_working_state, remember_entity, recall_entity, log_event, search_memory, get_wallet_balance, get_transaction_status]))
+    builder.add_node("scraper_tools", ToolNode([read_website_page, set_working_state, get_working_state, remember_entity, recall_entity, log_event, search_memory]))
     
     # Routing from Orchestrator
     builder.add_edge(START, "orchestrator")

@@ -1,6 +1,7 @@
 from app.services.graph.state import AgentState
 from app.services.graph.llm_factory import get_llm
 from app.services.graph.tools import read_website_page
+from app.services.graph.tools_memory import MEMORY_TOOLS
 from app.services.graph.prompt_utils import build_company_persona_prompt
 from langchain_core.messages import SystemMessage
 from app.core.langfuse import observe
@@ -13,12 +14,13 @@ COMPANY WEBSITE: {website}
 3. If info not on page, follow relevant links.
 4. RETRY: If content missing, retry with force_refresh=True.
 5. Answer based ONLY on page content.
+You also have access to Memory tools (`remember_entity`, `recall_entity`, `search_memory`, `set_working_state`, `get_working_state`, `log_event`).
 FALLBACK: If tool fails, call transfer_to_knowledge. No text when transferring."""
 
 @observe(name="scraper_agent_node")
 async def scraper_agent_node(state: AgentState, config):
     llm = get_llm(state["agent_provider"], streaming=True, force_anthropic_native=True)
-    llm_with_tools = llm.bind_tools([read_website_page] + SCRAPER_HANDOFF_TOOLS)
+    llm_with_tools = llm.bind_tools([read_website_page] + MEMORY_TOOLS + SCRAPER_HANDOFF_TOOLS)
     
     from app.services.prompt_service import render_prompt_for_company
     rendered = await render_prompt_for_company("scraper_agent", state.get("company_data", {}), state.get("company_id"))
