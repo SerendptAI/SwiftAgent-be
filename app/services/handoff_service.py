@@ -3,31 +3,20 @@ Enhanced AI-to-Human Handoff Service
 =====================================
 Passes full conversation context to human agents during escalation.
 Shows AI's attempted solutions and why they failed.
-Provides estimated wait time and agent routing.
+Provides estimated wait time, dynamic priority scoring, and structured briefings.
 """
 
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel
 
 from app.core.database import db
-from app.models.prompt_models import (
-    PromptTemplate,
-    PromptTemplateCreate,
-    PromptTemplateUpdate,
-    PromptVariable,
-    PromptTemplateVersion,
-    PromptTemplateVersionHistory,
-    PromptDiffResponse,
-    PromptPreviewRequest,
-    PromptPreviewResponse,
-    RenderedPrompt,
-    CompanyPromptOverride,
-)
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
 # HANDOFF CONTEXT BUILDER
 # ============================================================================
 
@@ -248,6 +237,122 @@ def generate_suggested_actions(messages: List[Dict], intent: str) -> List[str]:
 
 
 # ============================================================================
+# STRUCTURED BRIEFING & CALIBRATION
+# ============================================================================
+
+
+def format_structured_briefing(handoff_ctx: Union[HandoffContext, Dict[str, Any]]) -> str:
+    """
+    Format a standardized 3-part handoff card for human agents:
+    [Customer Intent] + [Failed Steps/Friction] + [Suggested Action]
+    """
+    if isinstance(handoff_ctx, HandoffContext):
+        ctx = handoff_ctx.model_dump()
+    elif isinstance(handoff_ctx, dict):
+        ctx = dict(handoff_ctx)
+    else:
+        ctx = {}
+
+    intent = ctx.get("intent") or "general_support"
+    sentiment = (ctx.get("customer_sentiment") or "neutral").upper()
+    summary = ctx.get("conversation_summary") or "Customer requested human support."
+    page_url = ctx.get("page_url")
+    reason_text = ctx.get("escalation_reason_text") or ctx.get("escalation_reason") or "Escalated to human agent"
+
+    # 1. Customer Intent
+    intent_lines = [
+        "### 📋 AI Handoff Briefing",
+        "",
+        "🎯 **Customer Intent**",
+        f"{summary}",
+        f"- **Classified Intent:** `{intent}`",
+        f"- **Customer Sentiment:** {sentiment}",
+        f"- **Escalation Reason:** {reason_text}",
+    ]
+    if page_url:
+        intent_lines.append(f"- **Origin Page:** `{page_url}`")
+
+    # 2. Failed Steps & Friction
+    friction_lines = ["", "⚠️ **Failed Steps & Friction**"]
+    failure_points = ctx.get("ai_failure_points") or []
+    attempts = ctx.get("ai_attempted_solutions") or []
+
+    friction_items = []
+    for fp in failure_points:
+        friction_items.append(f"- ⚠️ {fp}")
+
+    for att in attempts:
+        tool = att.get("tool_used", "tool")
+        success = att.get("success", True)
+        err = att.get("error")
+        summary_text = att.get("result_summary", "")
+        if not success:
+            detail = f" (Error: {err})" if err else ""
+            friction_items.append(f"- ❌ Tool `{tool}` failed{detail}")
+        elif summary_text:
+            short_summary = summary_text[:120] + "..." if len(summary_text) > 120 else summary_text
+            friction_items.append(f"- ℹ️ Tool `{tool}`: {short_summary}")
+
+    if not friction_items:
+        friction_items.append("- AI reached escalation threshold without finding a direct solution.")
+
+    friction_lines.extend(friction_items)
+
+    # 3. Suggested Action
+    actions = ctx.get("suggested_actions") or []
+    action_lines = ["", "👉 **Suggested Next Actions**"]
+    if actions:
+        for idx, act in enumerate(actions, 1):
+            action_lines.append(f"{idx}. {act}")
+    else:
+        action_lines.append("1. Review customer account context and previous interactions.")
+        action_lines.append("2. Respond to customer with next resolution steps.")
+
+    return "\n".join(intent_lines + friction_lines + action_lines)
+
+
+def calculate_escalation_priority(
+    handoff_ctx: Union[HandoffContext, Dict[str, Any]], 
+    default_priority: str = "medium"
+) -> str:
+    """
+    Calculate SLA priority dynamically based on sentiment, failure points, and escalation triggers.
+    Returns: 'low' | 'medium' | 'high' | 'urgent'
+    """
+    if isinstance(handoff_ctx, HandoffContext):
+        ctx = handoff_ctx.model_dump()
+    elif isinstance(handoff_ctx, dict):
+        ctx = dict(handoff_ctx)
+    else:
+        ctx = {}
+
+    sentiment = (ctx.get("customer_sentiment") or "").lower()
+    reason = ctx.get("escalation_reason") or ""
+    failure_points = ctx.get("ai_failure_points") or []
+    attempts = ctx.get("ai_attempted_solutions") or []
+    failed_attempts = [a for a in attempts if not a.get("success", True)]
+
+    # Urgent: Frustrated sentiment or multiple cascading failures
+    if sentiment == "frustrated" or len(failure_points) >= 3 or len(failed_attempts) >= 2:
+        return "urgent"
+
+    # High: Negative sentiment, customer idle abandonment, or repeated failures
+    if (
+        sentiment == "negative"
+        or reason in ("idle_unanswered", "repeated_ai_failures")
+        or len(failure_points) >= 1
+        or len(failed_attempts) >= 1
+    ):
+        return "high"
+
+    # Low: Positive sentiment with simple handoff request
+    if sentiment == "positive" and reason == "human_request":
+        return "low"
+
+    return default_priority if default_priority in ("low", "medium", "high", "urgent") else "medium"
+
+
+# ============================================================================
 # WAIT TIME ESTIMATION
 # ============================================================================
 
@@ -256,25 +361,31 @@ async def estimate_wait_time(company_id: str) -> Dict[str, Any]:
     """Estimate wait time for a human agent based on current queue."""
     now = datetime.now(timezone.utc)
 
-    # Count pending tickets
-    pending_count = await db.email_tickets.count_documents({
-        "company_id": company_id,
-        "status": {"$in": ["pending", "in_progress"]},
-    })
+    try:
+        # Count pending tickets
+        pending_count = await db.email_tickets.count_documents({
+            "company_id": company_id,
+            "status": {"$in": ["pending", "in_progress"]},
+        })
 
-    # Count tickets awaiting customer response
-    awaiting_customer = await db.email_tickets.count_documents({
-        "company_id": company_id,
-        "status": "awaiting_customer",
-    })
+        # Count tickets awaiting customer response
+        awaiting_customer = await db.email_tickets.count_documents({
+            "company_id": company_id,
+            "status": "awaiting_customer",
+        })
 
-    # Count online agents (agents who have been active in the last 10 minutes)
-    ten_min_ago = now - timedelta(minutes=10)
-    online_agents = await db.users.count_documents({
-        "company_id": company_id,
-        "last_active": {"$gte": ten_min_ago},
-        "role": {"$in": ["admin", "agent"]},
-    })
+        # Count online agents (agents who have been active in the last 10 minutes)
+        ten_min_ago = now - timedelta(minutes=10)
+        online_agents = await db.users.count_documents({
+            "company_id": company_id,
+            "last_active": {"$gte": ten_min_ago},
+            "role": {"$in": ["admin", "agent"]},
+        })
+    except Exception as e:
+        logger.warning(f"Error estimating wait time: {e}")
+        pending_count = 0
+        awaiting_customer = 0
+        online_agents = 0
 
     # Calculate estimated wait
     if online_agents == 0:
@@ -306,29 +417,32 @@ async def get_available_agents(company_id: str) -> List[Dict[str, str]]:
     now = datetime.now(timezone.utc)
     five_min_ago = now - timedelta(minutes=5)
 
-    # Get company members who are agents
-    company = await db.companies.find_one({"id": company_id})
-    if not company:
-        return []
-
-    members = company.get("members", [])
-    agent_ids = [m.get("user_id") for m in members if m.get("role") in ["admin", "agent", "manager"]]
-
-    # Check which agents are online (active in last 5 minutes)
     online_agents = []
-    for agent_id in agent_ids:
-        user = await db.users.find_one({"user_id": agent_id})
-        if user:
-            last_active = user.get("last_active")
-            if last_active:
-                if isinstance(last_active, str):
-                    last_active = datetime.fromisoformat(last_active.replace("Z", "+00:00"))
-                if last_active >= five_min_ago:
-                    online_agents.append({
-                        "user_id": agent_id,
-                        "name": user.get("name", "Agent"),
-                        "role": user.get("role", "agent"),
-                    })
+    try:
+        # Get company members who are agents
+        company = await db.companies.find_one({"id": company_id})
+        if not company:
+            return []
+
+        members = company.get("members", [])
+        agent_ids = [m.get("user_id") for m in members if m.get("role") in ["admin", "agent", "manager"]]
+
+        # Check which agents are online (active in last 5 minutes)
+        for agent_id in agent_ids:
+            user = await db.users.find_one({"user_id": agent_id})
+            if user:
+                last_active = user.get("last_active")
+                if last_active:
+                    if isinstance(last_active, str):
+                        last_active = datetime.fromisoformat(last_active.replace("Z", "+00:00"))
+                    if last_active >= five_min_ago:
+                        online_agents.append({
+                            "user_id": agent_id,
+                            "name": user.get("name", "Agent"),
+                            "role": user.get("role", "agent"),
+                        })
+    except Exception as e:
+        logger.warning(f"Error querying available agents: {e}")
 
     return online_agents
 
@@ -350,7 +464,7 @@ async def create_enhanced_handoff(
 ) -> Dict[str, Any]:
     """
     Create a rich handoff context and return it for use in ticket creation.
-    Returns a dict with handoff_context and wait_time_estimate.
+    Returns a dict with handoff_context, wait_time_estimate, and available_agents.
     """
     now = datetime.now(timezone.utc)
 
@@ -446,7 +560,3 @@ class HandoffContextResponse(BaseModel):
     escalated_at: datetime
     wait_time_estimate: Dict[str, Any]
     available_agents: List[Dict[str, str]]
-
-
-# Import here to avoid circular import
-from pydantic import BaseModel
