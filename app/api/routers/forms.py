@@ -492,25 +492,40 @@ async def _verify_ws_auth(websocket: WebSocket, company_id: str, token: Optional
                 token = websocket.query_params.get("token")
 
         if not token:
-            await websocket.send_json({"type": "error", "message": "Missing authentication token (?token=... or Authorization: Bearer ...)"})
-            await websocket.close(code=1008)
+            try:
+                await websocket.send_json({"type": "error", "message": "Missing authentication token (?token=... or Authorization: Bearer ...)"})
+                await websocket.close(code=1008)
+            except Exception:
+                pass
             return None
 
         payload = decode_access_token(token)
         if not payload or not payload.get("sub"):
-            await websocket.send_json({"type": "error", "message": "Invalid or missing token"})
-            await websocket.close(code=1008)
+            try:
+                await websocket.send_json({"type": "error", "message": "Invalid or missing token"})
+                await websocket.close(code=1008)
+            except Exception:
+                pass
             return None
         user_id = payload.get("sub")
         company = await get_company(company_id, user_id)
         if not company:
-            await websocket.send_json({"type": "error", "message": "Company not found or unauthorized"})
-            await websocket.close(code=1008)
+            try:
+                await websocket.send_json({"type": "error", "message": "Company not found or unauthorized"})
+                await websocket.close(code=1008)
+            except Exception:
+                pass
             return None
         return company
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected during auth for company {company_id}")
+        return None
     except Exception as e:
         logger.error(f"WebSocket auth failed: {e}")
-        await websocket.close(code=1008)
+        try:
+            await websocket.close(code=1008)
+        except Exception:
+            pass
         return None
 
 
@@ -534,9 +549,15 @@ async def forms_list_websocket(
             "items": jsonable_encoder(forms),
             "total": len(forms)
         })
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected during initial push for company {company_id} forms list")
+        return
     except Exception as e:
         logger.error(f"Error fetching initial forms for WS: {e}")
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
         return
 
     try:
@@ -586,9 +607,15 @@ async def all_submissions_websocket(
             "skip": 0,
             "has_next": len(submissions) < total
         })
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected during initial push for company {company_id} submissions")
+        return
     except Exception as e:
         logger.error(f"Error fetching initial submissions for WS: {e}")
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
         return
 
     try:
@@ -643,9 +670,15 @@ async def form_submissions_websocket(
             "skip": 0,
             "has_next": len(submissions) < total
         })
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected during initial push for form {form_id} submissions")
+        return
     except Exception as e:
         logger.error(f"Error fetching initial form submissions for WS: {e}")
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
         return
 
     try:
@@ -694,9 +727,15 @@ async def form_overview_websocket(
         overview = await form_service.get_website_overview(form_id, company_id)
         if overview:
             await websocket.send_json(jsonable_encoder(overview))
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected during initial push for form {form_id} overview")
+        return
     except Exception as e:
         logger.error(f"Error fetching initial form overview for WS: {e}")
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
         return
 
     try:

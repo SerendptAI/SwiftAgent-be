@@ -201,21 +201,33 @@ async def tickets_websocket(
     try:
         payload = decode_access_token(token)
         if not payload or not payload.get("sub"):
-            await websocket.send_json({"type": "error", "message": "Invalid or missing token"})
-            await websocket.close(code=1008)
+            try:
+                await websocket.send_json({"type": "error", "message": "Invalid or missing token"})
+                await websocket.close(code=1008)
+            except Exception:
+                pass
             return
         user_id = payload.get("sub")
         
         # Verify the user has access to this company
         company = await company_service.get_company(company_id, user_id)
         if not company:
-            await websocket.send_json({"type": "error", "message": "Company not found or unauthorized"})
-            await websocket.close(code=1008)
+            try:
+                await websocket.send_json({"type": "error", "message": "Company not found or unauthorized"})
+                await websocket.close(code=1008)
+            except Exception:
+                pass
             return
             
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected during auth for company {company_id}")
+        return
     except Exception as e:
         logger.error(f"WebSocket auth failed: {e}")
-        await websocket.close(code=1008)
+        try:
+            await websocket.close(code=1008)
+        except Exception:
+            pass
         return
 
     from fastapi.encoders import jsonable_encoder
@@ -231,9 +243,15 @@ async def tickets_websocket(
             "skip": 0,
             "has_next": len(tickets) < total
         })
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected during initial push for company {company_id} tickets")
+        return
     except Exception as e:
         logger.error(f"Error fetching initial tickets for WS: {e}")
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
         return
 
     from app.core.database import db
@@ -285,21 +303,33 @@ async def ticket_detail_websocket(
     try:
         payload = decode_access_token(token)
         if not payload or not payload.get("sub"):
-            await websocket.send_json({"type": "error", "message": "Invalid or missing token"})
-            await websocket.close(code=1008)
+            try:
+                await websocket.send_json({"type": "error", "message": "Invalid or missing token"})
+                await websocket.close(code=1008)
+            except Exception:
+                pass
             return
         user_id = payload.get("sub")
         
         # Verify the user has access to this company
         company = await company_service.get_company(company_id, user_id)
         if not company:
-            await websocket.send_json({"type": "error", "message": "Company not found or unauthorized"})
-            await websocket.close(code=1008)
+            try:
+                await websocket.send_json({"type": "error", "message": "Company not found or unauthorized"})
+                await websocket.close(code=1008)
+            except Exception:
+                pass
             return
             
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected during auth for ticket {ticket_id}")
+        return
     except Exception as e:
         logger.error(f"WebSocket auth failed: {e}")
-        await websocket.close(code=1008)
+        try:
+            await websocket.close(code=1008)
+        except Exception:
+            pass
         return
 
     from fastapi.encoders import jsonable_encoder
@@ -313,9 +343,15 @@ async def ticket_detail_websocket(
             if attributed_chat:
                 ticket["attributed_chat"] = attributed_chat
             await websocket.send_json({"type": "init", "data": jsonable_encoder(ticket)})
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected during initial push for ticket {ticket_id}")
+        return
     except Exception as e:
         logger.error(f"Error fetching initial ticket detail for WS: {e}")
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
         return
 
     from app.core.database import db
